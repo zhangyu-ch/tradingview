@@ -29,19 +29,11 @@ from tzlocal import get_localzone
 
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
-from tradingview_zy.cl_utils import (
-    cl_data_to_tv_chart,
-    del_cl_chart_config,
-    kcharts_frequency_h_l_map,
-    query_cl_chart_config,
-    set_cl_chart_config,
-    web_batch_get_cl_datas,
-)
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
-from tradingview_zy.tools.ai_analyse import AIAnalyse
+from tradingview_zy.web_payloads import klines_to_tv_history
 from tradingview_zy.zixuan import ZiXuan
 
 from .alert_tasks import AlertTasks
@@ -502,112 +494,21 @@ def create_app(test_config=None):
             return {"s": "no_data", "nextTime": int(now_time + (10 * 60))}
 
         frequency = resolution_maps[resolution]
-        cl_config = query_cl_chart_config(market, code)
-        frequency_low, kchart_to_frequency = kcharts_frequency_h_l_map(
-            market, frequency
-        )
-        if (
-            cl_config["enable_kchart_low_to_high"] == "1"
-            and kchart_to_frequency is not None
-        ):
-            # 如果开启并设置的该级别的低级别数据，获取低级别数据，并在转换成高级图表展示
-            klines = ex.klines(code, frequency_low)
-        else:
-            kchart_to_frequency = None
-            klines = ex.klines(code, frequency)
+        klines = ex.klines(code, frequency)
+        if klines is None or len(klines) == 0:
+            return {"s": "no_data"}
 
-        # 如果图表指定返回的时间太早，直接返回无数据
         if int(_to) < fun.datetime_to_int(klines.iloc[0]["date"]):
             return {"s": "no_data"}
 
-        try:
-            if kchart_to_frequency is not None:
-                cd = web_batch_get_cl_datas(
-                    market, code, {frequency_low: klines}, cl_config
-                )[0]
-            else:
-                cd = web_batch_get_cl_datas(market, code, {frequency: klines}, cl_config)[0]
-
-            cl_chart_data = cl_data_to_tv_chart(
-                cd, cl_config, to_frequency=kchart_to_frequency
-            )
-        except RuntimeError as e:
-            if "missing license key" not in str(e):
-                raise
-            cl_chart_data = {
-                "t": [fun.datetime_to_int(k["date"]) for _, k in klines.iterrows()],
-                "c": klines["close"].tolist(),
-                "o": klines["open"].tolist(),
-                "h": klines["high"].tolist(),
-                "l": klines["low"].tolist(),
-                "v": klines["volume"].tolist(),
-                "fxs": [],
-                "bis": [],
-                "xds": [],
-                "zsds": [],
-                "bi_zss": [],
-                "xd_zss": [],
-                "zsd_zss": [],
-                "bcs": [],
-                "mmds": [],
-            }
-
-        # 根据 from_time 和 to_time 来获取对应的K线数据
         if firstDataRequest == "false":
-            _t = cl_chart_data["t"][-10:]
-            _c = cl_chart_data["c"][-10:]
-            _o = cl_chart_data["o"][-10:]
-            _h = cl_chart_data["h"][-10:]
-            _l = cl_chart_data["l"][-10:]
-            _v = cl_chart_data["v"][-10:]
-            _fxs = cl_chart_data["fxs"][-5:]
-            _bis = cl_chart_data["bis"][-5:]
-            _xds = cl_chart_data["xds"][-5:]
-            _zsds = cl_chart_data["zsds"][-5:]
-            _bi_zss = cl_chart_data["bi_zss"][-5:]
-            _xd_zss = cl_chart_data["xd_zss"][-5:]
-            _zsd_zss = cl_chart_data["zsd_zss"][-5:]
-            _bcs = cl_chart_data["bcs"][-5:]
-            _mmds = cl_chart_data["mmds"][-5:]
-        else:
-            _t = cl_chart_data["t"]
-            _c = cl_chart_data["c"]
-            _o = cl_chart_data["o"]
-            _h = cl_chart_data["h"]
-            _l = cl_chart_data["l"]
-            _v = cl_chart_data["v"]
-            _fxs = cl_chart_data["fxs"]
-            _bis = cl_chart_data["bis"]
-            _xds = cl_chart_data["xds"]
-            _zsds = cl_chart_data["zsds"]
-            _bi_zss = cl_chart_data["bi_zss"]
-            _xd_zss = cl_chart_data["xd_zss"]
-            _zsd_zss = cl_chart_data["zsd_zss"]
-            _bcs = cl_chart_data["bcs"]
-            _mmds = cl_chart_data["mmds"]
+            klines = klines.iloc[-10:]
 
-        info = {
-            "s": s,
-            "t": _t,
-            "c": _c,
-            "o": _o,
-            "h": _h,
-            "l": _l,
-            "v": _v,
-            "fxs": _fxs,
-            "bis": _bis,
-            "xds": _xds,
-            "zsds": _zsds,
-            "bi_zss": _bi_zss,
-            "xd_zss": _xd_zss,
-            "zsd_zss": _zsd_zss,
-            "bcs": _bcs,
-            "mmds": _mmds,
-            "update": (
-                False if firstDataRequest == "true" else True
-            ),  # 是否是后续更新数据
-        }
-        return info
+        return klines_to_tv_history(
+            klines,
+            update=False if firstDataRequest == "true" else True,
+            status=s,
+        )
 
     @app.route("/tv/timescale_marks")
     @login_required
@@ -896,128 +797,6 @@ def create_app(test_config=None):
         except Exception:
             traceback.print_exc()
         return {"status": "ok"}
-
-    # 查询配置项
-    @app.route("/get_cl_config/<market>/<code>")
-    @login_required
-    def get_cl_config(market, code: str):
-        code = code.replace("__", "/")  # 数字货币特殊处理
-        cl_config = query_cl_chart_config(market, code)
-        cl_config["market"] = market
-        cl_config["code"] = code
-        return render_template("options.html", **cl_config)
-
-    # 设置配置项
-    @app.route("/set_cl_config", methods=["POST"])
-    @login_required
-    def set_cl_config():
-        market = request.form["market"]
-        code = request.form["code"]
-        is_del = request.form["is_del"]
-        if is_del == "true":
-            res = del_cl_chart_config(market, code)
-            return {"ok": res}
-
-        keys = [
-            "config_use_type",
-            # 个人定制配置
-            "kline_qk",
-            "judge_zs_qs_level",
-            # K线配置
-            "kline_type",
-            # 分型配置
-            "fx_qy",
-            "fx_qj",
-            "fx_bh",
-            # 笔配置
-            "bi_type",
-            "bi_bzh",
-            "bi_qj",
-            "bi_fx_cgd",
-            "bi_split_k_cross_nums",
-            "fx_check_k_nums",
-            "allow_bi_fx_strict",
-            # 线段配置
-            "xd_qj",
-            "zsd_qj",
-            "xd_zs_max_lines_split",
-            "xd_allow_bi_pohuai",
-            "xd_allow_split_no_highlow",
-            "xd_allow_split_zs_kz",
-            "xd_allow_split_zs_more_line",
-            "xd_allow_split_zs_no_direction",
-            # 中枢配置
-            "zs_bi_type",
-            "zs_xd_type",
-            "zs_qj",
-            "zs_cd",
-            "zs_wzgx",
-            # MACD 配置（计算力度背驰）
-            "idx_macd_fast",
-            "idx_macd_slow",
-            "idx_macd_signal",
-            # 买卖点计算
-            "cl_mmd_cal_qs_1mmd",
-            "cl_mmd_cal_not_qs_3mmd_1mmd",
-            "cl_mmd_cal_qs_3mmd_1mmd",
-            "cl_mmd_cal_qs_not_lh_2mmd",
-            "cl_mmd_cal_qs_bc_2mmd",
-            "cl_mmd_cal_3mmd_not_lh_bc_2mmd",
-            "cl_mmd_cal_1mmd_not_lh_2mmd",
-            "cl_mmd_cal_3mmd_xgxd_not_bc_2mmd",
-            "cl_mmd_cal_not_in_zs_3mmd",
-            "cl_mmd_cal_not_in_zs_gt_9_3mmd",
-            # 画图配置
-            "enable_kchart_low_to_high",
-            "chart_show_fx",
-            "chart_show_bi",
-            "chart_show_xd",
-            "chart_show_zsd",
-            "chart_show_qsd",
-            "chart_show_bi_zs",
-            "chart_show_xd_zs",
-            "chart_show_zsd_zs",
-            "chart_show_qsd_zs",
-            "chart_show_bi_mmd",
-            "chart_show_xd_mmd",
-            "chart_show_zsd_mmd",
-            "chart_show_qsd_mmd",
-            "chart_show_bi_bc",
-            "chart_show_xd_bc",
-            "chart_show_zsd_bc",
-            "chart_show_qsd_bc",
-        ]
-        cl_config = {}
-        for _k in keys:
-            cl_config[_k] = request.form[_k]
-            if _k in ["zs_bi_type", "zs_xd_type"]:
-                cl_config[_k] = cl_config[_k].split(",")
-            if cl_config[_k] == "":
-                cl_config[_k] = "0"
-            # print(f"{_k} : {cl_config[_k]}")
-
-        res = set_cl_chart_config(market, code, cl_config)
-        return {"ok": res}
-
-    # 重置配置项（删除当前标的的独立配置）
-    @app.route("/reset_cl_config", methods=["POST"])
-    @login_required
-    def reset_cl_config():
-        market = request.form["market"]
-        res = del_cl_chart_config(market, "common")
-        return {"ok": res}
-
-    # 导出缠论配置（返回当前标的配置 JSON）
-    @app.route("/export_cl_config", methods=["GET"])
-    @login_required
-    def export_cl_config():
-        market = request.args.get("market")
-        code = request.args.get("code")
-        # 与查询接口保持一致的代码处理规则
-        if code is not None:
-            code = code.replace("__", "/")
-        cl_config = query_cl_chart_config(market, code)
-        return cl_config
 
     # 股票涨跌幅
     @app.route("/ticks", methods=["POST"])
@@ -1510,36 +1289,6 @@ def create_app(test_config=None):
         db.cache_set("fs_keys", fs_keys)
 
         return {"ok": True}
-
-    @app.route("/ai/analyse", methods=["POST"])
-    @login_required
-    def ai_analyse():
-        market = request.form["market"]
-        code = request.form["code"]
-        frequency = request.form["frequency"]
-
-        ai_analyse_obj = AIAnalyse(market)
-        ai_res = ai_analyse_obj.analyse(code, frequency)
-
-        return ai_res
-
-    @app.route("/ai/analyse_records/<market>", methods=["GET"])
-    @login_required
-    def ai_analyse_records(market: str = "a"):
-        # 获取分页参数
-        page = request.args.get("page", 1, type=int)
-        limit = request.args.get("limit", 10, type=int)
-
-        # 调用分页查询
-        ai_analyse_records, total = AIAnalyse(market=market).analyse_records(
-            page=page, limit=limit
-        )
-        return {
-            "code": 0,
-            "msg": "",
-            "count": total,
-            "data": ai_analyse_records,
-        }
 
     @app.route("/a/bkgn_list", methods=["GET"])
     @login_required

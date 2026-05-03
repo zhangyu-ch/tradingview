@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh">
   <head>
-    <title>缠论解盘 - TradingView Chart</title>
+    <title>TradingView 行情图表</title>
 
     <link
       rel="shortcut icon"
@@ -65,7 +65,7 @@
           ">
           <div style="padding: 10px">
             <div class="layui-inline" style="width: 100%">
-              <h2 style="float: left; margin-top: 9px">缠论解盘</h2>
+              <h2 style="float: left; margin-top: 9px">行情图表</h2>
               <div
                 id="toggle-menu"
                 style="float: right; margin-top: 10px; cursor: pointer">
@@ -218,89 +218,11 @@
               </div>
             </div>
             <div class="layui-colla-item">
-              <div class="layui-colla-title" data-ca-title="AI分析助手">
-                AI分析助手
-              </div>
-              <div class="layui-colla-content" style="padding: 0">
-                <form class="layui-form" style="width: 100%">
-                  <div class="layui-form-item">
-                    <div class="layui-inline">
-                      <div
-                        class="layui-input-inline layui-input-wrap"
-                        style="width: 40%; float: left">
-                        <label for="ai_code">
-                          <input
-                            type="text"
-                            name="ai_code"
-                            id="ai_code"
-                            autocomplete="off"
-                            readonly="readonly"
-                            class="layui-input" />
-                        </label>
-                      </div>
-                      <div
-                        class="layui-form-mid"
-                        style="width: 30%; padding: 0 !important; float: left">
-                        <label>
-                          <select
-                            name="ai_frequencys"
-                            id="ai_frequencys"></select>
-                        </label>
-                      </div>
-                      <div
-                        class="layui-form-mid"
-                        style="padding: 4px 0 !important; float: left">
-                        <button
-                          type="button"
-                          id="ai_analyse_btn"
-                          class="layui-btn layui-btn-primary layui-border-red layui-btn-sm">
-                          分析
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </form>
-                <table
-                  class="layui-hide"
-                  id="table_ai_analysis"
-                  lay-filter="table_ai_analysis"></table>
-
-                <hr class="layui-border-red" />
-              </div>
-            </div>
-            <div class="layui-colla-item">
               <div class="layui-colla-title" data-ca-title="关于">关于</div>
               <div class="layui-colla-content" style="padding: 0">
                 <div class="layui-text" style="padding: 16px">
-                  <h3>Chanlun-Pro</h3>
-                  <p>基于缠论的市场行情量化分析工具</p>
-                  <p>
-                    <a
-                      href="https://github.com/yijixiuxin/chanlun-pro"
-                      target="_blank"
-                      >Github 地址</a
-                    >
-                    <a
-                      href="https://gitee.com/wang-student/chanlun-pro"
-                      target="_blank"
-                      >Gitee 地址</a
-                    >
-                  </p>
-                  <p>
-                    项目文档：<a
-                      href="https://chanlun-pro.readthedocs.io/"
-                      target="_blank"
-                      >链接</a
-                    >
-                  </p>
-                  <p>
-                    项目作者<br />
-                    <img
-                      src="{{ url_for('static', filename='imgs/wx.jpg') }}"
-                      width="200px"
-                      height="260px"
-                      alt="" />
-                  </p>
+                  <h3>tradingview_zy</h3>
+                  <p>通用行情、TradingView 图表、选股监控、回测和交易执行工具</p>
                 </div>
 
                 <hr class="layui-border-red" />
@@ -385,11 +307,9 @@
   <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
   <script src="{{ url_for('static', filename='js/zixuan.js') }}"></script>
   <script src="{{ url_for('static', filename='js/alert.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ai.js') }}"></script>
   <script src="{{ url_for('static', filename='js/bkgn.js') }}"></script>
   <script>
     $(function () {
-      // 缠论配置项更改
       layui.use(function () {
         var layer = layui.layer;
         var element = layui.element;
@@ -401,12 +321,6 @@
         dropdown.render({
           elem: "#toggle-menu",
           data: [
-            {
-              title: "缠论配置项",
-              templet:
-                '<div><i class="layui-icon layui-icon-set"></i> <span>缠论配置项</span></div>',
-              id: 1,
-            },
             {
               title: "自选组管理",
               templet:
@@ -424,6 +338,12 @@
               templet:
                 '<div><i class="layui-icon layui-icon-speaker"></i> <span>新增监控</span></div>',
               id: 4,
+            },
+            {
+              title: "运行选股",
+              templet:
+                '<div><i class="layui-icon layui-icon-template"></i> <span>运行选股</span></div>',
+              id: 5,
             },
             {
               title: "当前任务",
@@ -469,23 +389,15 @@
                 '<div><i class="layui-icon layui-icon-engine"></i> <span>切换主题</span></div>',
               id: 8,
             },
+            {
+              title: "系统设置",
+              templet:
+                '<div><i class="layui-icon layui-icon-set"></i> <span>系统设置</span></div>',
+              id: 9,
+            },
           ],
           click: function (item) {
-            if (item.title === "缠论配置项") {
-              layer.open({
-                type: 2,
-                title: "缠论配置项变更",
-                area: ["1100px", "90vh"],
-                content:
-                  "/get_cl_config/" +
-                  Utils.get_market() +
-                  "/" +
-                  Utils.get_code().replace("/", "__"),
-                anim: 1,
-                fixed: true, // 不固定
-                shadeClose: true,
-              });
-            } else if (item.title === "自选组管理") {
+            if (item.title === "自选组管理") {
               layer.open({
                 type: 2,
                 title: "自选组管理",
@@ -626,10 +538,6 @@
 
         // 固定条，显示与隐藏菜单栏
         Utils.render_fixbar();
-
-        // AI 分析助手
-        AI.init_ai_opts();
-        AI.get_ai_analyse_records();
       });
 
       // 初始化展示页面
