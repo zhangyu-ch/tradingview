@@ -107,27 +107,58 @@ def test_alert_js_task_list_uses_strategy_columns_without_legacy_fields():
     ).read_text(encoding="utf-8")
 
     for legacy_field in [
-        "check_bi_type",
-        "check_bi_beichi",
-        "check_bi_mmd",
-        "check_xd_type",
-        "check_xd_beichi",
-        "check_xd_mmd",
+        "line_type",
+        "check_bi_",
+        "check_xd_",
     ]:
         assert legacy_field not in alert_js
     for legacy_title in ["笔方向", "笔背驰", "笔买卖点", "线段方向", "线段背驰", "线段买卖点"]:
         assert legacy_title not in alert_js
     for strategy_text in ["strategy_config", "strategy_kwargs", "strategy_memo", "策略路径", "策略参数", "策略备注"]:
         assert strategy_text in alert_js
+    for event_text in ["event_type", "action", "score"]:
+        assert event_text in alert_js
 
 
-def test_alert_records_use_length_safe_strategy_fields(monkeypatch):
+def test_db_alert_models_expose_generic_properties():
+    from tradingview_zy.db import TableByAlertRecord, TableByAlertTask
+
+    task = TableByAlertTask(check_idx_ma_info=None, check_idx_macd_info=None)
+    assert task.strategy_config == "{}"
+    assert task.strategy_memo == ""
+
+    task.check_idx_ma_info = '{"strategy_path": "demo"}'
+    task.check_idx_macd_info = "memo"
+    assert task.strategy_config == '{"strategy_path": "demo"}'
+    assert task.strategy_memo == "memo"
+
+    event_time = dt.datetime(2026, 5, 3, 15, 0, 0)
+    record = TableByAlertRecord(
+        line_type=None,
+        bi_is_done=None,
+        bi_is_td=None,
+        line_dt=event_time,
+    )
+    assert record.event_type == ""
+    assert record.action == ""
+    assert record.score == ""
+    assert record.event_time == event_time
+
+    record.line_type = "sig"
+    record.bi_is_done = "watch"
+    record.bi_is_td = "0.9877"
+    assert record.event_type == "sig"
+    assert record.action == "watch"
+    assert record.score == "0.9877"
+
+
+def test_alert_tasks_use_generic_db_methods(monkeypatch):
     import cl_app.alert_tasks as alert_tasks
 
     saved = {}
 
     class FakeAlertDb:
-        def alert_record_save(self, **kwargs):
+        def alert_event_save(self, **kwargs):
             saved.update(kwargs)
 
     event = StrategySignal(
@@ -144,7 +175,7 @@ def test_alert_records_use_length_safe_strategy_fields(monkeypatch):
         task_name="task1",
         zx_group="source",
         frequency="d",
-        check_idx_ma_info='{"strategy_path": "unused", "strategy_kwargs": {}}',
+        strategy_config='{"strategy_path": "unused", "strategy_kwargs": {}}',
     )
 
     monkeypatch.setattr(alert_tasks.AlertTasks, "alert_get", lambda self, alert_id: alert_config)
@@ -168,9 +199,104 @@ def test_alert_records_use_length_safe_strategy_fields(monkeypatch):
 
     assert alert_tasks.AlertTasks(None).alert_run("1") is True
 
-    assert saved["line_type"] == "sig"
-    assert saved["bi_is_td"] == "1.235e+08"
-    assert len(saved["bi_is_td"]) <= 10
+    assert saved["event_type"] == "sig"
+    assert saved["action"] == "watch"
+    assert saved["score"] == "1.235e+08"
+    assert len(saved["score"]) <= 10
+    assert "line_type" not in saved
+    assert "bi_is_done" not in saved
+    assert "bi_is_td" not in saved
+
+
+def test_alert_save_uses_generic_task_methods(monkeypatch):
+    import cl_app.alert_tasks as alert_tasks
+
+    calls = []
+
+    class FakeAlertDb:
+        def task_save_strategy(self, **kwargs):
+            calls.append(("save", kwargs.copy()))
+
+        def task_update_strategy(self, **kwargs):
+            calls.append(("update", kwargs.copy()))
+
+    monkeypatch.setattr(alert_tasks, "db", FakeAlertDb())
+    monkeypatch.setattr(alert_tasks.AlertTasks, "run", lambda self: True)
+
+    tasks = alert_tasks.AlertTasks(None)
+    base_config = {
+        "id": "",
+        "market": "a",
+        "task_name": "task1",
+        "interval_minutes": 5,
+        "zx_group": "source",
+        "frequency": "d",
+        "strategy_config": '{"strategy_path": "unused"}',
+        "strategy_memo": "memo",
+        "is_send_msg": 1,
+        "is_run": 1,
+    }
+
+    assert tasks.alert_save(base_config.copy()) is True
+    assert calls[-1] == (
+        "save",
+        {
+            "market": "a",
+            "task_name": "task1",
+            "interval_minutes": 5,
+            "zx_group": "source",
+            "frequency": "d",
+            "strategy_config": '{"strategy_path": "unused"}',
+            "strategy_memo": "memo",
+            "is_send_msg": 1,
+            "is_run": 1,
+        },
+    )
+
+    update_config = {**base_config, "id": "7"}
+    assert tasks.alert_save(update_config) is True
+    assert calls[-1][0] == "update"
+    assert calls[-1][1]["id"] == 7
+    assert "check_bi_type" not in calls[-1][1]
+    assert "check_idx_ma_info" not in calls[-1][1]
+
+
+def test_alert_routes_use_generic_fields_without_legacy_payload_keys():
+    app_source = (
+        ROOT / "web" / "tradingview_zy_chart" / "cl_app" / "__init__.py"
+    ).read_text(encoding="utf-8")
+    alert_section = app_source[app_source.index('    @app.route("/alert_list/<market>")'):app_source.index('    @app.route("/jobs")')]
+
+    for generic_text in [
+        "strategy_config",
+        "strategy_memo",
+        "event_type",
+        "action",
+        "score",
+        "event_time",
+    ]:
+        assert generic_text in alert_section
+    for legacy_text in [
+        '"check_bi_type"',
+        '"check_bi_beichi"',
+        '"check_bi_mmd"',
+        '"check_xd_type"',
+        '"check_xd_beichi"',
+        '"check_xd_mmd"',
+        '"check_idx_ma_info"',
+        '"check_idx_macd_info"',
+        '"check_idx_ma_info_enable"',
+        '"check_idx_macd_info_enable"',
+        '"line_type"',
+        '"is_done"',
+        '"is_td"',
+        ".check_idx_ma_info",
+        ".check_idx_macd_info",
+        ".line_type",
+        ".bi_is_done",
+        ".bi_is_td",
+    ]:
+        assert legacy_text not in alert_section
 
 
 class FakeZiXuan:

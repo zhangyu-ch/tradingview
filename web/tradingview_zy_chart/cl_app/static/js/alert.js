@@ -57,7 +57,11 @@ var Alert = (function () {
                   }</span> <span style="color: #16baaa;">${
                     d.frequency || ""
                   }</span> <span style="color: #b37feb;">${
-                    d.line_type || ""
+                    d.event_type || ""
+                  }</span> <span style="color: #fa8c16;">${
+                    d.action || ""
+                  }</span> <span style="color: #52c41a;">${
+                    d.score || ""
                   }</span>
                       </div>
                       <div style="font-size: 16px;">${d.msg || ""}</div>

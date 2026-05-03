@@ -99,6 +99,14 @@ class TableByAlertTask(Base):
     # 添加配置设置编码
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
+    @property
+    def strategy_config(self):
+        return self.check_idx_ma_info or "{}"
+
+    @property
+    def strategy_memo(self):
+        return self.check_idx_macd_info or ""
+
 
 class TableByAlertRecord(Base):
     # 提醒记录
@@ -119,6 +127,22 @@ class TableByAlertRecord(Base):
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
     # 添加配置设置编码
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+
+    @property
+    def event_type(self):
+        return self.line_type or ""
+
+    @property
+    def action(self):
+        return self.bi_is_done or ""
+
+    @property
+    def score(self):
+        return self.bi_is_td or ""
+
+    @property
+    def event_time(self):
+        return self.line_dt
 
 
 class TableByTVMarks(Base):
@@ -810,6 +834,36 @@ class DB(object):
 
         return True
 
+    def task_save_strategy(
+        self,
+        market: str,
+        task_name: str,
+        zx_group: str,
+        frequency: str,
+        interval_minutes: int,
+        strategy_config: str,
+        strategy_memo: str,
+        is_run: int,
+        is_send_msg: int,
+    ):
+        return self.task_save(
+            market=market,
+            task_name=task_name,
+            zx_group=zx_group,
+            frequency=frequency,
+            interval_minutes=interval_minutes,
+            check_bi_type="",
+            check_bi_beichi="",
+            check_bi_mmd="",
+            check_xd_type="",
+            check_xd_beichi="",
+            check_xd_mmd="",
+            check_idx_ma_info=strategy_config,
+            check_idx_macd_info=strategy_memo,
+            is_run=is_run,
+            is_send_msg=is_send_msg,
+        )
+
     def task_query(self, market: str = None, id: int = None) -> List[TableByAlertTask]:
         with self.Session() as session:
             # 查询任务
@@ -876,6 +930,38 @@ class DB(object):
             session.commit()
         return True
 
+    def task_update_strategy(
+        self,
+        id: int,
+        market: str,
+        task_name: str,
+        zx_group: str,
+        frequency: str,
+        interval_minutes: int,
+        strategy_config: str,
+        strategy_memo: str,
+        is_run: int,
+        is_send_msg: int,
+    ):
+        return self.task_update(
+            id=id,
+            market=market,
+            task_name=task_name,
+            zx_group=zx_group,
+            frequency=frequency,
+            interval_minutes=interval_minutes,
+            check_bi_type="",
+            check_bi_beichi="",
+            check_bi_mmd="",
+            check_xd_type="",
+            check_xd_beichi="",
+            check_xd_mmd="",
+            check_idx_ma_info=strategy_config,
+            check_idx_macd_info=strategy_memo,
+            is_run=is_run,
+            is_send_msg=is_send_msg,
+        )
+
     def alert_record_save(
         self,
         market: str,
@@ -919,6 +1005,32 @@ class DB(object):
             session.commit()
 
         return True
+
+    def alert_event_save(
+        self,
+        market: str,
+        task_name: str,
+        stock_code: str,
+        stock_name: str,
+        frequency: str,
+        alert_msg: str,
+        action: str,
+        score: str,
+        event_type: str,
+        event_time: datetime.datetime,
+    ):
+        return self.alert_record_save(
+            market=market,
+            task_name=task_name,
+            stock_code=stock_code,
+            stock_name=stock_name,
+            frequency=frequency,
+            alert_msg=alert_msg,
+            bi_is_done=action,
+            bi_is_td=score,
+            line_type=event_type,
+            line_dt=event_time,
+        )
 
     def alert_record_query_by_code(
         self,

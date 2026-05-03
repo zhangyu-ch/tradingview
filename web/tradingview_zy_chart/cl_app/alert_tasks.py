@@ -77,7 +77,7 @@ class AlertTasks(object):
         )
 
         try:
-            strategy_config = json.loads(alert_config.check_idx_ma_info or "{}")
+            strategy_config = json.loads(alert_config.strategy_config or "{}")
         except json.JSONDecodeError as e:
             self.log.error(f"{alert_config.task_name} strategy_config JSON 解析失败：{e}")
             return False
@@ -107,17 +107,17 @@ class AlertTasks(object):
                     alert_config.frequency,
                 )
                 for event in events:
-                    db.alert_record_save(
+                    db.alert_event_save(
                         market=alert_config.market,
                         task_name=alert_config.task_name,
                         stock_code=event.code,
                         stock_name=event.name,
                         frequency=event.frequency,
                         alert_msg=event.message,
-                        bi_is_done=event.action,
-                        bi_is_td=f"{event.score:.4g}"[:10],
-                        line_type="sig",
-                        line_dt=event.event_time,
+                        action=event.action,
+                        score=f"{event.score:.4g}"[:10],
+                        event_type="sig",
+                        event_time=event.event_time,
                     )
             except Exception as e:
                 self.log.error(f'run {s["code"]} alert exception {e}')
@@ -146,10 +146,10 @@ class AlertTasks(object):
         """
         if alert_config["id"] == "":
             del alert_config["id"]
-            db.task_save(**alert_config)
+            db.task_save_strategy(**alert_config)
         else:
             alert_config["id"] = int(alert_config["id"])
-            db.task_update(**alert_config)
+            db.task_update_strategy(**alert_config)
 
         # 重新运行新的监控
         self.run()

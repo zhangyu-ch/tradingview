@@ -1079,8 +1079,8 @@ def create_app(test_config=None):
                 "zx_group": _l.zx_group,
                 "interval_minutes": _l.interval_minutes,
                 "frequency": _l.frequency,
-                "strategy_config": _l.check_idx_ma_info,
-                "strategy_memo": _l.check_idx_macd_info,
+                "strategy_config": _l.strategy_config,
+                "strategy_memo": _l.strategy_memo,
                 "is_send_msg": _l.is_send_msg,
                 "is_run": _l.is_run,
             }
@@ -1112,7 +1112,7 @@ def create_app(test_config=None):
             _alert_config = _alert_tasks.alert_get(id)
             if _alert_config is not None:
                 try:
-                    strategy_config = json.loads(_alert_config.check_idx_ma_info or "{}")
+                    strategy_config = json.loads(_alert_config.strategy_config or "{}")
                 except json.JSONDecodeError:
                     strategy_config = {}
                 alert_config = {
@@ -1126,21 +1126,7 @@ def create_app(test_config=None):
                     "strategy_kwargs": json.dumps(
                         strategy_config.get("strategy_kwargs", {}), ensure_ascii=False
                     ),
-                    "strategy_memo": _alert_config.check_idx_macd_info or "",
-                    "check_bi_type": "",
-                    "check_bi_beichi": "",
-                    "check_bi_mmd": "",
-                    "check_xd_type": "",
-                    "check_xd_beichi": "",
-                    "check_xd_mmd": "",
-                    "check_idx_ma_info_enable": 0,
-                    "check_idx_ma_info_slow": 10,
-                    "check_idx_ma_info_fast": 5,
-                    "check_idx_ma_info_cross_up": 0,
-                    "check_idx_ma_info_cross_down": 0,
-                    "check_idx_macd_info_enable": 0,
-                    "check_idx_macd_info_cross_up": 0,
-                    "check_idx_macd_info_cross_down": 0,
+                    "strategy_memo": _alert_config.strategy_memo,
                     "is_send_msg": _alert_config.is_send_msg,
                     "is_run": _alert_config.is_run,
                 }
@@ -1197,14 +1183,8 @@ def create_app(test_config=None):
             "interval_minutes": interval_minutes,
             "zx_group": request.form.get("zx_group", ""),
             "frequency": request.form.get("frequency", ""),
-            "check_bi_type": "",
-            "check_bi_beichi": "",
-            "check_bi_mmd": "",
-            "check_xd_type": "",
-            "check_xd_beichi": "",
-            "check_xd_mmd": "",
-            "check_idx_ma_info": strategy_config,
-            "check_idx_macd_info": request.form.get("strategy_memo", ""),
+            "strategy_config": strategy_config,
+            "strategy_memo": request.form.get("strategy_memo", ""),
             "is_send_msg": is_send_msg,
             "is_run": is_run,
         }
@@ -1227,13 +1207,14 @@ def create_app(test_config=None):
         records = db.alert_record_query(market, task_name)
         rls = [
             {
+                "event_type": _r.event_type,
+                "action": _r.action,
+                "score": _r.score,
+                "event_time": _r.event_time,
+                "msg": _r.alert_msg,
                 "code": _r.stock_code,
                 "name": _r.stock_name,
                 "frequency": _r.frequency,
-                "line_type": _r.line_type,
-                "msg": _r.alert_msg,
-                "is_done": _r.bi_is_done,
-                "is_td": _r.bi_is_td,
                 "task_name": _r.task_name,
                 "datetime_str": fun.datetime_to_str(_r.alert_dt),
             }
