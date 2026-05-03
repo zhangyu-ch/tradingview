@@ -59,7 +59,7 @@
   - `setup.py`: package name and package discovery.
   - `check_env.py`: import `tradingview_zy`, check `src/tradingview_zy/config.py`.
   - `windows_run.bat`: start `web/tradingview_zy_chart/app.py`.
-  - `script/chanlun_web.config.js`, `script/chanlun_demo.config.js`, `script/jupyter_lab.config.js`: update app path/name or rename to `script/tradingview_zy_*.config.js`.
+  - `script/tradingview_zy_web.config.js`, `script/tradingview_zy_demo.config.js`, `script/jupyter_lab.config.js`: update app path/name to `tradingview_zy` / `tradingview_zy_chart`.
   - `script/crontab/*.py`, `script/trader/*.py`: update imports; Chanlun-specific script bodies print an unavailable message and exit with code 0.
 
 ### Archive and docs
@@ -1459,8 +1459,8 @@ Expected: commit succeeds.
 **Files:**
 - Modify: `script/crontab/*.py`
 - Modify: `script/trader/*.py`
-- Rename/Modify: `script/chanlun_web.config.js` -> `script/tradingview_zy_web.config.js`
-- Rename/Modify: `script/chanlun_demo.config.js` -> `script/tradingview_zy_demo.config.js`
+- Rename/Modify: `script/tradingview_zy_web.config.js`
+- Rename/Modify: `script/tradingview_zy_demo.config.js`
 - Modify: `windows_run.bat`
 
 - [ ] **Step 1: Replace imports in scripts**
@@ -1490,8 +1490,7 @@ Expected: command exits with code 0.
 Run:
 
 ```bash
-if [ -f script/chanlun_web.config.js ]; then git mv script/chanlun_web.config.js script/tradingview_zy_web.config.js; fi
-if [ -f script/chanlun_demo.config.js ]; then git mv script/chanlun_demo.config.js script/tradingview_zy_demo.config.js; fi
+# PM2 config files were renamed during Task 3 migration.
 python - <<'PY'
 from pathlib import Path
 for path in Path("script").glob("tradingview_zy_*.config.js"):

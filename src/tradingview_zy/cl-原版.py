@@ -16,11 +16,11 @@ bing_data = bing_data.decode()
 if 'KCM' in bing_data:
     raise Exception('密钥错误，请重新获取')
 print('Chanlun-Pro 缠论数据计算')
-print('https://gitee.com/wang-student/tradingview_zy')
+print('https://gitee.com/wang-student/chanlun-pro')
 print(f'''运行环境: Python: {version}''')
 print(f'''授权信息: {bing_data} {expired_str}''')
 print(' *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  *  * ')
-'\n行情缠论数据计算\n\n* Github: https://github.com/yijixiuxin/tradingview_zy\n* gitee: https://gitee.com/wang-student/tradingview_zy\n'
+'\n行情缠论数据计算\n\n* Github: https://github.com/yijixiuxin/chanlun-pro\n* gitee: https://gitee.com/wang-student/chanlun-pro\n'
 from builtins import round as pyarmor__223, len as pyarmor__119, list as pyarmor__115, range as pyarmor__118, isinstance as pyarmor__109, dict as pyarmor__102, sorted as pyarmor__116, print as pyarmor__110, abs as pyarmor__172, int as pyarmor__108, bool as pyarmor__107, str as pyarmor__101, staticmethod as pyarmor__325, Exception as pyarmor__145, set as pyarmor__338
 __author__ = 'wangxu'
 import copy as copy

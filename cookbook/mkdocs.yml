@@ -4,7 +4,7 @@ site_description: '基于缠论的市场行情分析工具'
 site_url: http://www.chanlun-trader.com
 
 repo_name: 'GitHub'
-repo_url: 'https://github.com/yijixiuxin/tradingview_zy'
+repo_url: 'https://github.com/yijixiuxin/chanlun-pro'
 edit_uri: 'blob/master/cookbook/docs/'
 
 markdown_extensions:

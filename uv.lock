@@ -475,7 +475,7 @@ wheels = [
 ]
 
 [[package]]
-name = "chanlun-pro"
+name = "tradingview_zy"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [

@@ -1,1 +1,1 @@
-recursive-include src/chanlun/pytransform *.dylib *.dll *.so
+recursive-include src/tradingview_zy/pytransform *.dylib *.dll *.so

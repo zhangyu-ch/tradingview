@@ -11,9 +11,9 @@
 
 ### 1. 克隆项目到本地
 
-        git clone https://github.com/yijixiuxin/tradingview_zy.git
+        git clone https://github.com/yijixiuxin/chanlun-pro.git
         # gitee 国内地址
-        # git clone https://gitee.com/wang-student/tradingview_zy.git
+        # git clone https://gitee.com/wang-student/chanlun-pro.git
         cd tradingview_zy
 
 ### 2. pip 安装项目依赖包

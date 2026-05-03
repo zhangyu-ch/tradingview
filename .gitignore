@@ -138,11 +138,11 @@ dmypy.json
 cython_debug/
 
 
-src/chanlun_ai
-src/chanlun_strategy
+src/tradingview_zy_ai
+src/tradingview_zy_strategy
 src/core
-web/chanlun_kcm
-web/chanlun_chart/cl_app/static/datafeeds/udf/node_modules
+web/tradingview_zy_kcm
+web/tradingview_zy_chart/cl_app/static/datafeeds/udf/node_modules
 src/Kronos
 
 .idea
@@ -160,10 +160,10 @@ predict
 src/xtquant
 
 # 配置文件排除
-/src/chanlun/config.py
+/src/tradingview_zy/config.py
 # 私有代码排除
-web/chanlun_web/charts/static/datafeeds/udf/node_modules
-web/chanlun_chart/app/static/datafeeds/udf/node_modules
+web/tradingview_zy_web/charts/static/datafeeds/udf/node_modules
+web/tradingview_zy_chart/app/static/datafeeds/udf/node_modules
 **/my
 my_**.py
 my_**.ipynb

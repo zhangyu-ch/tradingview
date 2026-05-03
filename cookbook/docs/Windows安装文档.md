@@ -30,9 +30,9 @@
 > 两个地址项目是同步的，国内的可选 Gitee 国外的可选 GitHub （请帮忙给一个 Star）
 
       # GitHub 地址
-      https://github.com/yijixiuxin/tradingview_zy
+      https://github.com/yijixiuxin/chanlun-pro
       # Gitee 地址
-      https://gitee.com/wang-student/tradingview_zy
+      https://gitee.com/wang-student/chanlun-pro
 
 ### 2. 在 `tradingview_zy` 目录，双击 `windows_install.bat` 文件进行安装
 
