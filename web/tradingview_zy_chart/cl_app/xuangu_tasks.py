@@ -17,7 +17,7 @@ class XuanguTasks(object):
     def xuangu_task_config_list(self):
         return getattr(config, "XUANGU_STRATEGIES", {})
 
-    def _run_xuangu_job(self, market, task_name, frequencys, opt_type, zx_group):
+    def _run_xuangu_job(self, market, task_name, frequencys, opt_type, zx_group, target_zx_group):
         task_config = self.xuangu_task_config_list()[task_name]
         strategy = load_strategy(
             task_config["strategy_path"],
@@ -41,15 +41,22 @@ class XuanguTasks(object):
         results = []
         for frequency in frequencys:
             results.extend(runner.run(market, stocks, frequency))
+        if target_zx_group:
+            zx.clear_zx_stocks(target_zx_group)
+            for event in results:
+                zx.add_stock(target_zx_group, event.code, event.name, memo=event.message)
         self.running_tasks[task_name] = results
         return True
 
-    def run_xuangu(self, market, task_name, frequencys, opt_type, zx_group):
+    def run_xuangu(self, market, task_name, frequencys, opt_type, zx_group, target_zx_group=None):
         """
         执行选个股
         """
         if task_name not in self.xuangu_task_config_list().keys():
             return False
+
+        if target_zx_group is None:
+            target_zx_group = zx_group
 
         task_id = f"{market}_{task_name}"
         if (
@@ -60,11 +67,13 @@ class XuanguTasks(object):
             return False
 
         if self.scheduler is None:
-            return self._run_xuangu_job(market, task_name, frequencys, opt_type, zx_group)
+            return self._run_xuangu_job(
+                market, task_name, frequencys, opt_type, zx_group, target_zx_group
+            )
 
         task_config = self.xuangu_task_config_list()[task_name]
         task_display_name = task_config.get("name", task_name)
-        task_name_for_scheduler = f"{market}:{task_display_name} {frequencys} -> 【{zx_group}】"
+        task_name_for_scheduler = f"{market}:{task_display_name} {frequencys} -> 【{target_zx_group}】"
 
         self.scheduler.add_job(
             func=self._run_xuangu_job,
@@ -74,6 +83,7 @@ class XuanguTasks(object):
                 frequencys,
                 opt_type,
                 zx_group,
+                target_zx_group,
             ),
             trigger="date",
             next_run_time=datetime.datetime.now(),

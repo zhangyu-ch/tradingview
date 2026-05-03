@@ -1105,20 +1105,6 @@ def create_app(test_config=None):
             "strategy_path": "",
             "strategy_kwargs": "{}",
             "strategy_memo": "",
-            "check_bi_type": "",
-            "check_bi_beichi": "",
-            "check_bi_mmd": "",
-            "check_xd_type": "",
-            "check_xd_beichi": "",
-            "check_xd_mmd": "",
-            "check_idx_ma_info_enable": 0,
-            "check_idx_ma_info_slow": 10,
-            "check_idx_ma_info_fast": 5,
-            "check_idx_ma_info_cross_up": 0,
-            "check_idx_ma_info_cross_down": 0,
-            "check_idx_macd_info_enable": 0,
-            "check_idx_macd_info_cross_up": 0,
-            "check_idx_macd_info_cross_down": 0,
             "is_send_msg": 1,
             "is_run": 1,
         }
@@ -1313,6 +1299,7 @@ def create_app(test_config=None):
         task_name = request.form["task_name"]
         frequencys = request.form["frequencys"]
         src_zx_group = request.form["src_zx_group"]
+        target_zx_group = request.form.get("target_zx_group", src_zx_group)
         opt_type = request.form["opt_type"]
 
         frequencys = frequencys.split(",")
@@ -1331,7 +1318,7 @@ def create_app(test_config=None):
             }
 
         run_res = _xuangu_tasks.run_xuangu(
-            market, task_name, frequencys, opt_type, src_zx_group
+            market, task_name, frequencys, opt_type, src_zx_group, target_zx_group
         )
 
         return {

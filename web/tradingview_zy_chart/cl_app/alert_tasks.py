@@ -115,8 +115,8 @@ class AlertTasks(object):
                         frequency=event.frequency,
                         alert_msg=event.message,
                         bi_is_done=event.action,
-                        bi_is_td=str(event.score),
-                        line_type="strategy",
+                        bi_is_td=f"{event.score:.4g}"[:10],
+                        line_type="sig",
                         line_dt=event.event_time,
                     )
             except Exception as e:
