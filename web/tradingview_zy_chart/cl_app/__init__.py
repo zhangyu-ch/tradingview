@@ -3,6 +3,7 @@ import json
 import os
 import time
 import traceback
+import importlib
 
 import pinyin
 import pytz
@@ -35,8 +36,6 @@ from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.web_payloads import filter_klines_by_timestamp_range, klines_to_tv_history
 from tradingview_zy.zixuan import ZiXuan
-
-from .other_tasks import OtherTasks
 
 
 def create_app(test_config=None):
@@ -179,23 +178,85 @@ def create_app(test_config=None):
     __log = fun.get_logger()
 
     def _unavailable_task_message():
-        return "监控/选股任务将在策略接入后可用"
+        return "监控/选股任务将在策略接入后可用：旧缠论依赖已移除"
+
+    _REMOVED_LEGACY_MODULE_PREFIXES = (
+        "tradingview_zy.cl",
+        "tradingview_zy.kcharts",
+        "tradingview_zy.monitor",
+        "tradingview_zy.xuangu",
+    )
+    _REMOVED_LEGACY_IMPORT_NAMES = ("cl", "cl_interface", "cl_utils", "kcharts", "monitor", "xuangu")
+
+    def _is_removed_legacy_import_error(error: ImportError):
+        missing_name = getattr(error, "name", None) or ""
+        if any(
+            missing_name == prefix or missing_name.startswith(f"{prefix}.")
+            for prefix in _REMOVED_LEGACY_MODULE_PREFIXES
+        ):
+            return True
+
+        message = str(error)
+        if any(prefix in message for prefix in _REMOVED_LEGACY_MODULE_PREFIXES):
+            return True
+        return missing_name == "tradingview_zy" and any(
+            f"'{import_name}'" in message for import_name in _REMOVED_LEGACY_IMPORT_NAMES
+        )
 
     class _UnavailableTasks:
-        def __init__(self, module_name: str, error: Exception):
+        def __init__(self, module_name: str, error: ImportError):
             self.module_name = module_name
             self.error = error
 
         def __getattr__(self, name):
             raise RuntimeError(_unavailable_task_message()) from self.error
 
+    class _LazyTasks:
+        def __init__(self, module_name: str, class_name: str, on_load=None):
+            self.module_name = module_name
+            self.class_name = class_name
+            self.on_load = on_load
+            self._task_obj = None
+            self._task_error = None
+
+        @property
+        def error(self):
+            return self._task_error
+
+        def _load(self):
+            if self._task_obj is not None or self._task_error is not None:
+                return self._task_obj
+
+            task_cls, task_error = _load_task_class(self.module_name, self.class_name)
+            if task_error is not None:
+                self._task_error = task_error
+                return None
+
+            self._task_obj = task_cls(scheduler)
+            if self.on_load is not None:
+                self.on_load(self._task_obj)
+            return self._task_obj
+
+        def __getattr__(self, name):
+            task_obj = self._load()
+            if task_obj is None:
+                raise RuntimeError(_unavailable_task_message()) from self._task_error
+            return getattr(task_obj, name)
+
     def _load_task_class(module_name: str, class_name: str):
         try:
-            module = __import__(f"{__package__}.{module_name}", fromlist=[class_name])
+            module = importlib.import_module(f"{__package__}.{module_name}")
             return getattr(module, class_name), None
-        except Exception as e:
-            __log.warning("%s 导入失败：%s", module_name, e)
-            return None, e
+        except (ImportError, ModuleNotFoundError) as e:
+            if _is_removed_legacy_import_error(e):
+                __log.warning(
+                    "%s 依赖的旧缠论模块已移除，任务将在策略接入后可用：%s",
+                    module_name,
+                    e,
+                )
+                return None, e
+            __log.exception("%s 导入异常", module_name)
+            raise
 
     def _task_error_response(error: Exception = None):
         msg = _unavailable_task_message()
@@ -203,20 +264,9 @@ def create_app(test_config=None):
             msg = f"{msg}：{error}"
         return {"ok": False, "msg": msg}
 
-    alert_task_cls, alert_task_error = _load_task_class("alert_tasks", "AlertTasks")
-    if alert_task_cls is None:
-        _alert_tasks = _UnavailableTasks("alert_tasks", alert_task_error)
-    else:
-        _alert_tasks = alert_task_cls(scheduler)
-        _alert_tasks.run()
-
-    xuangu_task_cls, xuangu_task_error = _load_task_class("xuangu_tasks", "XuanguTasks")
-    if xuangu_task_cls is None:
-        _xuangu_tasks = _UnavailableTasks("xuangu_tasks", xuangu_task_error)
-    else:
-        _xuangu_tasks = xuangu_task_cls(scheduler)
-
-    _other_tasks = OtherTasks(scheduler)
+    _alert_tasks = _LazyTasks("alert_tasks", "AlertTasks", lambda task: task.run())
+    _xuangu_tasks = _LazyTasks("xuangu_tasks", "XuanguTasks")
+    _other_tasks = _LazyTasks("other_tasks", "OtherTasks")
 
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
@@ -1007,6 +1057,10 @@ def create_app(test_config=None):
     def _guard_task(task_obj):
         if isinstance(task_obj, _UnavailableTasks):
             return _task_error_response(task_obj.error)
+        if isinstance(task_obj, _LazyTasks):
+            task_obj._load()
+            if task_obj.error is not None:
+                return _task_error_response(task_obj.error)
         return None
 
     # 警报提醒列表
