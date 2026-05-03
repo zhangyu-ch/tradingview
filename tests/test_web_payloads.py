@@ -5,6 +5,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from tradingview_zy.fun import datetime_to_int
 from tradingview_zy.web_payloads import klines_to_tv_history
 
 
@@ -26,7 +27,7 @@ def test_klines_to_tv_history_returns_ohlcv_only():
 
     assert payload == {
         "s": "ok",
-        "t": [1777762200],
+        "t": [datetime_to_int(klines.iloc[0]["date"])],
         "o": [10.0],
         "c": [10.5],
         "h": [10.8],
