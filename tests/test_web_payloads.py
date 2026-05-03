@@ -1,3 +1,4 @@
+import importlib
 import sys
 from pathlib import Path
 
@@ -5,11 +6,21 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from tradingview_zy.fun import datetime_to_int
-from tradingview_zy.web_payloads import klines_to_tv_history
+
+def test_import_web_payloads_does_not_import_config_dependent_fun():
+    sys.modules.pop("tradingview_zy.web_payloads", None)
+    sys.modules.pop("tradingview_zy.fun", None)
+    sys.modules.pop("tradingview_zy.config", None)
+
+    importlib.import_module("tradingview_zy.web_payloads")
+
+    assert "tradingview_zy.fun" not in sys.modules
+    assert "tradingview_zy.config" not in sys.modules
 
 
 def test_klines_to_tv_history_returns_ohlcv_only():
+    from tradingview_zy.web_payloads import klines_to_tv_history
+
     klines = pd.DataFrame(
         [
             {
@@ -27,7 +38,7 @@ def test_klines_to_tv_history_returns_ohlcv_only():
 
     assert payload == {
         "s": "ok",
-        "t": [datetime_to_int(klines.iloc[0]["date"])],
+        "t": [int(klines.iloc[0]["date"].timestamp())],
         "o": [10.0],
         "c": [10.5],
         "h": [10.8],
