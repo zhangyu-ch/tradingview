@@ -84,6 +84,23 @@ Web 选股任务会读取自选组股票，按配置周期拉取 K 线，然后�
 
 ## 回测和交易接入
 
-回测和交易模块消费同一类策略信号。策略只负责生成信号，回测撮合和 trader 下单逻辑负责执行。
+选股和监控直接消费 `StrategySignal`。回测策略目前仍使用 `tradingview_zy.backtesting.base.Operation` 表达开平仓操作，需要在你的回测策略中把普通信号转换为 `Operation`。
 
-回测策略需要把普通 K 线信号转换为 `tradingview_zy.backtesting.base.Operation`。交易执行层只关心操作类型、标的、价格和数量，不关心信号来源。
+最小示例：
+
+```python
+from tradingview_zy.backtesting.base import Operation
+
+
+def signal_to_operation(signal):
+    if signal.action not in {"buy", "open"}:
+        return None
+    return Operation(
+        code=signal.code,
+        opt="open",
+        signal=signal.action,
+        msg=signal.message,
+    )
+```
+
+实盘交易层保留下单、撤单、账户和持仓查询等执行能力。交易代码应显式决定信号到订单的转换规则，例如标的、方向、数量、价格类型和风控限制；不要假设 `StrategySignal` 会被 trader 自动下单。
