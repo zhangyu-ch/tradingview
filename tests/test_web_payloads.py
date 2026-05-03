@@ -48,3 +48,41 @@ def test_klines_to_tv_history_returns_ohlcv_only():
     }
     assert "bis" not in payload
     assert "mmds" not in payload
+
+
+def test_filter_klines_by_timestamp_range_keeps_requested_window():
+    from tradingview_zy.web_payloads import filter_klines_by_timestamp_range
+
+    klines = pd.DataFrame(
+        [
+            {"date": pd.Timestamp("2026-05-03 09:30:00"), "open": 1},
+            {"date": pd.Timestamp("2026-05-03 09:35:00"), "open": 2},
+            {"date": pd.Timestamp("2026-05-03 09:40:00"), "open": 3},
+        ]
+    )
+
+    result = filter_klines_by_timestamp_range(
+        klines,
+        int(pd.Timestamp("2026-05-03 09:34:00").timestamp()),
+        int(pd.Timestamp("2026-05-03 09:36:00").timestamp()),
+    )
+
+    assert result["open"].tolist() == [2]
+
+
+def test_filter_klines_by_timestamp_range_returns_empty_for_empty_window():
+    from tradingview_zy.web_payloads import filter_klines_by_timestamp_range
+
+    klines = pd.DataFrame(
+        [
+            {"date": pd.Timestamp("2026-05-03 09:30:00"), "open": 1},
+        ]
+    )
+
+    result = filter_klines_by_timestamp_range(
+        klines,
+        int(pd.Timestamp("2026-05-03 09:34:00").timestamp()),
+        int(pd.Timestamp("2026-05-03 09:36:00").timestamp()),
+    )
+
+    assert result.empty

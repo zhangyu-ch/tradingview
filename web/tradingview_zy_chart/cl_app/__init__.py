@@ -33,12 +33,10 @@ from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
-from tradingview_zy.web_payloads import klines_to_tv_history
+from tradingview_zy.web_payloads import filter_klines_by_timestamp_range, klines_to_tv_history
 from tradingview_zy.zixuan import ZiXuan
 
-from .alert_tasks import AlertTasks
 from .other_tasks import OtherTasks
-from .xuangu_tasks import XuanguTasks
 
 
 def create_app(test_config=None):
@@ -178,14 +176,47 @@ def create_app(test_config=None):
     # 记录请求次数，超过则返回 no_data
     __history_req_counter = {}
 
-    _alert_tasks = AlertTasks(scheduler)
-    _alert_tasks.run()
+    __log = fun.get_logger()
 
-    _xuangu_tasks = XuanguTasks(scheduler)
+    def _unavailable_task_message():
+        return "监控/选股任务将在策略接入后可用"
+
+    class _UnavailableTasks:
+        def __init__(self, module_name: str, error: Exception):
+            self.module_name = module_name
+            self.error = error
+
+        def __getattr__(self, name):
+            raise RuntimeError(_unavailable_task_message()) from self.error
+
+    def _load_task_class(module_name: str, class_name: str):
+        try:
+            module = __import__(f"{__package__}.{module_name}", fromlist=[class_name])
+            return getattr(module, class_name), None
+        except Exception as e:
+            __log.warning("%s 导入失败：%s", module_name, e)
+            return None, e
+
+    def _task_error_response(error: Exception = None):
+        msg = _unavailable_task_message()
+        if error is not None:
+            msg = f"{msg}：{error}"
+        return {"ok": False, "msg": msg}
+
+    alert_task_cls, alert_task_error = _load_task_class("alert_tasks", "AlertTasks")
+    if alert_task_cls is None:
+        _alert_tasks = _UnavailableTasks("alert_tasks", alert_task_error)
+    else:
+        _alert_tasks = alert_task_cls(scheduler)
+        _alert_tasks.run()
+
+    xuangu_task_cls, xuangu_task_error = _load_task_class("xuangu_tasks", "XuanguTasks")
+    if xuangu_task_cls is None:
+        _xuangu_tasks = _UnavailableTasks("xuangu_tasks", xuangu_task_error)
+    else:
+        _xuangu_tasks = xuangu_task_cls(scheduler)
 
     _other_tasks = OtherTasks(scheduler)
-
-    __log = fun.get_logger()
 
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
@@ -445,18 +476,25 @@ def create_app(test_config=None):
         """
 
         symbol = request.args.get("symbol")
-        _from = request.args.get("from")
-        _to = request.args.get("to")
         resolution = request.args.get("resolution")
         firstDataRequest = request.args.get("firstDataRequest", "false")
+        try:
+            _from = int(request.args.get("from"))
+            _to = int(request.args.get("to"))
+        except (TypeError, ValueError):
+            return {"s": "error", "errmsg": "invalid from/to"}
+
+        if _from < 0 and _to < 0:
+            return {"s": "no_data"}
+
+        if resolution not in resolution_maps:
+            return {"s": "error", "errmsg": "unsupported resolution"}
 
         _symbol_res_old_k_time_key = f"{symbol}_{resolution}"
 
         now_time = time.time()
 
         s = "ok"
-        if int(_from) < 0 and int(_to) < 0:
-            s = "no_data"
 
         if firstDataRequest == "false":
             # 判断在 5 秒内，同一个请求大于 5 次，返回 no_data
@@ -498,11 +536,12 @@ def create_app(test_config=None):
         if klines is None or len(klines) == 0:
             return {"s": "no_data"}
 
-        if int(_to) < fun.datetime_to_int(klines.iloc[0]["date"]):
+        if _to < fun.datetime_to_int(klines.iloc[0]["date"]):
             return {"s": "no_data"}
 
-        if firstDataRequest == "false":
-            klines = klines.iloc[-10:]
+        klines = filter_klines_by_timestamp_range(klines, _from, _to)
+        if klines is None or len(klines) == 0:
+            return {"s": "no_data"}
 
         return klines_to_tv_history(
             klines,
@@ -965,10 +1004,18 @@ def create_app(test_config=None):
 
         return {"ok": res}
 
+    def _guard_task(task_obj):
+        if isinstance(task_obj, _UnavailableTasks):
+            return _task_error_response(task_obj.error)
+        return None
+
     # 警报提醒列表
     @app.route("/alert_list/<market>")
     @login_required
     def alert_list(market):
+        task_error = _guard_task(_alert_tasks)
+        if task_error is not None:
+            return {"code": 1, "msg": task_error["msg"], "count": 0, "data": []}
         al = _alert_tasks.task_list(market)
         al = [
             {
@@ -997,6 +1044,9 @@ def create_app(test_config=None):
     @app.route("/alert_edit/<market>/<id>")
     @login_required
     def alert_edit(market, id):
+        task_error = _guard_task(_alert_tasks)
+        if task_error is not None:
+            return task_error
         alert_config = {
             "id": "",
             "market": market,
@@ -1086,6 +1136,9 @@ def create_app(test_config=None):
     @app.route("/alert_save", methods=["POST"])
     @login_required
     def alert_save():
+        task_error = _guard_task(_alert_tasks)
+        if task_error is not None:
+            return task_error
         check_idx_ma_infos = json.dumps(
             {
                 "enable": (
@@ -1158,6 +1211,9 @@ def create_app(test_config=None):
     @app.route("/alert_del/<id>")
     @login_required
     def alert_del(id):
+        task_error = _guard_task(_alert_tasks)
+        if task_error is not None:
+            return task_error
         res = _alert_tasks.alert_del(id)
         return {"ok": res}
 
@@ -1195,6 +1251,9 @@ def create_app(test_config=None):
     @app.route("/xuangu/task_list/<market>")
     @login_required
     def xuangu_task_list(market):
+        task_error = _guard_task(_xuangu_tasks)
+        if task_error is not None:
+            return task_error
         # 获取自选组
         zx = ZiXuan(market)
         zixuan_groups = zx.zixuan_list
@@ -1226,6 +1285,9 @@ def create_app(test_config=None):
     @app.route("/xuangu/task_add", methods=["POST"])
     @login_required
     def xuangu_task_add():
+        task_error = _guard_task(_xuangu_tasks)
+        if task_error is not None:
+            return task_error
         market = request.form["market"]
         task_name = request.form["task_name"]
         frequencys = request.form["frequencys"]

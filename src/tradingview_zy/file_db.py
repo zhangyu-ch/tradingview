@@ -98,6 +98,36 @@ class FileCacheDB(object):
                 pass
         return True
 
+    def get_web_cl_data(self, *args, **kwargs):
+        """
+        旧缠论缓存接口已移除，保留方法名避免调用方出现 AttributeError。
+        """
+        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
+
+    def clear_web_cl_data(self, *args, **kwargs):
+        """
+        旧缠论缓存接口已移除，保留方法名避免调用方出现 AttributeError。
+        """
+        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
+
+    def clear_old_web_cl_data(self, *args, **kwargs):
+        """
+        旧缠论缓存接口已移除，保留方法名避免调用方出现 AttributeError。
+        """
+        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
+
+    def clear_all_cl_data(self, *args, **kwargs):
+        """
+        旧缠论缓存接口已移除，保留方法名避免调用方出现 AttributeError。
+        """
+        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
+
+    def get_low_to_high_cl_data(self, *args, **kwargs):
+        """
+        旧缠论缓存接口已移除，保留方法名避免调用方出现 AttributeError。
+        """
+        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
+
     def cache_pkl_to_file(self, filename: str, data: object):
         """
         将缓存数据持久化到文件中
