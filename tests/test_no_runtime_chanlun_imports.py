@@ -33,6 +33,7 @@ REMOVED_IMPORTS = {
     "tradingview_zy.cl_interface",
     "tradingview_zy.cl_utils",
     "tradingview_zy.kcharts",
+    "tradingview_zy.monitor",
     "tradingview_zy.strategy",
     "tradingview_zy.xuangu",
     "cl_myquant",
@@ -87,6 +88,7 @@ def test_removed_import_prefixes_cover_deleted_runtime_modules():
     assert is_removed_import("tradingview_zy.cl")
     assert is_removed_import("tradingview_zy.cl_analyse")
     assert is_removed_import("tradingview_zy.kcharts")
+    assert is_removed_import("tradingview_zy.monitor")
     assert is_removed_import("tradingview_zy.strategy")
     assert is_removed_import("tradingview_zy.xuangu")
 
@@ -98,22 +100,27 @@ import chanlun
 from chanlun import cl
 import tradingview_zy.cl_utils
 from tradingview_zy.cl_utils import helper
-from tradingview_zy import cl_utils, strategy, xuangu, kcharts, cl_analyse
+import tradingview_zy.monitor
+from tradingview_zy.monitor import unavailable
+from tradingview_zy import cl_utils, strategy, xuangu, kcharts, cl_analyse, monitor
 """
     tree = ast.parse(source, filename=str(py_file))
 
     offenders = collect_removed_import_offenders(py_file, tree)
 
-    assert len(offenders) == 9
+    assert len(offenders) == 12
     assert any("import chanlun" in offender for offender in offenders)
     assert any("from chanlun import ..." in offender for offender in offenders)
     assert any("import tradingview_zy.cl_utils" in offender for offender in offenders)
     assert any("from tradingview_zy.cl_utils import ..." in offender for offender in offenders)
+    assert any("import tradingview_zy.monitor" in offender for offender in offenders)
+    assert any("from tradingview_zy.monitor import ..." in offender for offender in offenders)
     assert any("from tradingview_zy import cl_utils" in offender for offender in offenders)
     assert any("from tradingview_zy import strategy" in offender for offender in offenders)
     assert any("from tradingview_zy import xuangu" in offender for offender in offenders)
     assert any("from tradingview_zy import kcharts" in offender for offender in offenders)
     assert any("from tradingview_zy import cl_analyse" in offender for offender in offenders)
+    assert any("from tradingview_zy import monitor" in offender for offender in offenders)
 
 
 def test_runtime_python_files_do_not_import_chanlun():
