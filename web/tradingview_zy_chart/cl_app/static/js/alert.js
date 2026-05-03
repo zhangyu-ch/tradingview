@@ -87,6 +87,30 @@ var Alert = (function () {
       layui.use(["table", "dropdown", "util"], function () {
         let table = layui.table;
         let dropdown = layui.dropdown;
+
+        function parseStrategyConfig(row) {
+          if (!row.strategy_config) {
+            return {};
+          }
+          if (typeof row.strategy_config === "object") {
+            return row.strategy_config;
+          }
+          try {
+            return JSON.parse(row.strategy_config);
+          } catch (e) {
+            return {};
+          }
+        }
+
+        function strategyKwargsText(row) {
+          let config = parseStrategyConfig(row);
+          let kwargs = config.strategy_kwargs || {};
+          if (typeof kwargs === "string") {
+            return kwargs;
+          }
+          return JSON.stringify(kwargs);
+        }
+
         table.render({
           elem: "#table_alerts",
           defaultContextmenu: false,
@@ -120,45 +144,25 @@ var Alert = (function () {
                 },
               },
               {
-                filed: "check_bi_type",
-                title: "笔方向",
+                filed: "strategy_config",
+                title: "策略路径",
                 templet: function (d) {
-                  return d.check_bi_type;
+                  let config = parseStrategyConfig(d);
+                  return config.strategy_path || "";
                 },
               },
               {
-                filed: "check_bi_beichi",
-                title: "笔背驰",
+                filed: "strategy_kwargs",
+                title: "策略参数",
                 templet: function (d) {
-                  return d.check_bi_beichi;
+                  return strategyKwargsText(d);
                 },
               },
               {
-                filed: "check_bi_mmd",
-                title: "笔买卖点",
+                filed: "strategy_memo",
+                title: "策略备注",
                 templet: function (d) {
-                  return d.check_bi_mmd;
-                },
-              },
-              {
-                filed: "check_xd_type",
-                title: "线段方向",
-                templet: function (d) {
-                  return d.check_xd_type;
-                },
-              },
-              {
-                filed: "check_xd_beichi",
-                title: "线段背驰",
-                templet: function (d) {
-                  return d.check_xd_beichi;
-                },
-              },
-              {
-                filed: "check_xd_mmd",
-                title: "线段买卖点",
-                templet: function (d) {
-                  return d.check_xd_mmd;
+                  return d.strategy_memo || "";
                 },
               },
               {

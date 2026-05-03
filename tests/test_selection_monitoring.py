@@ -101,6 +101,26 @@ def test_alert_template_uses_strategy_form_without_legacy_fields():
         assert legacy_text not in template
 
 
+def test_alert_js_task_list_uses_strategy_columns_without_legacy_fields():
+    alert_js = (
+        ROOT / "web" / "tradingview_zy_chart" / "cl_app" / "static" / "js" / "alert.js"
+    ).read_text(encoding="utf-8")
+
+    for legacy_field in [
+        "check_bi_type",
+        "check_bi_beichi",
+        "check_bi_mmd",
+        "check_xd_type",
+        "check_xd_beichi",
+        "check_xd_mmd",
+    ]:
+        assert legacy_field not in alert_js
+    for legacy_title in ["笔方向", "笔背驰", "笔买卖点", "线段方向", "线段背驰", "线段买卖点"]:
+        assert legacy_title not in alert_js
+    for strategy_text in ["strategy_config", "strategy_kwargs", "strategy_memo", "策略路径", "策略参数", "策略备注"]:
+        assert strategy_text in alert_js
+
+
 def test_alert_records_use_length_safe_strategy_fields(monkeypatch):
     import cl_app.alert_tasks as alert_tasks
 
