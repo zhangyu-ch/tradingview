@@ -1282,7 +1282,7 @@ def create_app(test_config=None):
         task_name = request.form["task_name"]
         frequencys = request.form["frequencys"]
         src_zx_group = request.form["src_zx_group"]
-        target_zx_group = request.form.get("target_zx_group", src_zx_group)
+        target_zx_group = request.form.get("target_zx_group", "").strip()
         opt_type = request.form["opt_type"]
 
         frequencys = frequencys.split(",")

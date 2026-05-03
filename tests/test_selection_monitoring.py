@@ -367,6 +367,75 @@ class XuanguTaskStrategy:
         ]
 
 
+def test_xuangu_task_add_without_target_group_passes_empty_target(monkeypatch):
+    import cl_app
+
+    calls = []
+
+    class FakeXuanguTasks:
+        def xuangu_task_config_list(self):
+            return {"task1": {"frequency_num": 1}}
+
+        def run_xuangu(self, market, task_name, frequencys, opt_type, src_zx_group, target_zx_group):
+            calls.append(
+                {
+                    "market": market,
+                    "task_name": task_name,
+                    "frequencys": frequencys,
+                    "opt_type": opt_type,
+                    "src_zx_group": src_zx_group,
+                    "target_zx_group": target_zx_group,
+                }
+            )
+            return True
+
+    monkeypatch.setattr(cl_app.config, "LOGIN_PWD", "")
+    fake_exchange = SimpleNamespace(
+        support_frequencys=lambda: {"d": "日线"},
+        default_code=lambda: "SH.000001",
+    )
+    monkeypatch.setattr(cl_app, "get_exchange", lambda market: fake_exchange)
+
+    app = cl_app.create_app()
+    route_view = app.view_functions["xuangu_task_add"]
+    wrapped_view = route_view.__wrapped__
+    closure_cells = dict(zip(wrapped_view.__code__.co_freevars, wrapped_view.__closure__))
+    monkeypatch.setattr(closure_cells["_xuangu_tasks"].cell_contents, "_task_obj", FakeXuanguTasks())
+
+    base_form = {
+        "market": "a",
+        "task_name": "task1",
+        "frequencys": "d",
+        "src_zx_group": "source",
+        "opt_type": "long",
+    }
+    for target_value, expected_target in [(None, ""), ("   ", ""), ("target", "target")]:
+        form = base_form.copy()
+        if target_value is not None:
+            form["target_zx_group"] = target_value
+        with app.test_request_context(
+            "/xuangu/task_add",
+            method="POST",
+            data=form,
+        ):
+            response = wrapped_view()
+
+        assert response["ok"] is True
+        assert calls[-1]["src_zx_group"] == "source"
+        assert calls[-1]["target_zx_group"] == expected_target
+
+
+def test_alert_js_strategy_config_parser_rejects_null_and_arrays():
+    alert_js = (
+        ROOT / "web" / "tradingview_zy_chart" / "cl_app" / "static" / "js" / "alert.js"
+    ).read_text(encoding="utf-8")
+
+    assert "function isPlainObject(value)" in alert_js
+    assert "value !== null" in alert_js
+    assert "!Array.isArray(value)" in alert_js
+    assert "return isPlainObject(config) ? config : {};" in alert_js
+
+
 def test_xuangu_task_without_target_group_only_updates_running_results(monkeypatch):
     import cl_app.xuangu_tasks as xuangu_tasks
 

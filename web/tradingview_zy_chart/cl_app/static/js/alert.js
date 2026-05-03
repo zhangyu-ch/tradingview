@@ -92,15 +92,20 @@ var Alert = (function () {
         let table = layui.table;
         let dropdown = layui.dropdown;
 
+        function isPlainObject(value) {
+          return value !== null && typeof value === "object" && !Array.isArray(value);
+        }
+
         function parseStrategyConfig(row) {
           if (!row.strategy_config) {
             return {};
           }
-          if (typeof row.strategy_config === "object") {
+          if (isPlainObject(row.strategy_config)) {
             return row.strategy_config;
           }
           try {
-            return JSON.parse(row.strategy_config);
+            let config = JSON.parse(row.strategy_config);
+            return isPlainObject(config) ? config : {};
           } catch (e) {
             return {};
           }
