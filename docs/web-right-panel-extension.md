@@ -79,7 +79,7 @@ web/tradingview_zy_chart/cl_app/static/css/right_panel.css
     const refresh = document.getElementById('right-extension-panel-refresh');
     const clear = document.getElementById('right-extension-panel-clear');
     if (!content) {
-      return;
+      return false;
     }
 
     function setText(text) {
@@ -112,12 +112,11 @@ web/tradingview_zy_chart/cl_app/static/css/right_panel.css
     }
 
     setText('');
+    return true;
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initRightPanel);
-  } else {
-    initRightPanel();
+  if (!initRightPanel()) {
+    document.addEventListener('DOMContentLoaded', initRightPanel, { once: true });
   }
 })();
 ```
@@ -133,7 +132,7 @@ web/tradingview_zy_chart/cl_app/static/css/right_panel.css
 <script type="text/javascript" src="{{ url_for('static', filename='js/right_panel.js') }}"></script>
 ```
 
-CSS 建议放在 `app.css` 之后；JS 建议放在页面底部或现有业务脚本之前，确保业务脚本调用时 `window.tradingviewZyRightPanel` 已初始化。
+CSS 建议放在 `app.css` 之后；JS 建议放在扩展窗口 HTML 容器之后。业务脚本如果要立即调用 `window.tradingviewZyRightPanel`，也应放在扩展脚本之后；否则在 `DOMContentLoaded`、用户事件或自定义刷新事件中调用。
 
 ## 与图表联动
 
@@ -147,7 +146,8 @@ window.tradingviewZyRightPanel.setText('等待策略结果...');
 
 ```javascript
 function refreshRightPanel(market, code) {
-  fetch('/panel/strategy_results/' + market + '/' + code)
+  const params = new URLSearchParams({ market: market, code: code });
+  fetch('/panel/strategy_results?' + params.toString())
     .then(function (response) { return response.json(); })
     .then(function (payload) {
       if (!window.tradingviewZyRightPanel) {
@@ -163,9 +163,14 @@ function refreshRightPanel(market, code) {
 新增接口时保持右侧窗口与图表低耦合：
 
 ```python
-@app.route('/panel/strategy_results/<market>/<code>')
+from flask import request
+
+
+@app.route('/panel/strategy_results')
 @login_required
-def panel_strategy_results(market, code):
+def panel_strategy_results():
+    market = request.args.get('market', '')
+    code = request.args.get('code', '')
     return {"code": 0, "data": []}
 ```
 
