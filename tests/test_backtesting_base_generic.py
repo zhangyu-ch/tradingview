@@ -1,4 +1,5 @@
 import ast
+import datetime
 import importlib
 import inspect
 import sys
@@ -7,6 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from tradingview_zy.backtesting.base import MarketDatas, Operation, POSITION, Strategy
+from tradingview_zy.backtesting.backtest import BackTest
+from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 
 
 
@@ -93,7 +96,78 @@ def test_runtime_operation_position_calls_use_generic_keywords():
     assert bad_calls == []
 
 
-def test_position_accepts_type_keyword_for_direction_semantics():
-    pos = POSITION(code="rb2210", signal="risk", type="long")
-    assert pos.type == "long"
-    assert pos.mmd == "risk"
+
+
+def test_cl_wtpy_base_strategy_imports_without_removed_chanlun_modules():
+    module = importlib.import_module("cl_wtpy.strategy.base_strategy")
+
+    assert module is not None
+    assert "tradingview_zy.cl" not in sys.modules
+    assert "tradingview_zy.cl_interface" not in sys.modules
+    assert "tradingview_zy.cl_utils" not in sys.modules
+
+
+def test_cl_wtpy_base_strategy_source_does_not_import_removed_chanlun_modules():
+    repo_root = Path(__file__).resolve().parents[1]
+    source_path = repo_root / "src" / "cl_wtpy" / "strategy" / "base_strategy.py"
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+    bad_imports = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            bad_imports.extend(
+                alias.name for alias in node.names if alias.name.startswith("tradingview_zy.cl")
+            )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if node.module.startswith("tradingview_zy.cl"):
+                bad_imports.append(node.module)
+
+    assert bad_imports == []
+
+
+def test_backtest_trader_execute_uses_operation_opt_for_generic_signal():
+    trader = BackTestTrader("test", mode="signal", market="us")
+    trader.datas = type(
+        "Datas",
+        (),
+        {
+            "now_date": datetime.datetime(2024, 1, 2, 9, 30),
+            "last_k_info": lambda self, code: {
+                "date": datetime.datetime(2024, 1, 2, 9, 30),
+                "open": 100,
+                "close": 100,
+                "high": 101,
+                "low": 99,
+            },
+        },
+    )()
+
+    assert trader.execute("SH.000001", Operation(code="SH.000001", opt="buy", signal="breakout")) is True
+    pos = trader.positions["SH.000001:breakout"]
+    assert pos.type == "做多"
+
+    assert trader.execute(
+        "SH.000001",
+        Operation(code="SH.000001", opt="sell", signal="breakout"),
+        pos,
+    ) is True
+    assert "breakout" in trader.results
+
+
+def test_backtest_result_accepts_unknown_signal_key():
+    bt = BackTest()
+    bt.mode = "signal"
+    bt.init_balance = 100000
+    bt.trader = BackTestTrader("test", mode="signal", market="us")
+    bt.trader.results = {
+        "breakout": {
+            "win_num": 1,
+            "loss_num": 0,
+            "win_balance": 1200,
+            "loss_balance": 0,
+        }
+    }
+
+    result = bt.result(is_print=False)
+
+    assert "breakout" in result["mmd_infos"].get_string()

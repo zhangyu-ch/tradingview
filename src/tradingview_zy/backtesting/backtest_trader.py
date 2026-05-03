@@ -192,6 +192,36 @@ class BackTestTrader(Trader):
         # 缓冲区的执行操作，用于在特定时间点批量进行开盘检测后，对要执行的开盘信号再次进行过滤筛选
         self.buffer_opts: List[Operation] = []
 
+    @staticmethod
+    def _empty_result_stats():
+        return {"win_num": 0, "loss_num": 0, "win_balance": 0, "loss_balance": 0}
+
+    def ensure_result(self, signal: str):
+        if signal not in self.results:
+            self.results[signal] = self._empty_result_stats()
+        return self.results[signal]
+
+    def _record_closed_position(self, pos: POSITION, signal: str):
+        result_stats = self.ensure_result(signal)
+        if pos.profit > 0:
+            # 盈利
+            result_stats["win_num"] += 1
+            result_stats["win_balance"] += pos.profit
+        else:
+            # 亏损
+            result_stats["loss_num"] += 1
+            result_stats["loss_balance"] += abs(pos.profit)
+
+        if self.mode == "trade":
+            self.balance += pos.balance + pos.profit
+
+        # 将持仓添加到历史持仓
+        if pos.code not in self.positions_history.keys():
+            self.positions_history[pos.code] = []
+        self.positions_history[pos.code].append(copy.deepcopy(pos))
+        # 记录总计手续费
+        self.fee_total += pos.fee
+
     def add_times(self, key, ts):
         if key not in self.use_times.keys():
             self.use_times[key] = 0
@@ -295,13 +325,15 @@ class BackTestTrader(Trader):
             return self.datas.now_date
         return datetime.datetime.now()
 
-    def get_opt_close_uids(self, code: str, mmd: str, allow_close_uids: list):
+    def get_opt_close_uids(
+        self, code: str, signal: str, allow_close_uids: list, pos_type: str = None
+    ):
         # 实盘中起效果，允许执行的 close_uid 列表
         # 有多种格式
         #       列表格式：['a', 'b', 'c']，表示只在允许的 close_uid 中才允许操作
         #       字典格式：{'buy': ['a', 'b'], 'sell' : ['c', 'd']}，表示 buy 只在做多的仓位中允许，sell 只在做空的仓位中允许
         #       字典格式：{'1buy': ['a', 'b'], '1sell' : ['c', 'd']}，按照给定的买卖点，分别设置平仓信号
-        #       字典格式：{'SHFE.RB': ['a', 'b', 'c'], 'SHFE.FU': {'buy': ['a'], 'sell': ['b']}} ,按照代码分别设置平仓信号
+        #       字典格式：{'SHFE.RB': ['a', 'b', 'c'], 'SHFE.FU': {'buy': ['a'], 'sell': ['b']}} ,按照代码分别设置
         if allow_close_uids is None:
             return ["clear"]
 
@@ -309,18 +341,20 @@ class BackTestTrader(Trader):
         if isinstance(allow_close_uids, list):
             return allow_close_uids
 
-        # 按照买卖操作的类型，返回对应的 close_uid
-        opt_type = "buy" if "buy" in mmd else "sell"
+        # 按照持仓方向，返回对应的 close_uid
+        opt_type = "buy" if pos_type == "做多" else "sell"
         if isinstance(allow_close_uids, dict) and opt_type in allow_close_uids.keys():
-            return allow_close_uids[mmd]
+            return allow_close_uids[opt_type]
 
-        # 按照买卖点的类型，返回对应的 close_uid
-        if isinstance(allow_close_uids, dict) and mmd in allow_close_uids.keys():
-            return allow_close_uids[mmd]
+        # 按照信号名，返回对应的 close_uid
+        if isinstance(allow_close_uids, dict) and signal in allow_close_uids.keys():
+            return allow_close_uids[signal]
 
         # 按照代码分别设置的
         if isinstance(allow_close_uids, dict) and code in allow_close_uids.keys():
-            return self.get_opt_close_uids(code, mmd, allow_close_uids[code])
+            return self.get_opt_close_uids(
+                code, signal, allow_close_uids[code], pos_type=pos_type
+            )
         return ["clear"]
 
     # 运行的唯一入口
@@ -351,7 +385,7 @@ class BackTestTrader(Trader):
                 _opt.code = code
                 if self.mode != "signal":
                     allow_close_uids = self.get_opt_close_uids(
-                        _opt.code, _opt.mmd, self.strategy.allow_close_uids
+                        _opt.code, _opt.signal, self.strategy.allow_close_uids, pos_type=pos.type
                     )
                     if _opt.close_uid not in allow_close_uids:
                         continue
@@ -436,7 +470,7 @@ class BackTestTrader(Trader):
             if pos.amount == 0:
                 continue
             code_price = self.get_price(pos.code)
-            if "buy" in pos.mmd:
+            if pos.type == "做多":
                 code_balance = pos.amount * code_price["close"]
                 if self.market == "futures":
                     code_balance = pos.balance - pos.release_balance
@@ -764,13 +798,21 @@ class BackTestTrader(Trader):
                 opt.close_uid = "clear"
 
             # 传递有持仓对象，则表示要进行平仓操作，判断当前是否有正确的持仓信息
+            if opt.opt not in {"buy", "sell"}:
+                return False
+
             if pos is not None:
                 if pos.balance == 0.0 or pos.now_pos_rate == 0.0 or pos.amount == 0.0:
                     return True
 
-            opt_mmd = opt.mmd
-            # 检查是否在允许做的买卖点上
-            if self.allow_mmds is not None and opt_mmd not in self.allow_mmds:
+            signal = opt.signal
+            direction = (
+                "short"
+                if isinstance(opt.info, dict) and opt.info.get("type") in {"short", "做空"}
+                else "long"
+            )
+            # 检查是否在允许做的信号上
+            if self.allow_mmds is not None and signal not in self.allow_mmds:
                 return True
 
             if opt.opt == "buy":
@@ -783,14 +825,14 @@ class BackTestTrader(Trader):
                     if pos.now_pos_rate >= 1:
                         return True
                 else:
-                    pos = POSITION(code=code, signal=opt.mmd, open_uid=opt.open_uid)
+                    pos = POSITION(code=code, signal=signal, open_uid=opt.open_uid)
                     self.positions[opt.open_uid] = pos
 
             res = None
             order_type = None
 
-            # 买点，买入，开仓做多
-            if "buy" in opt_mmd and opt.opt == "buy":
+            # 买入操作，开仓做多
+            if direction == "long" and opt.opt == "buy":
                 # 开仓后，不同位置分仓买入的key
                 if opt.key in pos.open_keys.keys():
                     return False
@@ -869,11 +911,11 @@ class BackTestTrader(Trader):
                 order_type = "open_long"
 
                 self._print_log(
-                    f"[{code} - {self.get_now_datetime()}] // {opt_mmd} 做多买入（{res['price']} - {res['amount']}），原因： {opt.msg}"
+                    f"[{code} - {self.get_now_datetime()}] // {signal} 做多买入（{res['price']} - {res['amount']}），原因： {opt.msg}"
                 )
 
-            # 卖点，买入，开仓做空（期货）
-            if self.can_short and "sell" in opt_mmd and opt.opt == "buy":
+            # 买入操作，开仓做空（期货）
+            if self.can_short and direction == "short" and opt.opt == "buy":
                 # 唯一key判断
                 if opt.key in pos.open_keys.keys():
                     return False
@@ -948,11 +990,11 @@ class BackTestTrader(Trader):
                 order_type = "open_short"
 
                 self._print_log(
-                    f"[{code} - {self.get_now_datetime()}] // {opt_mmd} 做空卖出（{res['price']} - {res['amount']}），原因： {opt.msg}"
+                    f"[{code} - {self.get_now_datetime()}] // {signal} 做空卖出（{res['price']} - {res['amount']}），原因： {opt.msg}"
                 )
 
-            # 卖点，卖出，平仓做空（期货）
-            if self.can_short and "sell" in opt_mmd and opt.opt == "sell":
+            # 卖出操作，平仓做空（期货）
+            if self.can_short and pos.type == "做空" and opt.opt == "sell":
                 # 唯一key判断
                 if opt.key in pos.close_keys.keys():
                     return False
@@ -1015,7 +1057,7 @@ class BackTestTrader(Trader):
                     % (
                         code,
                         self.get_now_datetime(),
-                        opt_mmd,
+                        signal,
                         res["price"],
                         res["amount"],
                         opt.msg,
@@ -1069,32 +1111,15 @@ class BackTestTrader(Trader):
 
                         # 打印记录
                         self._print_log(
-                            f"[{code} - {opt_mmd}] // 平仓做空 (开仓：{pos.open_datetime} / {pos.price} 平仓：{pos.close_datetime} / {res['price']}) (开仓资金：{pos.balance} 平仓资金：{pos.release_balance} 手续费：{pos.fee}) 盈亏：{profit} ({profit_rate:.2f}%)"
+                            f"[{code} - {signal}] // 平仓做空 (开仓：{pos.open_datetime} / {pos.price} 平仓：{pos.close_datetime} / {res['price']}) (开仓资金：{pos.balance} 平仓资金：{pos.release_balance} 手续费：{pos.fee}) 盈亏：{profit} ({profit_rate:.2f}%)"
                         )
 
-                        if pos.profit > 0:
-                            # 盈利
-                            self.results[opt_mmd]["win_num"] += 1
-                            self.results[opt_mmd]["win_balance"] += pos.profit
-                        else:
-                            # 亏损
-                            self.results[opt_mmd]["loss_num"] += 1
-                            self.results[opt_mmd]["loss_balance"] += abs(pos.profit)
-
-                        if self.mode == "trade":
-                            self.balance += pos.balance + profit
-
-                        # 将持仓添加到历史持仓
-                        if pos.code not in self.positions_history.keys():
-                            self.positions_history[pos.code] = []
-                        self.positions_history[pos.code].append(copy.deepcopy(pos))
-                        # 记录总计手续费
-                        self.fee_total += pos.fee
+                        self._record_closed_position(pos, signal)
 
                 order_type = "close_short"
 
-            # 买点，卖出，平仓做多
-            if "buy" in opt_mmd and opt.opt == "sell":
+            # 卖出操作，平仓做多
+            if pos.type == "做多" and opt.opt == "sell":
                 # 唯一key判断
                 if opt.key in pos.close_keys.keys():
                     return False
@@ -1161,7 +1186,7 @@ class BackTestTrader(Trader):
                     % (
                         code,
                         self.get_now_datetime(),
-                        opt_mmd,
+                        signal,
                         res["price"],
                         res["amount"],
                         opt.msg,
@@ -1215,27 +1240,10 @@ class BackTestTrader(Trader):
 
                         # 打印记录
                         self._print_log(
-                            f"[{code} - {opt_mmd}] // 平仓做多 (开仓：{pos.open_datetime} / {pos.price} 平仓：{pos.close_datetime} / {res['price']}) (开仓资金：{pos.balance} 平仓资金：{pos.release_balance} 手续费：{pos.fee}) 盈亏：{profit} ({profit_rate:.2f}%)"
+                            f"[{code} - {signal}] // 平仓做多 (开仓：{pos.open_datetime} / {pos.price} 平仓：{pos.close_datetime} / {res['price']}) (开仓资金：{pos.balance} 平仓资金：{pos.release_balance} 手续费：{pos.fee}) 盈亏：{profit} ({profit_rate:.2f}%)"
                         )
 
-                        if pos.profit > 0:
-                            # 盈利
-                            self.results[opt_mmd]["win_num"] += 1
-                            self.results[opt_mmd]["win_balance"] += pos.profit
-                        else:
-                            # 亏损
-                            self.results[opt_mmd]["loss_num"] += 1
-                            self.results[opt_mmd]["loss_balance"] += abs(pos.profit)
-
-                        if self.mode == "trade":
-                            self.balance += pos.balance + profit
-
-                        # 将持仓添加到历史持仓
-                        if pos.code not in self.positions_history.keys():
-                            self.positions_history[pos.code] = []
-                        self.positions_history[pos.code].append(copy.deepcopy(pos))
-                        # 记录总计手续费
-                        self.fee_total += pos.fee
+                        self._record_closed_position(pos, signal)
 
                 order_type = "close_long"
 

@@ -348,8 +348,9 @@ class BackTest:
                 BT.load(f)
                 # 汇总结果
                 for mmd, res in BT.trader.results.items():
+                    result = self.trader.results.setdefault(mmd, {})
                     for _k, _v in res.items():
-                        self.trader.results[mmd][_k] += _v
+                        result[_k] = result.get(_k, 0) + _v
                 # 历史持仓合并
                 for _code, _poss in BT.trader.positions_history.items():
                     self.trader.positions_history[_code] = _poss
@@ -712,16 +713,17 @@ class BackTest:
         total_win_balance = 0
         total_loss_balance = 0
         for k in self.trader.results.keys():
-            mmd = mmds[k]
-            win_num = self.trader.results[k]["win_num"]
-            loss_num = self.trader.results[k]["loss_num"]
+            mmd = mmds.get(k, k)
+            result_stats = self.trader.results.get(k, {})
+            win_num = result_stats.get("win_num", 0)
+            loss_num = result_stats.get("loss_num", 0)
             shenglv = (
                 0
                 if win_num == 0 and loss_num == 0
                 else win_num / (win_num + loss_num) * 100
             )
-            win_balance = self.trader.results[k]["win_balance"]
-            loss_balance = self.trader.results[k]["loss_balance"]
+            win_balance = result_stats.get("win_balance", 0)
+            loss_balance = result_stats.get("loss_balance", 0)
             net_balance = win_balance - loss_balance
             back_rate = 0 if win_balance == 0 else loss_balance / win_balance * 100
             win_mean_balance = 0 if win_num == 0 else win_balance / win_num

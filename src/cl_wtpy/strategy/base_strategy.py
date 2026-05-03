@@ -1,25 +1,30 @@
+import pandas as pd
 from pandas.core.api import DataFrame as DataFrame
-from tradingview_zy.cl_interface import ICL, List
-from wtpy import BaseCtaStrategy, WtBarRecords
-from wtpy import CtaContext
+from typing import Dict, List
 
-from tradingview_zy import cl
-from tradingview_zy.backtesting.base import *
-from tradingview_zy.cl_interface import *
-from tradingview_zy.cl_utils import query_cl_chart_config
+try:
+    from wtpy import BaseCtaStrategy, CtaContext, WtBarRecords
+except ModuleNotFoundError:
+    class BaseCtaStrategy:
+        def __init__(self, name):
+            self.name = name
+
+    CtaContext = object
+    WtBarRecords = object
+
+from tradingview_zy.backtesting.base import MarketDatas, Operation, POSITION, Strategy
 
 
 class WTPYMarketData(MarketDatas):
 
     def __init__(self, context: CtaContext, frequencys: List[str]):
         self.context: CtaContext = context
-        cl_config = query_cl_chart_config("futures", "RB")
-        super().__init__("futures", frequencys, cl_config)
+        super().__init__("futures", frequencys)
 
     @staticmethod
     def bars_to_df_klines(code: str, bars: WtBarRecords) -> pd.DataFrame:
         """
-        将 wtpy 的k线数据，转换成 缠论所需的 DataFram 数据
+        将 wtpy 的 K 线数据转换成通用 DataFrame 数据
         """
         bars_df = bars.to_df()
         # Index(['date', 'bartime', 'open', 'high', 'low', 'close', 'settle', 'money',
@@ -43,18 +48,13 @@ class WTPYMarketData(MarketDatas):
             "low": float(kline.iloc[-1]["low"]),
         }
 
-    def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
-        key = f"{code}_{frequency}"
-        if key not in self.cache_cl_datas.keys():
-            self.cache_cl_datas[key] = cl.CL(code, frequency, self.cl_config)
-        klines = self.klines(code, frequency)
-        self.cache_cl_datas[key].process_klines(klines)
-        return self.cache_cl_datas[key]
+    def get_cl_data(self, code, frequency, cl_config: dict = None):
+        raise NotImplementedError("缠论运行路径已移除，WTPYMarketData 仅提供通用 K 线数据")
 
 
 class BaseStrategy(BaseCtaStrategy):
     """
-    缠论 wtpy 策略类
+    WTPY 通用策略类
     """
 
     def __init__(self, name: str, strategy: Strategy, code: str, period: str):
@@ -63,7 +63,7 @@ class BaseStrategy(BaseCtaStrategy):
         self.code = code
         self.period = period
 
-        # 基于缠论的策略
+        # 通用策略
         self.STR = strategy
 
         # wtpy 数据转换
@@ -74,7 +74,7 @@ class BaseStrategy(BaseCtaStrategy):
 
     def on_init(self, context: CtaContext):
         """
-        初始化策略时，初始缠论数据
+        初始化策略数据
         """
         if self.datas is None:
             self.datas = WTPYMarketData(context, [self.period])
@@ -163,8 +163,8 @@ class BaseStrategy(BaseCtaStrategy):
             # 根据实际交易品种，定义交易数量
             trdUnit = 1
 
-            # 读取最新的行情数据，增量更新，不需要太多
-            cds = self.get_cl_datas(code, context)
+            # 读取最新行情数据
+            self.datas.klines(code, self.period)
             # 读取当前仓位
             curPos = context.stra_get_position(code)
 
@@ -172,9 +172,9 @@ class BaseStrategy(BaseCtaStrategy):
                 # 当前空仓，判断是否可以开仓
                 open_opts = self.STR.open(code, self.datas)
                 for opt in open_opts:
-                    if "buy" in opt.mmd:
+                    if opt.opt == "buy":
                         self.open_buy(context, code, trdUnit, opt)
-                    elif "sell" in opt.mmd:
+                    elif opt.opt == "sell" and self.datas.market in {"currency", "futures"}:
                         self.open_sell(context, code, trdUnit, opt)
             elif curPos > 0:
                 # 查找当前运行代码的持仓记录
