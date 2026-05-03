@@ -7,19 +7,19 @@ import traceback
 import numpy as np
 import talib
 
-from chanlun import fun
-from chanlun.backtesting.backtest_klines import BackTestKlines
-from chanlun.backtesting.base import Strategy
-from chanlun.cl_interface import BI, ICL
-from chanlun.cl_utils import (
+from tradingview_zy import fun
+from tradingview_zy.backtesting.backtest_klines import BackTestKlines
+from tradingview_zy.backtesting.base import Strategy
+from tradingview_zy.cl_interface import BI, ICL
+from tradingview_zy.cl_utils import (
     query_cl_chart_config,
     up_cross,
 )
-from chanlun.db import db
-from chanlun.zixuan import ZiXuan
-from chanlun.config import get_data_path
+from tradingview_zy.db import db
+from tradingview_zy.zixuan import ZiXuan
+from tradingview_zy.config import get_data_path
 from tqdm.auto import tqdm
-from chanlun import cl
+from tradingview_zy import cl
 
 """
 进行历史选股，测试选股条件是否符合自己预期
@@ -273,7 +273,7 @@ class HistoryXuangu(object):
 
 if __name__ == "__main__":
 
-    from chanlun.exchange.exchange_tdx import ExchangeTDX
+    from tradingview_zy.exchange.exchange_tdx import ExchangeTDX
 
     # 要执行历史选股的股票列表
     # run_codes = ["SZ.000019"]

@@ -23,8 +23,8 @@
 2. 通过设置 config.py 配置的 TDX_PATH 本地通达信安装路径，读取通达信文件获取行业与概念；（推荐使用）
 
 ```
-    Python 文件 ：src/chanlun/exchange/stocks_bkgn.py
-    JSON 文件：src/chanlun/exchange/new_stocks_bkgn.json
+    Python 文件 ：src/tradingview_zy/exchange/stocks_bkgn.py
+    JSON 文件：src/tradingview_zy/exchange/new_stocks_bkgn.json
 ```
 
 ### 如何获取 v2rayN 的 HTTP 代理 IP 和端口？

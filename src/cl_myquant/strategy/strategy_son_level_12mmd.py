@@ -18,11 +18,11 @@ from gm.api import (
     subscribe,
 )
 
-from chanlun import fun
-from chanlun.backtesting.base import Strategy
-from chanlun.cl_utils import query_cl_chart_config
-from chanlun.exchange.exchange import convert_stock_kline_frequency
-from chanlun.strategy import strategy_son_level_1mmd
+from tradingview_zy import fun
+from tradingview_zy.backtesting.base import Strategy
+from tradingview_zy.cl_utils import query_cl_chart_config
+from tradingview_zy.exchange.exchange import convert_stock_kline_frequency
+from tradingview_zy.strategy import strategy_son_level_1mmd
 from cl_myquant.base import MyQuantData, MyQuantTrader
 
 # 定义全局变量

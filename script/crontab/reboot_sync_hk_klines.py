@@ -1,6 +1,6 @@
 #:  -*- coding: utf-8 -*-
-from chanlun.exchange.exchange_db import ExchangeDB
-from chanlun.exchange.exchange_futu import ExchangeFutu
+from tradingview_zy.exchange.exchange_db import ExchangeDB
+from tradingview_zy.exchange.exchange_futu import ExchangeFutu
 import traceback
 import time
 

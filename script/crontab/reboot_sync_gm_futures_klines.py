@@ -7,9 +7,9 @@ import pandas as pd
 from gm.api import ADJUST_NONE, get_symbols, history, set_serv_addr, set_token
 from tqdm.auto import tqdm
 
-from chanlun import config, fun
-from chanlun.exchange.exchange import convert_futures_kline_frequency
-from chanlun.exchange.exchange_db import ExchangeDB
+from tradingview_zy import config, fun
+from tradingview_zy.exchange.exchange import convert_futures_kline_frequency
+from tradingview_zy.exchange.exchange_db import ExchangeDB
 
 """
 同步期货行情到数据库中

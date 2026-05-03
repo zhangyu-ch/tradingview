@@ -1,6 +1,6 @@
 from cl_vnpy.strategies.base_strategy import *
 
-from chanlun.strategy.strategy_xd_mmd import StrategyXDMMD
+from tradingview_zy.strategy.strategy_xd_mmd import StrategyXDMMD
 
 
 class ChanlunXdmmdStrategy(BaseStrategy):

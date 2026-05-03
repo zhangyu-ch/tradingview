@@ -218,7 +218,7 @@ ALTER TABLE `cl_alert_task`
     * 新增个人定制，缠论缺口
     * 分型计算优化
 * 回测 run 方法增加回调方法参数
-* chanlun_chart web 项目，tv 图表配置增加分型显示选项
+* tradingview_zy_chart web 项目，tv 图表配置增加分型显示选项
 * tv 图表版本更新
 
 ### 2023-10-02
@@ -245,7 +245,7 @@ ALTER TABLE `cl_alert_task`
 
 * 缠论计算：拆分三类买卖点情况，非为 9段内与 9段及以上 中枢的三类买卖点，可自行配置
 * 配合 TV图表数据要求，修改各个交易所 日线及以上周期的返回时间
-* 修改 新版 chanlun_chart WEB 项目相关bug
+* 修改 新版 tradingview_zy_chart WEB 项目相关bug
 
 
 ### 2023-07-17
@@ -505,7 +505,7 @@ ALTER TABLE `cl_alert_task`
 新增：通过掘金量化，获取期货主连合约数据脚本，并同步到数据库中，进行回测使用 `script/crontab/reboot_sync_gm_futures_klines.py`
 
 * 策略 `Operation` 操作对象，增加 `opt : lock` 锁仓的操作，应用于期货策略
-* 缠论配置项：修改为保存到 `Redis` 中，并且可以单个品种独立设置，相关方法在 `src/chanlun/cl_utils.py` 文件中
+* 缠论配置项：修改为保存到 `Redis` 中，并且可以单个品种独立设置，相关方法在 `src/tradingview_zy/cl_utils.py` 文件中
 * WEB 页面，可设置更多的图表参数（新增副图、成交量均线、RSI、ATR、CCI、KDJ）
 * WEB 页面，缠论配置可设置多个中枢类型，并在图表上进行展示
 * WEB 页面，可设置图表初始化展示的K线数量（如果觉得 1000 太多，图太小，可自行改小一些）
@@ -535,7 +535,7 @@ ALTER TABLE `cl_alert_task`
     * `xg_single_pre_bi_tk_and_3buy` : 在三买点前一笔，有跳空缺口
 * 沪深行情页面，增加 F10资料 快捷入口，可直达 东方财富的F10 页面
 * 自选组，沪深的参数由原来的 `stock` 更改为 `a`
-* 文档地址修改为：https://chanlun-pro.readthedocs.io/
+* 文档地址修改为：https://tradingview_zy.readthedocs.io/
 
 ### 2022-06-24
 
@@ -572,7 +572,7 @@ ALTER TABLE `cl_alert_task`
 * 策略回测增加进度条，展示当前回测进度
 * `exchange_tdx.py` 请求行情的 klines 增加缓存，避免每次都全量多次查询行情数据
 * 自选类增加清空方法 `clear_zx_stocks`
-* 项目文档重新整理，在线地址 https://chanlun-pro.readthedocs.io/
+* 项目文档重新整理，在线地址 https://tradingview_zy.readthedocs.io/
 * 策略
     * 增加高级别根据低级别1类买卖点信号开仓策略，采用多周期的笔进行判断（`strategy_son_level_1mmd.py`）
     * 增加高级别根据低级别1类买卖点信号开仓策略，采用低级别递归进行判断（`strategy_zsd_xd_bi_1mmd.py`）
@@ -581,9 +581,9 @@ ALTER TABLE `cl_alert_task`
 
 > 策略是否有效，和 `cl_config` 配置也有很大关系，不同的市场适用不同的缠论配置，可根据 `OptimizationSetting` 进行参数优化，查找最优配置
 >
-> `chanlun.backtesting.backtest.BackTest:246` 节省参数优化执行的时间，这里可以手动设置每次循环的周期
+> `tradingview_zy.backtesting.backtest.BackTest:246` 节省参数优化执行的时间，这里可以手动设置每次循环的周期
 >
-> `chanlun.backtesting.backtest.BackTest:257` 这里设置参数优化评估的结果值，可以设置为 max_profit_rate ,查找最大盈亏百分比总和最大的
+> `tradingview_zy.backtesting.backtest.BackTest:257` 这里设置参数优化评估的结果值，可以设置为 max_profit_rate ,查找最大盈亏百分比总和最大的
 
 ### 2022-05-27
 
@@ -609,14 +609,14 @@ ALTER TABLE `cl_alert_task`
 > 方向性中枢：计算的中枢，进入与离开的方向一致（除最后一个未完成中枢）
 
 * 支持掘金量化回测，并增加示例 [run.py](src/cl_myquant/run.py)
-* 增加基于最后一个中枢的策略示例 [strategy_last_zs_3mmd.py](src/chanlun/strategy/strategy_last_zs_3mmd.py)
+* 增加基于最后一个中枢的策略示例 [strategy_last_zs_3mmd.py](src/tradingview_zy/strategy/strategy_last_zs_3mmd.py)
 
 ### 2022-05-13
 
 * 缠论计算修改
     * 修改默认配置，分型包含为允许、笔中枢类型为标准、中枢位置关系为 zggdd
     * 类3买点逻辑优化
-    * 多级别分析的类转移到 chanlun.cl_analyse.py 文件中
+    * 多级别分析的类转移到 tradingview_zy.cl_analyse.py 文件中
     * 修复计算bug
 * 回测增加缠论参数优化功能，参看 [回测_缠论参数优化](notebook/回测_缠论参数优化.ipynb)
 * online_market_datas.py 获取线上行情数据增加缓存，避免多次重复请求，需要手动调用 clear_cache 清除缓存
@@ -666,7 +666,7 @@ ALTER TABLE `cl_alert_task`
 
 * 增加美股行情支持 @Jiang Haoquan 提供
 * 交易所对象整理，所有交易所对象放在 exchange 包中，可在 config.py 中配置 web 所使用的各个市场交易所
-* 增加更多选股条件设置，支持多周期选股，在 src/chanlun/xuangu/xuangu.py
+* 增加更多选股条件设置，支持多周期选股，在 src/tradingview_zy/xuangu/xuangu.py
 * 回测图表优化
 * 策略类 Strategy 增加一些策略中常用的方法（最后完成笔、强停顿、验证分型等等）
 * 增加binance交易所获取K线数量，原 1000 到 1500 （数据库支持可到 2000）
@@ -711,7 +711,7 @@ ALTER TABLE `cl_alert_task`
 
 ### 2022-04-05
 
-### chanlun-pro 项目更新
+### tradingview_zy 项目更新
 
 * 缠论核心 cl.py 代码加密并增加授权验证
 * 增加本地选股脚本 script/xuangu.py，用于代替之前聚宽平台的选股功能
@@ -727,7 +727,7 @@ ALTER TABLE `cl_alert_task`
 
 ### 2022-03-25
 
-### chanlun-pro 项目更新
+### tradingview_zy 项目更新
 
 * 缠论中枢增加 段内中枢 功能，在线段内查找并标识笔中枢
 * 增加中枢区间配置，可设置 实际高低 与 顶底端点 两个配置，用来计算 中枢高低点
@@ -747,7 +747,7 @@ ALTER TABLE `cl_alert_task`
 
 ### 2022-03-22
 
-### chanlun-pro 项目更新
+### tradingview_zy 项目更新
 
 * 缠论线段计算 bug 修复
 * 将港股与沪深股市分开两个页面展示
@@ -759,7 +759,7 @@ ALTER TABLE `cl_alert_task`
 
 ## 2022-03-20
 
-### chanlun-pro 项目更新
+### tradingview_zy 项目更新
 
 * 股票列表通过 通达信 获取
 * 增加股票行情获取条数，原来 800 条增加到现在的 2400 条
@@ -779,7 +779,7 @@ ALTER TABLE `cl_alert_task`
 
 具体可参考：https://github.com/yijixiuxin/chanlun/tree/main/example
 
-### chanlun-pro 项目更新
+### tradingview_zy 项目更新
 
 * 图表增加均线
 * 增加页面可定义指标参数设置

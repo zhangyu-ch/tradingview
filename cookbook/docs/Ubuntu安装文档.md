@@ -11,10 +11,10 @@
 
 ### 1. 克隆项目到本地
 
-        git clone https://github.com/yijixiuxin/chanlun-pro.git
+        git clone https://github.com/yijixiuxin/tradingview_zy.git
         # gitee 国内地址
-        # git clone https://gitee.com/wang-student/chanlun-pro.git
-        cd chanlun-pro
+        # git clone https://gitee.com/wang-student/tradingview_zy.git
+        cd tradingview_zy
 
 ### 2. pip 安装项目依赖包
 
@@ -38,10 +38,10 @@
 
          vim ~/.bashrc
          # 在最后一行增加  project_path 替换成项目所在的目录
-         export PYTHONPATH=$PYTHONPATH:/project_path/chanlun-pro/src:
+         export PYTHONPATH=$PYTHONPATH:/project_path/tradingview_zy/src:
          source ~/.bashrc
 
-### 4. 在 `src/chanlun` 目录， 复制拷贝 `config.py.demo` 文件为 `config.py` 并修改其中的 [配置项](配置文件说明.md)
+### 4. 在 `src/tradingview_zy` 目录， 复制拷贝 `config.py.demo` 文件为 `config.py` 并修改其中的 [配置项](配置文件说明.md)
 
 ### 5. 运行项目根目录中的 `check_env.py` 文件，检查环境是否OK，如果输出 “环境OK”，则可以继续进行，如果有错误，则安装提示进行修复
 
@@ -50,10 +50,10 @@
 
 ### 6. 加作者微信，获取授权许可文件，并放置在项目中的 `src/pyarmor_runtime_005445` 目录下
 
-### 7. 到 `web/chanlun_chart` 目录，启动 web 服务
+### 7. 到 `web/tradingview_zy_chart` 目录，启动 web 服务
 
          conda activate chanlun
-         cd web/chanlun_chart
+         cd web/tradingview_zy_chart
          python app.py
 
     

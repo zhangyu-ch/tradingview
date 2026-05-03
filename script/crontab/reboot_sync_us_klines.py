@@ -5,8 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from tqdm.auto import tqdm
 
-from chanlun.exchange.exchange_db import ExchangeDB
-from chanlun.exchange.exchange_ib import ExchangeIB
+from tradingview_zy.exchange.exchange_db import ExchangeDB
+from tradingview_zy.exchange.exchange_ib import ExchangeIB
 
 """
 同步美股数据到数据库中

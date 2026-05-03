@@ -30,13 +30,13 @@
 > 两个地址项目是同步的，国内的可选 Gitee 国外的可选 GitHub （请帮忙给一个 Star）
 
       # GitHub 地址
-      https://github.com/yijixiuxin/chanlun-pro
+      https://github.com/yijixiuxin/tradingview_zy
       # Gitee 地址
-      https://gitee.com/wang-student/chanlun-pro
+      https://gitee.com/wang-student/tradingview_zy
 
-### 2. 在 `chanlun-pro` 目录，双击 `windows_install.bat` 文件进行安装
+### 2. 在 `tradingview_zy` 目录，双击 `windows_install.bat` 文件进行安装
 
-### 3. 在 `chanlun-pro` 目录，双击 `windows_run.bat` 运行项目
+### 3. 在 `tradingview_zy` 目录，双击 `windows_run.bat` 运行项目
 
 
 ---
@@ -52,11 +52,11 @@
          # 我的电脑 -> 右键菜单选“属性” -> 高级系统设置 -> 高级 -> 环境变量 -> 系统变量 -> 新建
          # 系统变量信息，project_path 需要替换成项目所在目录
          变量名：PYTHONPATH
-         变量值：\你的项目代码路径\chanlun-pro\src
+         变量值：\你的项目代码路径\tradingview_zy\src
          
          设置完成后，重启终端 ，输入命令 $env:PYTHONPATH  查看是否设置成功
 
-### 在 `src/chanlun` 目录， 复制拷贝 `config.py.demo` 文件为 `config.py` 并修改其中的 [配置项](配置文件说明.md)
+### 在 `src/tradingview_zy` 目录， 复制拷贝 `config.py.demo` 文件为 `config.py` 并修改其中的 [配置项](配置文件说明.md)
 
 UV 和 Conda 任选一个自己喜欢的就行
 
@@ -65,8 +65,8 @@ UV 和 Conda 任选一个自己喜欢的就行
       # 安装 uv
       powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
       
-      # 进入 chanlun-pro 目录，创建虚拟环境，安装依赖包
-      cd \你的项目代码路径\chanlun-pro
+      # 进入 tradingview_zy 目录，创建虚拟环境，安装依赖包
+      cd \你的项目代码路径\tradingview_zy
       
       uv venv --python=3.11 .venv
       uv sync
@@ -75,7 +75,7 @@ UV 和 Conda 任选一个自己喜欢的就行
       uv run check_env.py
 
       # 运行 Web 服务
-      uv run web/chanlun_chart/app.py
+      uv run web/tradingview_zy_chart/app.py
 
 ### Conda 安装命令
 
@@ -94,5 +94,5 @@ UV 和 Conda 任选一个自己喜欢的就行
       python check_env.py
 
       # 运行 Web 服务
-      python web/chanlun_chart/app.py
+      python web/tradingview_zy_chart/app.py
       

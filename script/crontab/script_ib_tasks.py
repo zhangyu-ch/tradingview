@@ -9,10 +9,10 @@ import ib_insync
 import pandas as pd
 import pytz
 
-from chanlun import config, fun, rd
-from chanlun.base import Market
-from chanlun.exchange.exchange_ib import CmdEnum, ib_res_hkey
-from chanlun.file_db import FileCacheDB
+from tradingview_zy import config, fun, rd
+from tradingview_zy.base import Market
+from tradingview_zy.exchange.exchange_ib import CmdEnum, ib_res_hkey
+from tradingview_zy.file_db import FileCacheDB
 
 
 def run_tasks(client_id: int):

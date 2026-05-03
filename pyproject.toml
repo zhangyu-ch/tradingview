@@ -1,7 +1,7 @@
 [project]
-name = "chanlun-pro"
+name = "tradingview_zy"
 version = "1.0.0"
-description = "chanlun pro"
+description = "TradingView market data, monitoring, backtesting, and trading tools"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

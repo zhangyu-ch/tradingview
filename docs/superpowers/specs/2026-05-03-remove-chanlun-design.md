@@ -27,8 +27,8 @@
 
 一次性迁移范围：
 
-- `src/chanlun/` 迁移为 `src/tradingview_zy/`。
-- `web/chanlun_chart/` 迁移为 `web/tradingview_zy_chart/`，并只保留基础图表/K 线服务入口及通用选股/监控外壳。
+- `src/tradingview_zy/` 迁移为 `src/tradingview_zy/`。
+- `web/tradingview_zy_chart/` 迁移为 `web/tradingview_zy_chart/`，并只保留基础图表/K 线服务入口及通用选股/监控外壳。
 - `src/cl_myquant`、`src/cl_vnpy`、`src/cl_wtpy`、`joinquant` 等缠论策略适配下线或归档。
 - 缠论计算、缠论接口数据结构、分型、笔、线段、中枢、买卖点、背驰、缠论图形绘制从运行路径移除。
 

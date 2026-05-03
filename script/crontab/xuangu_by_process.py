@@ -6,11 +6,11 @@ from multiprocessing import get_context
 
 from tqdm.auto import tqdm
 
-from chanlun import zixuan
-from chanlun.cl_utils import query_cl_chart_config
-from chanlun.exchange.exchange_tdx import ExchangeTDX
-from chanlun.trader.online_market_datas import OnlineMarketDatas
-from chanlun.xuangu import xuangu
+from tradingview_zy import zixuan
+from tradingview_zy.cl_utils import query_cl_chart_config
+from tradingview_zy.exchange.exchange_tdx import ExchangeTDX
+from tradingview_zy.trader.online_market_datas import OnlineMarketDatas
+from tradingview_zy.xuangu import xuangu
 
 """
 沪深A股 选股程序

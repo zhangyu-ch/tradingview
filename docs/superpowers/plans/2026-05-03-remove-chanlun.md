@@ -14,7 +14,7 @@
 
 ### Runtime package
 
-- Rename directory: `src/chanlun/` -> `src/tradingview_zy/`.
+- Rename directory: `src/tradingview_zy/` -> `src/tradingview_zy/`.
 - Keep and refactor:
   - `src/tradingview_zy/base.py`: market enum and generic project constants.
   - `src/tradingview_zy/exchange/`: exchange adapters and K-line access.
@@ -42,7 +42,7 @@
 
 ### Web package
 
-- Rename directory: `web/chanlun_chart/` -> `web/tradingview_zy_chart/`.
+- Rename directory: `web/tradingview_zy_chart/` -> `web/tradingview_zy_chart/`.
 - Modify:
   - `web/tradingview_zy_chart/app.py`: import `tradingview_zy`, not `chanlun`.
   - `web/tradingview_zy_chart/cl_app/__init__.py`: remove Chanlun routes and convert `/tv/history` to plain OHLCV.
@@ -300,11 +300,11 @@ def test_runtime_python_files_do_not_import_chanlun():
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "chanlun" or alias.name.startswith("chanlun."):
+                    if alias.name == "chanlun" or alias.name.startswith("tradingview_zy."):
                         offenders.append(f"{py_file}: import {alias.name}")
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                if module == "chanlun" or module.startswith("chanlun."):
+                if module == "chanlun" or module.startswith("tradingview_zy."):
                     offenders.append(f"{py_file}: from {module} import ...")
     assert offenders == []
 ```
@@ -492,8 +492,8 @@ Expected: commit succeeds.
 ## Task 3: Rename Runtime Package and Web Directory
 
 **Files:**
-- Rename: `src/chanlun/` -> `src/tradingview_zy/`
-- Rename: `web/chanlun_chart/` -> `web/tradingview_zy_chart/`
+- Rename: `src/tradingview_zy/` -> `src/tradingview_zy/`
+- Rename: `web/tradingview_zy_chart/` -> `web/tradingview_zy_chart/`
 - Modify: `pyproject.toml`
 - Modify: `setup.py`
 - Modify: `check_env.py`
@@ -504,8 +504,8 @@ Expected: commit succeeds.
 Run:
 
 ```bash
-git mv src/chanlun src/tradingview_zy
-git mv web/chanlun_chart web/tradingview_zy_chart
+git mv src/tradingview_zy src/tradingview_zy
+git mv web/tradingview_zy_chart web/tradingview_zy_chart
 ```
 
 Expected: both `git mv` commands exit with code 0.
@@ -522,16 +522,16 @@ root = Path.cwd()
 extensions = {".py", ".md", ".toml", ".bat", ".js", ".html", ".json", ".yml", ".yaml"}
 skip_parts = {".git", ".venv", "archive", "__pycache__", "node_modules"}
 replacements = {
-    "chanlun_chart": "tradingview_zy_chart",
-    "chanlun-pro": "tradingview_zy",
-    "chanlun pro": "tradingview_zy",
-    "from chanlun": "from tradingview_zy",
-    "import chanlun": "import tradingview_zy",
-    "chanlun.": "tradingview_zy.",
-    "src/chanlun": "src/tradingview_zy",
+    "tradingview_zy_chart": "tradingview_zy_chart",
+    "tradingview_zy": "tradingview_zy",
+    "tradingview_zy": "tradingview_zy",
+    "from tradingview_zy": "from tradingview_zy",
+    "import tradingview_zy": "import tradingview_zy",
+    "tradingview_zy.": "tradingview_zy.",
+    "src/tradingview_zy": "src/tradingview_zy",
     "src\\chanlun": "src\\tradingview_zy",
-    "web/chanlun_chart": "web/tradingview_zy_chart",
-    "web\\chanlun_chart": "web\\tradingview_zy_chart",
+    "web/tradingview_zy_chart": "web/tradingview_zy_chart",
+    "web\\tradingview_zy_chart": "web\\tradingview_zy_chart",
 }
 for path in root.rglob("*"):
     if not path.is_file() or path.suffix not in extensions:
@@ -609,7 +609,7 @@ Update `check_env.py` environment checks to this exact code:
         return
 ```
 
-Replace the old `from chanlun import cl_interface` and `from chanlun import config` blocks with the code above.
+Replace the old `from tradingview_zy import cl_interface` and `from tradingview_zy import config` blocks with the code above.
 
 - [ ] **Step 6: Run package import smoke check**
 
@@ -1474,11 +1474,11 @@ for path in list(Path("script").rglob("*.py")) + [Path("windows_run.bat")]:
     if not path.exists():
         continue
     text = path.read_text(encoding="utf-8", errors="ignore")
-    text = text.replace("from chanlun", "from tradingview_zy")
-    text = text.replace("import chanlun", "import tradingview_zy")
-    text = text.replace("chanlun.", "tradingview_zy.")
-    text = text.replace("web/chanlun_chart", "web/tradingview_zy_chart")
-    text = text.replace("web\\chanlun_chart", "web\\tradingview_zy_chart")
+    text = text.replace("from tradingview_zy", "from tradingview_zy")
+    text = text.replace("import tradingview_zy", "import tradingview_zy")
+    text = text.replace("tradingview_zy.", "tradingview_zy.")
+    text = text.replace("web/tradingview_zy_chart", "web/tradingview_zy_chart")
+    text = text.replace("web\\tradingview_zy_chart", "web\\tradingview_zy_chart")
     path.write_text(text, encoding="utf-8")
 PY
 ```
@@ -1497,7 +1497,7 @@ from pathlib import Path
 for path in Path("script").glob("tradingview_zy_*.config.js"):
     text = path.read_text(encoding="utf-8", errors="ignore")
     text = text.replace("chanlun", "tradingview_zy")
-    text = text.replace("web/chanlun_chart/app.py", "web/tradingview_zy_chart/app.py")
+    text = text.replace("web/tradingview_zy_chart/app.py", "web/tradingview_zy_chart/app.py")
     path.write_text(text, encoding="utf-8")
 PY
 ```
@@ -1642,7 +1642,7 @@ Expected: output only for files that intentionally display the removal message o
 For each Python file printed by Step 1, apply one of these exact changes:
 
 ```python
-from chanlun import config
+from tradingview_zy import config
 ```
 
 becomes:
@@ -1652,7 +1652,7 @@ from tradingview_zy import config
 ```
 
 ```python
-from chanlun.base import Market
+from tradingview_zy.base import Market
 ```
 
 becomes:
@@ -1662,7 +1662,7 @@ from tradingview_zy.base import Market
 ```
 
 ```python
-from chanlun.exchange import get_exchange
+from tradingview_zy.exchange import get_exchange
 ```
 
 becomes:
@@ -1671,7 +1671,7 @@ becomes:
 from tradingview_zy.exchange import get_exchange
 ```
 
-Any import from `chanlun.cl`, `chanlun.cl_interface`, `chanlun.cl_utils`, `chanlun.strategy`, or `chanlun.xuangu` must be deleted, and the caller must use `tradingview_zy.strategies`, `tradingview_zy.selection`, or `tradingview_zy.monitoring` instead.
+Any import from `tradingview_zy.cl`, `tradingview_zy.cl_interface`, `tradingview_zy.cl_utils`, `tradingview_zy.strategy`, or `tradingview_zy.xuangu` must be deleted, and the caller must use `tradingview_zy.strategies`, `tradingview_zy.selection`, or `tradingview_zy.monitoring` instead.
 
 - [ ] **Step 4: Run no-runtime-imports test again**
 

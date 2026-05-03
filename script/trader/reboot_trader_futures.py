@@ -2,12 +2,12 @@
 import time
 import traceback
 
-from chanlun import fun, zixuan
-from chanlun.cl_interface import Config
-from chanlun.exchange.exchange_tq import ExchangeTq
-from chanlun.strategy import strategy_demo
-from chanlun.trader.online_market_datas import OnlineMarketDatas
-from chanlun.trader.trader_futures import TraderFutures
+from tradingview_zy import fun, zixuan
+from tradingview_zy.cl_interface import Config
+from tradingview_zy.exchange.exchange_tq import ExchangeTq
+from tradingview_zy.strategy import strategy_demo
+from tradingview_zy.trader.online_market_datas import OnlineMarketDatas
+from tradingview_zy.trader.trader_futures import TraderFutures
 
 logger = fun.get_logger("trader_futures.log")
 

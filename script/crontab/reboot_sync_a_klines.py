@@ -2,8 +2,8 @@
 import time
 from tqdm.auto import tqdm
 
-from chanlun.exchange.exchange_baostock import ExchangeBaostock
-from chanlun.exchange.exchange_db import ExchangeDB
+from tradingview_zy.exchange.exchange_baostock import ExchangeBaostock
+from tradingview_zy.exchange.exchange_db import ExchangeDB
 
 """
 同步股票数据到数据库中

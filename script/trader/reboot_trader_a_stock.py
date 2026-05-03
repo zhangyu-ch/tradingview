@@ -2,12 +2,12 @@
 import time
 import traceback
 
-from chanlun import fun
-from chanlun.cl_interface import *
-from chanlun.exchange.exchange_tdx import ExchangeTDX
-from chanlun.strategy.strategy_xd_mmd import StrategyXDMMD
-from chanlun.trader.online_market_datas import OnlineMarketDatas
-from chanlun.trader.trader_a_stock import TraderAStock
+from tradingview_zy import fun
+from tradingview_zy.cl_interface import *
+from tradingview_zy.exchange.exchange_tdx import ExchangeTDX
+from tradingview_zy.strategy.strategy_xd_mmd import StrategyXDMMD
+from tradingview_zy.trader.online_market_datas import OnlineMarketDatas
+from tradingview_zy.trader.trader_a_stock import TraderAStock
 
 """
 运行依赖 futuOpenD

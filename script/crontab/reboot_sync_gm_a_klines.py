@@ -8,10 +8,10 @@ import pandas as pd
 from gm.api import ADJUST_NONE, get_symbols, history, set_serv_addr, set_token
 from tqdm.auto import tqdm
 
-from chanlun import config, fun
-from chanlun.exchange.exchange import convert_stock_kline_frequency
-from chanlun.exchange.exchange_db import ExchangeDB
-from chanlun.exchange.exchange_tdx import ExchangeTDX
+from tradingview_zy import config, fun
+from tradingview_zy.exchange.exchange import convert_stock_kline_frequency
+from tradingview_zy.exchange.exchange_db import ExchangeDB
+from tradingview_zy.exchange.exchange_tdx import ExchangeTDX
 
 """
 同步A股行情到数据库中

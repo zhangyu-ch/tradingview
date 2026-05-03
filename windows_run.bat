@@ -25,6 +25,6 @@ set "PYTHONPATH=%ROOT_DIR%src"
 echo 当前 PYTHONPATH: !PYTHONPATH!
 
 echo 启动 WEB 服务
-if exist "%ROOT_DIR%web/chanlun_chart/app.py" (
-    %UV_DIR% run "%ROOT_DIR%web/chanlun_chart/app.py"
+if exist "%ROOT_DIR%web/tradingview_zy_chart/app.py" (
+    %UV_DIR% run "%ROOT_DIR%web/tradingview_zy_chart/app.py"
 )

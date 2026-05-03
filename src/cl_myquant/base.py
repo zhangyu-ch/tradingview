@@ -18,10 +18,10 @@ from gm.api import (
     order_value,
 )
 
-from chanlun import cl
-from chanlun.backtesting.backtest_trader import BackTestTrader
-from chanlun.backtesting.base import POSITION, MarketDatas, Operation
-from chanlun.cl_interface import ICL
+from tradingview_zy import cl
+from tradingview_zy.backtesting.backtest_trader import BackTestTrader
+from tradingview_zy.backtesting.base import POSITION, MarketDatas, Operation
+from tradingview_zy.cl_interface import ICL
 
 
 class MyQuantData(MarketDatas):

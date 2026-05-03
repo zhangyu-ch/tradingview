@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function
 
 from gm.api import ADJUST_PREV, MODE_BACKTEST, run, set_serv_addr, set_token
 
-from chanlun import config
+from tradingview_zy import config
 
 # 如在远程执行，需要制定掘金终端地址  https://www.myquant.cn/docs/gm3_faq/154#b244aeed0032526e
 set_serv_addr(config.GM_SERVER_ADDR)

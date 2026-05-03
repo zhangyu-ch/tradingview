@@ -2,7 +2,7 @@ from wtpy import WtBtEngine, EngineType
 from wtpy.apps import WtBtAnalyst
 
 from cl_wtpy.strategy.base_strategy import BaseStrategy
-from chanlun.strategy.strategy_xd_mmd import StrategyXDMMD
+from tradingview_zy.strategy.strategy_xd_mmd import StrategyXDMMD
 
 if __name__ == "__main__":
     # 创建一个运行环境，并加入策略

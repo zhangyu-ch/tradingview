@@ -10,11 +10,11 @@ from vnpy_ctastrategy import (
     BarGenerator,
 )
 
-from chanlun import cl
-from chanlun.backtesting.backtest_trader import BackTestTrader
-from chanlun.backtesting.base import *
-from chanlun.strategy.strategy_demo import StrategyDemo
-from chanlun import fun
+from tradingview_zy import cl
+from tradingview_zy.backtesting.backtest_trader import BackTestTrader
+from tradingview_zy.backtesting.base import *
+from tradingview_zy.strategy.strategy_demo import StrategyDemo
+from tradingview_zy import fun
 
 
 class VNPYTrader(BackTestTrader):

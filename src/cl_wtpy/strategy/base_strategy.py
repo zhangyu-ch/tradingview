@@ -1,12 +1,12 @@
 from pandas.core.api import DataFrame as DataFrame
-from chanlun.cl_interface import ICL, List
+from tradingview_zy.cl_interface import ICL, List
 from wtpy import BaseCtaStrategy, WtBarRecords
 from wtpy import CtaContext
 
-from chanlun import cl
-from chanlun.backtesting.base import *
-from chanlun.cl_interface import *
-from chanlun.cl_utils import query_cl_chart_config
+from tradingview_zy import cl
+from tradingview_zy.backtesting.base import *
+from tradingview_zy.cl_interface import *
+from tradingview_zy.cl_utils import query_cl_chart_config
 
 
 class WTPYMarketData(MarketDatas):

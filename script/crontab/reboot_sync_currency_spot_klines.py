@@ -1,6 +1,6 @@
 #:  -*- coding: utf-8 -*-
-from chanlun.exchange.exchange_binance_spot import ExchangeBinanceSpot
-from chanlun.exchange.exchange_db import ExchangeDB
+from tradingview_zy.exchange.exchange_binance_spot import ExchangeBinanceSpot
+from tradingview_zy.exchange.exchange_db import ExchangeDB
 import traceback
 from tqdm.auto import tqdm
 

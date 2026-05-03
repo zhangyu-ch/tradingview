@@ -2,12 +2,12 @@
 
 import datetime
 
-from chanlun import fun, zixuan  # noqa: F401
-from chanlun.base import Market
-from chanlun.cl_utils import query_cl_chart_config
-from chanlun.db import db
-from chanlun.exchange import get_exchange
-from chanlun.xuangu.xuangu_by_same import XuanguBySame
+from tradingview_zy import fun, zixuan  # noqa: F401
+from tradingview_zy.base import Market
+from tradingview_zy.cl_utils import query_cl_chart_config
+from tradingview_zy.db import db
+from tradingview_zy.exchange import get_exchange
+from tradingview_zy.xuangu.xuangu_by_same import XuanguBySame
 
 """
 选相同的股票
