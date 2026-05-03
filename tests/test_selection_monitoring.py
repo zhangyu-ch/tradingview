@@ -299,6 +299,36 @@ def test_alert_routes_use_generic_fields_without_legacy_payload_keys():
         assert legacy_text not in alert_section
 
 
+def test_alert_run_rejects_non_object_strategy_config(monkeypatch):
+    import cl_app.alert_tasks as alert_tasks
+
+    errors = []
+    alert_config = SimpleNamespace(
+        market="a",
+        task_name="task1",
+        zx_group="source",
+        frequency="d",
+        strategy_config="[]",
+    )
+
+    monkeypatch.setattr(alert_tasks.AlertTasks, "alert_get", lambda self, alert_id: alert_config)
+    monkeypatch.setattr(alert_tasks, "get_exchange", lambda market: SimpleNamespace(now_trading=lambda: True))
+    monkeypatch.setattr(
+        alert_tasks,
+        "ZiXuan",
+        lambda market: SimpleNamespace(zx_stocks=lambda group: []),
+    )
+
+    tasks = alert_tasks.AlertTasks(None)
+    tasks.log = SimpleNamespace(
+        info=lambda msg: None,
+        error=lambda msg: errors.append(msg),
+    )
+
+    assert tasks.alert_run("1") is False
+    assert any("strategy_config" in msg and "JSON 对象" in msg for msg in errors)
+
+
 class FakeZiXuan:
     instances = []
 
@@ -335,6 +365,32 @@ class XuanguTaskStrategy:
                 event_time=context.now,
             )
         ]
+
+
+def test_xuangu_task_without_target_group_only_updates_running_results(monkeypatch):
+    import cl_app.xuangu_tasks as xuangu_tasks
+
+    FakeZiXuan.instances = []
+    monkeypatch.setattr(
+        xuangu_tasks,
+        "config",
+        SimpleNamespace(
+            XUANGU_STRATEGIES={
+                "task1": {"strategy_path": "unused", "strategy_kwargs": {}}
+            }
+        ),
+    )
+    monkeypatch.setattr(xuangu_tasks, "load_strategy", lambda path, **kwargs: XuanguTaskStrategy())
+    monkeypatch.setattr(xuangu_tasks, "get_exchange", lambda market: FakeExchange())
+    monkeypatch.setattr(xuangu_tasks, "ZiXuan", FakeZiXuan)
+
+    tasks = xuangu_tasks.XuanguTasks(None)
+    assert tasks.run_xuangu("a", "task1", ["d"], ["long"], "source") is True
+
+    zx = FakeZiXuan.instances[0]
+    assert zx.cleared_groups == []
+    assert zx.added_stocks == []
+    assert tasks.running_tasks["task1"][0].code == "SH.000001"
 
 
 def test_xuangu_task_writes_results_to_target_zx_group(monkeypatch):

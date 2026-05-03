@@ -55,9 +55,6 @@ class XuanguTasks(object):
         if task_name not in self.xuangu_task_config_list().keys():
             return False
 
-        if target_zx_group is None:
-            target_zx_group = zx_group
-
         task_id = f"{market}_{task_name}"
         if (
             self.scheduler is not None

@@ -81,6 +81,9 @@ class AlertTasks(object):
         except json.JSONDecodeError as e:
             self.log.error(f"{alert_config.task_name} strategy_config JSON 解析失败：{e}")
             return False
+        if not isinstance(strategy_config, dict):
+            self.log.error(f"{alert_config.task_name} strategy_config 必须是 JSON 对象")
+            return False
 
         strategy_path = strategy_config.get("strategy_path", "")
         strategy_kwargs = strategy_config.get("strategy_kwargs", {})

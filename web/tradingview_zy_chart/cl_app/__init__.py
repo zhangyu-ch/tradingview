@@ -1115,6 +1115,8 @@ def create_app(test_config=None):
                     strategy_config = json.loads(_alert_config.strategy_config or "{}")
                 except json.JSONDecodeError:
                     strategy_config = {}
+                if not isinstance(strategy_config, dict):
+                    strategy_config = {}
                 alert_config = {
                     "id": _alert_config.id,
                     "market": _alert_config.market,
