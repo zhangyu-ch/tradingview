@@ -1,138 +1,49 @@
-# 缠论市场 WEB 分析工具
+# tradingview_zy
 
----
+`tradingview_zy` 是一个通用行情、TradingView 图表、选股监控、回测和交易执行工具。
 
-[![Documentation Status](https://readthedocs.org/projects/chanlun-pro/badge/?version=latest)](https://chanlun-pro.readthedocs.io/zh_CN/latest/?badge=latest)
+本仓库已从原缠论分析系统迁移为普通行情/交易工具。运行路径中不再保留缠论计算、分型、笔、线段、中枢、买卖点、背驰等模块。历史缠论源码已压缩归档到 `archive/chanlun-runtime-source.zip`，相关文档已迁移到 `archive/docs/`。
 
-基于缠论的市场行情分析工具
+## 当前保留能力
 
-[在线缠论分析网址 VIP](http://www.chanlun-trader.com)
+- 多市场交易所适配和 K 线查询。
+- TradingView UDF 风格基础 K 线接口。
+- 自选股、通用选股任务和通用监控任务外壳。
+- 自定义策略接入接口。
+- 通用回测框架。
+- trader 下单、撤单、账户和持仓等交易执行适配。
 
-[Github 地址](https://github.com/yijixiuxin/chanlun-pro)
+## 环境
 
-[Gitee 地址](https://gitee.com/wang-student/chanlun-pro)
+项目优先使用 Python 3.11：
 
-[在线文档](https://chanlun-pro.readthedocs.io/)
+```bash
+uv venv --python=3.11 .venv
+uv sync
+export PYTHONPATH="$PWD/src"
+```
 
-[B站视频教程](https://space.bilibili.com/384267873/video)
+运行前复制配置：
 
-[更新日志](https://chanlun-pro.readthedocs.io/UPDATE/)
+```bash
+cp src/tradingview_zy/config.py.demo src/tradingview_zy/config.py
+```
 
+检查环境：
 
-* 缠论图表展示
-* 支持市场 : 沪深股市、港股、美股、国内期货、纽约期货、外汇、数字货币 (有数据源皆可接入)
-* 行情数据下载
-* 行情监控（背驰、买卖点），可发送飞书或钉钉消息
-* 行情回放练习（基于本地行情数据）
-* 小周期数据递归计算到高周期图表展示
-* 自定义缠论策略进行回测
-* 实盘策略交易
-* VNPY 策略与实盘支持
-* 掘金量化回测与仿真
-* TradingView 图表
+```bash
+PYTHONPATH="$PWD/src" uv run python check_env.py
+```
 
+启动 Web 服务：
 
-### Web 首页右侧“缠论解盘”面板代码位置
+```bash
+PYTHONPATH="$PWD/src" uv run python web/tradingview_zy_chart/app.py nobrowser
+```
 
-截图中 TradingView 图表右侧的“缠论解盘”面板主要由 Web 模块实现：
+## 自定义策略
 
-- 页面模板：`web/chanlun_chart/cl_app/templates/index.html`
-  - 标题“缠论解盘”、市场选择、商品代码搜索输入框。
-  - 折叠区块：“自选组”“监控提醒”“板块概念”“AI 分析助手”“关于”。
-  - 入口脚本引用：`zixuan.js`、`alert.js`、`ai.js`、`bkgn.js`。
-- 自选组前端：`web/chanlun_chart/cl_app/static/js/zixuan.js`
-  - 加载自选组、刷新自选股列表、添加/删除自选、商品代码远程搜索。
-  - 主要后端接口：`/get_zixuan_groups/<market>`、`/get_zixuan_stocks/<market>/<group_name>`、`/set_stock_zixuan`、`/tv/search`。
-- 监控提醒前端：`web/chanlun_chart/cl_app/static/js/alert.js`
-  - 展示监控提醒记录、加载/刷新监控任务。
-  - 主要后端接口在 `web/chanlun_chart/cl_app/__init__.py` 的 `/alert_list/<market>`、`/alert_save`、`/alert_del/<id>` 等路由。
-- 板块概念前端：`web/chanlun_chart/cl_app/static/js/bkgn.js`
-  - 加载 A 股板块/概念下拉和板块成分股表格。
-  - 主要后端接口：`/a/bkgn_list`、`/a/bkgn_codes`。
-- AI 分析助手前端：`web/chanlun_chart/cl_app/static/js/ai.js`
-  - 触发 AI 分析并展示历史分析记录。
-  - 主要后端接口：`/ai/analyse`、`/ai/analyse_records/<market>`。
-- 后端路由集中在：`web/chanlun_chart/cl_app/__init__.py`
-  - TradingView 数据接口：`/tv/search`、`/tv/history`。
-  - 自选组接口：约 `get_zixuan_groups`、`get_zixuan_stocks`、`set_stock_zixuan` 等路由附近。
-  - 监控、板块概念、AI 分析接口也在同一文件内注册。
+选股、监控、回测和交易信号统一面向普通 K 线数据。接入方式见：
 
-### 在线网站与本地部署的区别
-
-| | 在线网站 | 本地部署 |
-| -- | -------- | -------- |
-| 适用人群 | 轻度使用 | 重度缠论爱好者 |
-| 技能要求 | 无 | 会 Python 基础编程 |
-| 功能 | 图表/监控/选股/历史买卖点等有限功能 | 全部功能，可自由按需求开发 |
-| 量化回测 | 不支持 | 支持 |
-| 实盘交易 | 不支持 | 支持 |
-| 市场 | 沪深、国内期货、纽约期货、数字货币(后期可加入其他市场) | 沪深、港股、美股、国内外期货、外汇、数字货币(可自定义市场) |
-| 周期 | 基础周期(1m/5m/15m/30m/60m/d等) | 更多可自定义周期数据 |
-| K线 | 2000-2500 根 | 无限制 |
-| 数据延迟 | 1分钟内(纽约期货10分钟延迟) | 大多数数据源是实时行情(可加入自己数据源) |
-| 价格 | 时长订阅收费 | 一次付费，终身受用 |
-
-
-### 项目中的计算方法
-
-缠论数据的计算，采用逐Bar方式进行计算，根据当前Bar变化，计算并合并缠论K线，再计算分型、笔、线段、中枢、走势段、背驰、买卖点数据；
-
-再根据下一根K线数据，更新以上缠论数据；
-
-如已经是形成并确认的分型、笔、线段、中枢、走势段等，后续无特殊情况，则不会进行变更。
-
-如上，程序会给出当下的一个背驰或买卖点信息，至于后续行情如何走，有可能确认，也有可能继续延续，最终背驰或买卖点消失；
-
-这种情况就需要通过其他的辅助加以判断，如均线、布林线等指标，也可以看小级别的走势进行判断，以此来增加成功的概率。
-
-这种计算方式，可以很方便实现增量更新，process_klines 方法可以一直喂数据，内部会判断，已处理的不会重新计算，新K线会重复以上的计算步骤；
-
-在进行策略回测的时候，采用以上的增量计算，可以大大缩减计算时间，从而提升回测的效率。
-
-### 感兴趣可加微信进行了解
-
-**加好友可免费获取20天使用授权**
-
-> 请先阅读安装文档，确保自己能够正常安装后，在添加微信好友；
->
-> 扫码添加作者微信，备注 ：“chanlun-pro 试用”
-
-### 作者微信
-
-![Wechat](cookbook/docs/img/wx.jpg)
-
-### QQ 群
-
-![QQ](cookbook/docs/img/qq.png)
-
-### 在线网站【缠论交易园】飞书交流群
-
-![飞书](cookbook/docs/img/feishu.jpg)
-
-
-
-### 实际运行效果展示
-
-![股票行情页面](cookbook/docs/img/stock.png)
-
-* 支持切换深色与浅色主题
-* 支持切换单图或双图模式
-
-**通过掘金量化进行回测**
-
-![掘金量化回测](cookbook/docs/img/my_quant_backtest.png)
-
-**通过 Jupyterlab 进行策略回测，图表展示回测结果；并展示回测标的历史行情，并标注买卖订单，从而进行策略优化**
-
-![策略回测结果查看](cookbook/docs/img/back_test_1.png)
-
-**项目的回测没有资金与仓位管理，每次下单固定金额10W，主要用于测试策略信号的胜率与盈亏比**
-
-![策略回测结果查看](cookbook/docs/img/back_test_2.png)
-![策略回测结果查看](cookbook/docs/img/back_test_3.png)
-![策略回测结果查看](cookbook/docs/img/back_test_4.png)
-![策略回测结果查看](cookbook/docs/img/back_test_5.png)
-
-![监控任务管理](cookbook/docs/img/check.png)
-
-
+- `docs/custom-strategy-integration.md`
+- `docs/web-right-panel-extension.md`
