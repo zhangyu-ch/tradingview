@@ -4,10 +4,11 @@ from typing import Dict, List
 from apscheduler.schedulers.background import BackgroundScheduler
 from tqdm.auto import tqdm
 
-from tradingview_zy import fun, monitor
-from tradingview_zy.cl_utils import query_cl_chart_config
+from tradingview_zy import fun
 from tradingview_zy.db import TableByAlertTask, db
 from tradingview_zy.exchange import Market, get_exchange
+from tradingview_zy.monitoring import MonitoringRunner
+from tradingview_zy.strategies.loader import load_strategy
 from tradingview_zy.zixuan import ZiXuan
 
 
@@ -60,6 +61,10 @@ class AlertTasks(object):
 
     def alert_run(self, alert_id):
         alert_config = self.alert_get(alert_id)
+        if alert_config is None:
+            self.log.error(f"未找到监控任务 {alert_id}")
+            return False
+
         ex = get_exchange(Market(alert_config.market))
         if ex.now_trading() is False:
             return True
@@ -70,39 +75,50 @@ class AlertTasks(object):
         self.log.info(
             f"执行 {alert_config.task_name} 警报提醒，获取 {alert_config.zx_group} 自选组中 {len(stocks)} 数量股票"
         )
+
+        try:
+            strategy_config = json.loads(alert_config.check_idx_ma_info or "{}")
+        except json.JSONDecodeError as e:
+            self.log.error(f"{alert_config.task_name} strategy_config JSON 解析失败：{e}")
+            return False
+
+        strategy_path = strategy_config.get("strategy_path", "")
+        strategy_kwargs = strategy_config.get("strategy_kwargs", {})
+        if strategy_path == "":
+            self.log.error(f"{alert_config.task_name} 未配置 strategy_path")
+            return False
+        if not isinstance(strategy_kwargs, dict):
+            self.log.error(f"{alert_config.task_name} strategy_kwargs 必须是 JSON 对象")
+            return False
+
+        try:
+            strategy = load_strategy(strategy_path, **strategy_kwargs)
+        except Exception as e:
+            self.log.error(f"{alert_config.task_name} 加载策略失败：{e}")
+            return False
+
+        runner = MonitoringRunner(exchange=ex, strategy=strategy)
         for s in tqdm(stocks):
             try:
-                s: Dict[str, str] = s
-                cl_config = query_cl_chart_config(alert_config.market, s["code"])
-                monitor.monitoring_code(
-                    alert_config.task_name,
+                events = runner.run_code(
                     alert_config.market,
                     s["code"],
                     s["name"],
-                    [alert_config.frequency],
-                    check_cl_types={
-                        "bi_types": alert_config.check_bi_type.split(","),
-                        "bi_beichi": alert_config.check_bi_beichi.split(","),
-                        "bi_mmd": alert_config.check_bi_mmd.split(","),
-                        "xd_types": alert_config.check_xd_type.split(","),
-                        "xd_beichi": alert_config.check_xd_beichi.split(","),
-                        "xd_mmd": alert_config.check_xd_mmd.split(","),
-                    },
-                    check_idx_types={
-                        "idx_ma": (
-                            json.loads(alert_config.check_idx_ma_info)
-                            if alert_config.check_idx_ma_info
-                            else {"enable": 0}
-                        ),
-                        "idx_macd": (
-                            json.loads(alert_config.check_idx_macd_info)
-                            if alert_config.check_idx_macd_info
-                            else {"enable": 0}
-                        ),
-                    },
-                    is_send_msg=bool(alert_config.is_send_msg),
-                    cl_config=cl_config,
+                    alert_config.frequency,
                 )
+                for event in events:
+                    db.alert_record_save(
+                        market=alert_config.market,
+                        task_name=alert_config.task_name,
+                        stock_code=event.code,
+                        stock_name=event.name,
+                        frequency=event.frequency,
+                        alert_msg=event.message,
+                        bi_is_done=event.action,
+                        bi_is_td=str(event.score),
+                        line_type="strategy",
+                        line_dt=event.event_time,
+                    )
             except Exception as e:
                 self.log.error(f'run {s["code"]} alert exception {e}')
 

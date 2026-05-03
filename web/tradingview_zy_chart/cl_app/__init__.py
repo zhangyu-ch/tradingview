@@ -1079,14 +1079,8 @@ def create_app(test_config=None):
                 "zx_group": _l.zx_group,
                 "interval_minutes": _l.interval_minutes,
                 "frequency": _l.frequency,
-                "check_bi_type": _l.check_bi_type,
-                "check_bi_beichi": _l.check_bi_beichi,
-                "check_bi_mmd": _l.check_bi_mmd,
-                "check_xd_type": _l.check_xd_type,
-                "check_xd_beichi": _l.check_xd_beichi,
-                "check_xd_mmd": _l.check_xd_mmd,
-                "check_idx_ma_info": _l.check_idx_ma_info,
-                "check_idx_macd_info": _l.check_idx_macd_info,
+                "strategy_config": _l.check_idx_ma_info,
+                "strategy_memo": _l.check_idx_macd_info,
                 "is_send_msg": _l.is_send_msg,
                 "is_run": _l.is_run,
             }
@@ -1108,11 +1102,14 @@ def create_app(test_config=None):
             "zx_group": "我的关注",
             "interval_minutes": 5,
             "frequency": "5m",
-            "check_bi_type": "up,down",
-            "check_bi_beichi": "pz,qs",
+            "strategy_path": "",
+            "strategy_kwargs": "{}",
+            "strategy_memo": "",
+            "check_bi_type": "",
+            "check_bi_beichi": "",
             "check_bi_mmd": "",
-            "check_xd_type": "up,down",
-            "check_xd_beichi": "pz,qs",
+            "check_xd_type": "",
+            "check_xd_beichi": "",
             "check_xd_mmd": "",
             "check_idx_ma_info_enable": 0,
             "check_idx_ma_info_slow": 10,
@@ -1128,26 +1125,10 @@ def create_app(test_config=None):
         if id != "0":
             _alert_config = _alert_tasks.alert_get(id)
             if _alert_config is not None:
-                check_idx_ma_info = (
-                    json.loads(_alert_config.check_idx_ma_info)
-                    if _alert_config.check_idx_ma_info
-                    else {
-                        "enable": 0,
-                        "slow": 10,
-                        "fast": 5,
-                        "cross_up": 0,
-                        "cross_down": 0,
-                    }
-                )
-                check_idx_macd_info = (
-                    json.loads(_alert_config.check_idx_macd_info)
-                    if _alert_config.check_idx_macd_info
-                    else {
-                        "enable": 0,
-                        "cross_up": 0,
-                        "cross_down": 0,
-                    }
-                )
+                try:
+                    strategy_config = json.loads(_alert_config.check_idx_ma_info or "{}")
+                except json.JSONDecodeError:
+                    strategy_config = {}
                 alert_config = {
                     "id": _alert_config.id,
                     "market": _alert_config.market,
@@ -1155,20 +1136,25 @@ def create_app(test_config=None):
                     "zx_group": _alert_config.zx_group,
                     "interval_minutes": _alert_config.interval_minutes,
                     "frequency": _alert_config.frequency,
-                    "check_bi_type": _alert_config.check_bi_type,
-                    "check_bi_beichi": _alert_config.check_bi_beichi,
-                    "check_bi_mmd": _alert_config.check_bi_mmd,
-                    "check_xd_type": _alert_config.check_xd_type,
-                    "check_xd_beichi": _alert_config.check_xd_beichi,
-                    "check_xd_mmd": _alert_config.check_xd_mmd,
-                    "check_idx_ma_info_enable": check_idx_ma_info["enable"],
-                    "check_idx_ma_info_slow": check_idx_ma_info["slow"],
-                    "check_idx_ma_info_fast": check_idx_ma_info["fast"],
-                    "check_idx_ma_info_cross_up": check_idx_ma_info["cross_up"],
-                    "check_idx_ma_info_cross_down": check_idx_ma_info["cross_down"],
-                    "check_idx_macd_info_enable": check_idx_macd_info["enable"],
-                    "check_idx_macd_info_cross_up": check_idx_macd_info["cross_up"],
-                    "check_idx_macd_info_cross_down": check_idx_macd_info["cross_down"],
+                    "strategy_path": strategy_config.get("strategy_path", ""),
+                    "strategy_kwargs": json.dumps(
+                        strategy_config.get("strategy_kwargs", {}), ensure_ascii=False
+                    ),
+                    "strategy_memo": _alert_config.check_idx_macd_info or "",
+                    "check_bi_type": "",
+                    "check_bi_beichi": "",
+                    "check_bi_mmd": "",
+                    "check_xd_type": "",
+                    "check_xd_beichi": "",
+                    "check_xd_mmd": "",
+                    "check_idx_ma_info_enable": 0,
+                    "check_idx_ma_info_slow": 10,
+                    "check_idx_ma_info_fast": 5,
+                    "check_idx_ma_info_cross_up": 0,
+                    "check_idx_ma_info_cross_down": 0,
+                    "check_idx_macd_info_enable": 0,
+                    "check_idx_macd_info_cross_up": 0,
+                    "check_idx_macd_info_cross_down": 0,
                     "is_send_msg": _alert_config.is_send_msg,
                     "is_run": _alert_config.is_run,
                 }
@@ -1193,71 +1179,48 @@ def create_app(test_config=None):
         task_error = _guard_task(_alert_tasks)
         if task_error is not None:
             return task_error
-        check_idx_ma_infos = json.dumps(
+        strategy_path = request.form.get("strategy_path", "").strip()
+        if strategy_path == "":
+            return {"ok": False, "msg": "strategy_path 不能为空"}
+
+        try:
+            strategy_kwargs = json.loads(request.form.get("strategy_kwargs") or "{}")
+        except json.JSONDecodeError as e:
+            return {"ok": False, "msg": f"strategy_kwargs 必须是合法 JSON：{e}"}
+        if not isinstance(strategy_kwargs, dict):
+            return {"ok": False, "msg": "strategy_kwargs 必须是 JSON 对象"}
+
+        try:
+            interval_minutes = int(request.form.get("interval_minutes", "5"))
+            is_send_msg = int(request.form.get("is_send_msg", "1"))
+            is_run = int(request.form.get("is_run", "1"))
+        except ValueError as e:
+            return {"ok": False, "msg": f"数值字段格式错误：{e}"}
+
+        strategy_config = json.dumps(
             {
-                "enable": (
-                    int(request.form["check_idx_ma_info_enable"])
-                    if request.form["check_idx_ma_info_enable"]
-                    else 0
-                ),
-                "slow": (
-                    int(request.form["check_idx_ma_info_slow"])
-                    if request.form["check_idx_ma_info_slow"]
-                    else 0
-                ),
-                "fast": (
-                    int(request.form["check_idx_ma_info_fast"])
-                    if request.form["check_idx_ma_info_fast"]
-                    else 0
-                ),
-                "cross_up": (
-                    int(request.form["check_idx_ma_info_cross_up"])
-                    if request.form["check_idx_ma_info_cross_up"]
-                    else 0
-                ),
-                "cross_down": (
-                    int(request.form["check_idx_ma_info_cross_down"])
-                    if request.form["check_idx_ma_info_cross_down"]
-                    else 0
-                ),
-            }
-        )
-        check_idx_macd_infos = json.dumps(
-            {
-                "enable": (
-                    int(request.form["check_idx_macd_info_enable"])
-                    if request.form["check_idx_macd_info_enable"]
-                    else 0
-                ),
-                "cross_up": (
-                    int(request.form["check_idx_macd_info_cross_up"])
-                    if request.form["check_idx_macd_info_cross_up"]
-                    else 0
-                ),
-                "cross_down": (
-                    int(request.form["check_idx_macd_info_cross_down"])
-                    if request.form["check_idx_macd_info_cross_down"]
-                    else 0
-                ),
-            }
+                "strategy_path": strategy_path,
+                "strategy_kwargs": strategy_kwargs,
+            },
+            ensure_ascii=False,
         )
         alert_config = {
-            "id": request.form["id"],
-            "market": request.form["market"],
-            "task_name": request.form["task_name"],
-            "interval_minutes": int(request.form["interval_minutes"]),
-            "zx_group": request.form["zx_group"],
-            "frequency": request.form["frequency"],
-            "check_bi_type": request.form["check_bi_type"],
-            "check_bi_beichi": request.form["check_bi_beichi"],
-            "check_bi_mmd": request.form["check_bi_mmd"],
-            "check_xd_type": request.form["check_xd_type"],
-            "check_xd_beichi": request.form["check_xd_beichi"],
-            "check_xd_mmd": request.form["check_xd_mmd"],
-            "check_idx_ma_info": check_idx_ma_infos,
-            "check_idx_macd_info": check_idx_macd_infos,
-            "is_send_msg": int(request.form["is_send_msg"]),
-            "is_run": int(request.form["is_run"]),
+            "id": request.form.get("id", ""),
+            "market": request.form.get("market", ""),
+            "task_name": request.form.get("task_name", ""),
+            "interval_minutes": interval_minutes,
+            "zx_group": request.form.get("zx_group", ""),
+            "frequency": request.form.get("frequency", ""),
+            "check_bi_type": "",
+            "check_bi_beichi": "",
+            "check_bi_mmd": "",
+            "check_xd_type": "",
+            "check_xd_beichi": "",
+            "check_xd_mmd": "",
+            "check_idx_ma_info": strategy_config,
+            "check_idx_macd_info": request.form.get("strategy_memo", ""),
+            "is_send_msg": is_send_msg,
+            "is_run": is_run,
         }
         _alert_tasks.alert_save(alert_config)
         return {"ok": True}
@@ -1316,13 +1279,17 @@ def create_app(test_config=None):
         frequencys = get_exchange(Market(market)).support_frequencys()
 
         # 选股配置
-        xuangu_task_list = _xuangu_tasks.xuangu_task_config_list()
+        xuangu_task_configs = _xuangu_tasks.xuangu_task_config_list()
+        xuangu_task_list = {
+            _k: {**_v, "name": _v.get("name", _k)}
+            for _k, _v in xuangu_task_configs.items()
+        }
 
         # task_memo
         task_infos = {
             _k: {
-                "task_memo": _v["task_memo"],
-                "frequency_memo": _v["frequency_memo"],
+                "task_memo": _v.get("task_memo", _v.get("description", "")),
+                "frequency_memo": _v.get("frequency_memo", "自定义策略周期"),
             }
             for _k, _v in xuangu_task_list.items()
         }
@@ -1345,7 +1312,7 @@ def create_app(test_config=None):
         market = request.form["market"]
         task_name = request.form["task_name"]
         frequencys = request.form["frequencys"]
-        zx_group = request.form["zx_group"]
+        src_zx_group = request.form["src_zx_group"]
         opt_type = request.form["opt_type"]
 
         frequencys = frequencys.split(",")
@@ -1354,9 +1321,9 @@ def create_app(test_config=None):
         if task_name not in _xuangu_tasks.xuangu_task_config_list().keys():
             return {"ok": False, "msg": "选股任务不存在"}
 
-        allow_freq_num = _xuangu_tasks.xuangu_task_config_list()[task_name][
-            "frequency_num"
-        ]
+        allow_freq_num = _xuangu_tasks.xuangu_task_config_list()[task_name].get(
+            "frequency_num", len(frequencys)
+        )
         if len(frequencys) != allow_freq_num:
             return {
                 "ok": False,
@@ -1364,7 +1331,7 @@ def create_app(test_config=None):
             }
 
         run_res = _xuangu_tasks.run_xuangu(
-            market, task_name, frequencys, opt_type, zx_group
+            market, task_name, frequencys, opt_type, src_zx_group
         )
 
         return {

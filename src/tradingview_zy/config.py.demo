@@ -155,6 +155,20 @@ FEISHU_KEYS = {
     "enable_img": False,
 }
 
+# 自定义选股策略配置，格式示例：
+# XUANGU_STRATEGIES = {
+#     "demo": {
+#         "name": "示例策略",
+#         "strategy_path": "my_package.my_module:MyStrategy",
+#         "strategy_kwargs": {},
+#         "task_memo": "策略说明",
+#         "frequency_num": 1,
+#         "frequency_memo": "单周期",
+#     }
+# }
+XUANGU_STRATEGIES = {}
+
+
 def get_data_path():
     # 获取项目数据的目录
     data_path = pathlib.Path(DATA_PATH)
