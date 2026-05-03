@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `src/tradingview_zy/`：核心 Python 包，包含基础枚举/数据结构、配置模板、行情存储、图表辅助、监控、自选等通用能力。
 - `src/tradingview_zy/exchange/`：行情与交易所适配层。`exchange.py` 定义 `Exchange` 抽象接口，`exchange/__init__.py` 的 `get_exchange(Market)` 根据 `src/tradingview_zy/config.py` 中的 `EXCHANGE_*` 配置选择并缓存具体实现。
 - `src/tradingview_zy/backtesting/`：回测框架。`backtest.py` 组合回测 K 线、回测交易器和策略类；`base.py` 定义 `Strategy`、`Trader`、`MarketDatas`、`POSITION`、`Operation` 等基类。
-- `src/tradingview_zy/strategy/`：策略实现，策略继承 `tradingview_zy.backtesting.base.Strategy` 并实现 `open` / `close`。
+- `src/tradingview_zy/strategies/`：通用策略协议与策略加载器，策略通过普通 K 线数据输入输出信号。
 - `src/tradingview_zy/trader/`：实盘/交易执行适配，按市场区分 A 股、港股、期货、数字货币等。
 - `web/tradingview_zy_chart/`：Web 应用。`app.py` 将 `src` 和 Web 目录加入 `sys.path`，用 Tornado 包装 Flask 应用并监听 `config.WEB_HOST:9900`；`cl_app/__init__.py` 创建 Flask app，提供 TradingView 数据接口、登录、监控、选股等路由。
 - `script/crontab/` 与 `script/trader/`：行情同步、选股和交易任务脚本。
@@ -76,11 +76,7 @@ Windows 启动脚本：
 ./windows_run.bat
 ```
 
-pytest 已在 `pyproject.toml` 依赖中声明，但仓库没有集中测试目录；现有测试/示例更像脚本。运行单个测试文件示例：
-
-```bash
-uv run pytest src/cl_wtpy/test_hotpicker/testHots.py
-```
+pytest 已在 `pyproject.toml` 依赖中声明，但仓库没有集中测试目录；现有测试/示例更像脚本。可按需运行具体脚本或模块测试。
 
 运行单个 Python 脚本时保留 `PYTHONPATH`：
 
