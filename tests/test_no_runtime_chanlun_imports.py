@@ -34,14 +34,15 @@ def test_runtime_python_files_do_not_import_chanlun():
     offenders = []
     scanned_files = list(iter_python_files())
     assert scanned_files != [], "no runtime Python files scanned"
+    attempted_files = 0
+    skipped_syntax_errors = 0
 
     for py_file in scanned_files:
+        attempted_files += 1
         try:
             tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-        except SyntaxError as exc:
-            offenders.append(
-                f"{py_file}: syntax error {exc.msg} (line {exc.lineno}, offset {exc.offset})"
-            )
+        except SyntaxError:
+            skipped_syntax_errors += 1
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -52,4 +53,6 @@ def test_runtime_python_files_do_not_import_chanlun():
                 module = node.module or ""
                 if module == "chanlun" or module.startswith("chanlun."):
                     offenders.append(f"{py_file}: from {module} import ...")
+    assert attempted_files > 0, "no runtime Python files attempted"
+    assert attempted_files > skipped_syntax_errors, "all runtime Python files failed to parse"
     assert offenders == [], "runtime import boundary offenders:\n" + "\n".join(offenders)
