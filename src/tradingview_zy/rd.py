@@ -3,7 +3,6 @@ import json
 import redis
 
 from tradingview_zy import config
-from tradingview_zy.cl_interface import *
 
 r = None
 rb = None

@@ -2,14 +2,12 @@
 线上行情数据获取对象，用于实盘交易执行
 """
 
-from typing import List, Dict
+from typing import Dict, List
 
 import pandas as pd
 
 from tradingview_zy.backtesting.base import MarketDatas
-from tradingview_zy.cl_interface import ICL
 from tradingview_zy.exchange.exchange import Exchange
-from tradingview_zy.file_db import FileCacheDB
 
 
 class OnlineMarketDatas(MarketDatas):
@@ -22,16 +20,14 @@ class OnlineMarketDatas(MarketDatas):
         market: str,
         frequencys: List[str],
         ex: Exchange,
-        cl_config: dict,
         use_cache=True,
     ):
         """
         初始化
         use_cache 是否使用缓存，如果设置为 True，在每次循环都需要显式调用 clear_cache 清除缓存，避免后续无法获取最新行情数据
         """
-        super().__init__(market, frequencys, cl_config)
+        super().__init__(market, frequencys)
         self.ex = ex
-        self.fdb = FileCacheDB()
 
         self.use_cache = use_cache
 
@@ -64,19 +60,3 @@ class OnlineMarketDatas(MarketDatas):
             "high": float(klines.iloc[-1]["high"]),
             "low": float(klines.iloc[-1]["low"]),
         }
-
-    def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
-        # 根据回测配置，可自定义不同周期所使用的缠论配置项
-        if code in self.cl_config.keys():
-            cl_config = self.cl_config[code]
-        elif frequency in self.cl_config.keys():
-            cl_config = self.cl_config[frequency]
-        elif "default" in self.cl_config.keys():
-            cl_config = self.cl_config["default"]
-        else:
-            cl_config = self.cl_config
-
-        klines = self.klines(code, frequency)
-
-        cd = self.fdb.get_web_cl_data(self.market, code, frequency, cl_config, klines)
-        return cd
