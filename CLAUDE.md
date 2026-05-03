@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python 版本以 `pyproject.toml` 为准：`>=3.11`。安装文档同时说明 3.8、3.9、3.10、3.11 可用；本仓库优先使用 3.11。
 
-项目需要 `PYTHONPATH` 指向仓库的 `src` 目录，否则 `check_env.py` 会提示无法导入 `chanlun`：
+项目需要 `PYTHONPATH` 指向仓库的 `src` 目录，否则 `check_env.py` 会提示无法导入 `tradingview_zy`：
 
 ```bash
 export PYTHONPATH="$PWD/src"

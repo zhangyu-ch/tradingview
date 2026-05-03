@@ -47,11 +47,11 @@ def test_runtime_python_files_do_not_import_chanlun():
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name == "chanlun" or alias.name.startswith("tradingview_zy."):
+                    if alias.name == "chanlun" or alias.name.startswith("chanlun."):
                         offenders.append(f"{py_file}: import {alias.name}")
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                if module == "chanlun" or module.startswith("tradingview_zy."):
+                if module == "chanlun" or module.startswith("chanlun."):
                     offenders.append(f"{py_file}: from {module} import ...")
     assert attempted_files > 0, "no runtime Python files attempted"
     assert attempted_files > skipped_syntax_errors, "all runtime Python files failed to parse"
