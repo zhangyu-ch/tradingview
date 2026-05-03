@@ -234,7 +234,7 @@ class SignalToTrade(BackTestTrader):
                 opt = Operation(
                     code=_pos["code"],
                     opt="sell",
-                    mmd=_pos["mmd"],
+                    signal=_pos["mmd"],
                     msg=_pos["close_msg"],
                     close_uid="clear",
                 )
@@ -258,7 +258,7 @@ class SignalToTrade(BackTestTrader):
                 opt = Operation(
                     code=_pos["code"],
                     opt="buy",
-                    mmd=_pos["mmd"],
+                    signal=_pos["mmd"],
                     loss_price=_pos["loss_price"],
                     info={_k: _v for _k, _v in _pos.items() if _k in info_keys},
                     msg=_pos["open_msg"],
@@ -289,7 +289,7 @@ class SignalToTrade(BackTestTrader):
                     opt = Operation(
                         code=_pos["code"],
                         opt="buy",
-                        mmd=_pos["mmd"],
+                        signal=_pos["mmd"],
                         loss_price=_pos["loss_price"],
                         info={_k: _v for _k, _v in _pos.items() if _k in info_keys},
                         msg=_pos["open_msg"],

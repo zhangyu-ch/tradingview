@@ -390,7 +390,7 @@ class BackTestTrader(Trader):
                     pos.code,
                     Operation(
                         opt="sell",
-                        mmd=pos.mmd,
+                        signal=pos.mmd,
                         msg="退出",
                         code=pos.code,
                         close_uid="clear",
@@ -774,7 +774,7 @@ class BackTestTrader(Trader):
                     if pos.now_pos_rate >= 1:
                         return True
                 else:
-                    pos = POSITION(code=code, mmd=opt.mmd, open_uid=opt.open_uid)
+                    pos = POSITION(code=code, signal=opt.mmd, open_uid=opt.open_uid)
                     self.positions[opt.open_uid] = pos
 
             res = None

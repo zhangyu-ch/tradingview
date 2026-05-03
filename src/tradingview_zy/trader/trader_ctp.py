@@ -428,7 +428,7 @@ class CTPTrader(BackTestTrader):
         time.sleep(1)
 
         # 根据持仓方向决定锁仓方向
-        if pos.direction == "buy":
+        if pos.type == "buy":
             # 持有多仓，开空仓锁仓
             self.trader_api.order_ref += 1
             req = ApiStruct.InputOrder(
@@ -501,7 +501,7 @@ class CTPTrader(BackTestTrader):
         self.trader_api.order_ref += 1
 
         # 根据持仓方向决定平仓方向和价格
-        if pos.direction == "buy":
+        if pos.type == "buy":
             # 平多仓，用卖一价
             direction = THOST_FTDC_D_Sell
             price = tick[code].sell1
@@ -577,7 +577,7 @@ class CTPTrader(BackTestTrader):
             amount = pos_info.Position
 
             pos = POSITION(
-                code=code, direction=direction, price=pos_info.OpenPrice, amount=amount
+                code=code, signal=opt.mmd, type=direction, price=pos_info.OpenPrice, amount=amount
             )
 
             result = self.force_close(code, pos, opt)
@@ -654,7 +654,7 @@ class CTPTrader(BackTestTrader):
         time.sleep(1)
 
         # 根据持仓方向决定锁仓方向
-        if pos.direction == "buy":
+        if pos.type == "buy":
             # 持有多仓，开空仓锁仓
             self.trader_api.order_ref += 1
             req = ApiStruct.InputOrder(
