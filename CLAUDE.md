@@ -1,0 +1,96 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 项目概览
+
+这是基于缠论的多市场行情分析、图表展示、监控、回测和交易工具。核心计算以逐 Bar 增量方式处理 K 线，`process_klines` 可重复喂入数据，已处理数据会跳过，最后一个 Bar 会更新。
+
+主要代码分层：
+
+- `src/chanlun/`：核心库。`cl.py` 实现缠论计算，`cl_interface.py` 定义 K 线、分型、笔、线段、中枢等接口/数据结构。
+- `src/chanlun/exchange/`：行情与交易所适配层。`exchange.py` 定义 `Exchange` 抽象接口，`exchange/__init__.py` 的 `get_exchange(Market)` 根据 `src/chanlun/config.py` 中的 `EXCHANGE_*` 配置选择并缓存具体实现。
+- `src/chanlun/backtesting/`：回测框架。`backtest.py` 的 `BackTest` 组合 `BackTestKlines`、`BackTestTrader` 和策略类；`base.py` 定义 `Strategy`、`Trader`、`MarketDatas`、`POSITION`、`Operation` 等基类。
+- `src/chanlun/strategy/`：策略实现，策略继承 `chanlun.backtesting.base.Strategy` 并实现 `open` / `close`。
+- `src/chanlun/trader/`：实盘/交易执行适配，按市场区分 A 股、港股、期货、数字货币等。
+- `web/chanlun_chart/`：Web 应用。`app.py` 将 `src` 和 Web 目录加入 `sys.path`，用 Tornado 包装 Flask 应用并监听 `config.WEB_HOST:9900`；`cl_app/__init__.py` 创建 Flask app，提供 TradingView 数据接口、登录、监控、选股等路由。
+- `script/crontab/` 与 `script/trader/`：行情同步、选股和交易任务脚本。
+- `notebook/`：Jupyter 回测、图表和研究示例。
+
+支持市场枚举在 `src/chanlun/base.py`：A 股、港股、国内期货、纽约期货、数字货币合约/现货、美股、外汇。
+
+## 环境与配置
+
+Python 版本以 `pyproject.toml` 为准：`>=3.11`。安装文档同时说明 3.8、3.9、3.10、3.11 可用；本仓库优先使用 3.11。
+
+项目需要 `PYTHONPATH` 指向仓库的 `src` 目录，否则 `check_env.py` 会提示无法导入 `chanlun`：
+
+```bash
+export PYTHONPATH="$PWD/src"
+```
+
+运行前需要从示例配置复制真实配置：
+
+```bash
+cp src/chanlun/config.py.demo src/chanlun/config.py
+```
+
+`src/chanlun/config.py` 已被 `.gitignore` 排除；不要依赖它已经存在。授权文件路径由 `check_env.py` 检查：`src/pyarmor_runtime_005445/pyarmor.rkey`。
+
+## 常用命令
+
+优先使用仓库自带的 `uv` 配置：
+
+```bash
+uv venv --python=3.11 .venv
+uv sync
+```
+
+Windows 下也可双击或运行：
+
+```bash
+./windows_install.bat
+```
+
+检查环境：
+
+```bash
+uv run check_env.py
+```
+
+运行 Web 服务：
+
+```bash
+uv run web/chanlun_chart/app.py
+```
+
+不自动打开浏览器：
+
+```bash
+uv run web/chanlun_chart/app.py nobrowser
+```
+
+Windows 启动脚本：
+
+```bash
+./windows_run.bat
+```
+
+pytest 已在 `pyproject.toml` 依赖中声明，但仓库没有集中测试目录；现有测试/示例更像脚本。运行单个测试文件示例：
+
+```bash
+uv run pytest src/cl_wtpy/test_hotpicker/testHots.py
+```
+
+运行单个 Python 脚本时保留 `PYTHONPATH`：
+
+```bash
+PYTHONPATH="$PWD/src" uv run python path/to/script.py
+```
+
+## 开发注意事项
+
+- 配置驱动的市场选择集中在 `src/chanlun/config.py.demo` 的 `EXCHANGE_*` 变量和 `src/chanlun/exchange/__init__.py`；新增市场/数据源时同时检查 `Market` 枚举、Exchange 实现、Web 端市场映射和配置示例。
+- Web 图表接口依赖 TradingView UDF 风格路由，如 `/tv/config`、`/tv/search`、`/tv/symbols`、`/tv/history`；改行情字段或频率映射时要同步检查 Web 路由与 exchange 的 `support_frequencys()`。
+- 回测策略应以 `Strategy.open` / `Strategy.close` 返回 `Operation`，并通过 `MarketDatas.get_cl_data()` 获取指定标的/周期的缠论数据。
+- 数据默认保存路径由 `config.DATA_PATH` 决定；以 `.` 开头时会落到用户 home 目录下。
