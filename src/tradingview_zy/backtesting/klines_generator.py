@@ -1,15 +1,12 @@
 import pandas as pd
 
-from tradingview_zy import cl
-from tradingview_zy.cl_interface import ICL
-
 
 class KlinesGenerator:
     """
     K线合成，目前只支持分钟线合成，小时、日，需要考虑不同市场的交易时间，比较麻烦，不搞呢
     """
 
-    def __init__(self, minute: int, cl_config: dict = None, dt_align_type: str = "eob"):
+    def __init__(self, minute: int, dt_align_type: str = "eob"):
         """
         如果源的分钟数是 1分钟，可以合成 3、5、7、30，如果是 5分钟，可以合成 10、15、30，
         如果源是 5分钟，非要合成 13分钟数据，合出来的数据则是错误的
@@ -20,22 +17,18 @@ class KlinesGenerator:
         合并到源的对齐方式与合并后的要一致
 
         @param minute: 需要合成的分钟数
-        @param cl_config: 缠论对配置项
         @param dt_align_type: 时间对齐方式，bob 前对齐，eob 后对齐
         """
 
         self.minute = minute  # 合成后的分钟数据
-        self.cl_config = cl_config  # 缠论配置项
         self.dt_align_type = dt_align_type  # 时间对齐类型
 
-        self.to_klines: pd.DataFrame  # 合成后保存到k线数据
-        self.to_cl_data: ICL  # 合成后计算的缠论数据
+        self.to_klines: pd.DataFrame
         self.to_klines = None
-        self.to_cl_data = None
 
-    def update_klines(self, from_klines: pd.DataFrame) -> ICL:
+    def update_klines(self, from_klines: pd.DataFrame) -> pd.DataFrame:
         if len(from_klines) == 0:
-            return self.to_cl_data
+            return self.to_klines
 
         convert_klines = (
             from_klines
@@ -46,7 +39,6 @@ class KlinesGenerator:
         convert_klines.insert(0, column="date_index", value=convert_klines["date"])
         convert_klines.set_index("date_index", inplace=True)
         period_type = f"{self.minute}min"
-        # 前对其
 
         if self.dt_align_type == "bob":
             label = "right"
@@ -108,37 +100,27 @@ class KlinesGenerator:
         # 控制一下大小
         if len(self.to_klines) > 20000:
             self.to_klines = self.to_klines.iloc[-10000::]
-            self.to_cl_data = None
 
-        if self.to_cl_data is None:
-            self.to_cl_data = cl.CL(
-                self.to_klines.iloc[0]["code"], str(self.minute), self.cl_config
-            ).process_klines(self.to_klines)
-        else:
-            self.to_cl_data.process_klines(self.to_klines)
-        return self.to_cl_data
+        return self.to_klines
 
 
 if __name__ == "__main__":
-    from tradingview_zy.cl_utils import query_cl_chart_config
     from tradingview_zy.exchange.exchange import convert_futures_kline_frequency
     from tradingview_zy.exchange.exchange_db import ExchangeDB
 
     market = "futures"
     code = "SHFE.RB"
     freq = "1m"
-    cl_config = query_cl_chart_config(market, code)
     ex = ExchangeDB(market)
 
     klines = ex.klines(code, freq)
     # 合成前的K线
     print(klines[["date", "open", "close", "high", "low", "volume"]].tail(10))
 
-    kg = KlinesGenerator(30, cl_config, "eob")
-    cd = kg.update_klines(klines)
+    kg = KlinesGenerator(30, "eob")
+    to_klines = kg.update_klines(klines)
     # 合成后的K线
-    print(kg.to_klines[["date", "open", "close", "high", "low", "volume"]].tail())
+    print(to_klines[["date", "open", "close", "high", "low", "volume"]].tail())
 
-    klines_day = convert_futures_kline_frequency(kg.to_klines, "d")
-    print(klines_day.tail())
+    klines_day = convert_futures_kline_frequency(to_klines, "d")
     print(klines_day.tail())

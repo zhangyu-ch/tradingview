@@ -1,13 +1,52 @@
 import ast
+import importlib
+import inspect
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from tradingview_zy.backtesting.base import MarketDatas, Operation, POSITION
+from tradingview_zy.backtesting.base import MarketDatas, Operation, POSITION, Strategy
 
 
-def test_operation_uses_generic_signal_name():
+
+
+def test_backtesting_base_import_does_not_load_hidden_config_or_fun():
+    sys.modules.pop("tradingview_zy.backtesting.base", None)
+    sys.modules.pop("tradingview_zy.fun", None)
+    sys.modules.pop("tradingview_zy.config", None)
+
+    module = importlib.import_module("tradingview_zy.backtesting.base")
+
+    assert module is not None
+    assert "tradingview_zy.fun" not in sys.modules
+    assert "tradingview_zy.config" not in sys.modules
+
+
+def test_backtesting_base_source_does_not_import_fun():
+    repo_root = Path(__file__).resolve().parents[1]
+    source = (repo_root / "src" / "tradingview_zy" / "backtesting" / "base.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "tradingview_zy.fun" not in source
+    assert "get_logger" not in source
+
+
+def test_strategy_close_signature_uses_signal_not_mmd():
+    parameters = inspect.signature(Strategy.close).parameters
+
+    assert "signal" in parameters
+    assert "mmd" not in parameters
+
+
+def test_backtesting_key_modules_import_smoke():
+    for module_name in [
+        "tradingview_zy.backtesting.base",
+        "tradingview_zy.backtesting.backtest",
+        "tradingview_zy.backtesting.backtest_klines",
+    ]:
+        assert importlib.import_module(module_name) is not None
     opt = Operation(code="SH.000001", opt="open", signal="breakout", msg="突破")
     assert opt.opt == "buy"
     assert opt.signal == "breakout"

@@ -11,19 +11,19 @@ class OptimizationSetting:
     """
 
     def __init__(self):
-        # 缠论配置的参数优化配置
-        self.cl_config_params = {}
+        # 数据配置的参数优化配置
+        self.data_config_params = {}
 
-    def add_cl_parameter(self, name: str, values: list):
+    def add_parameter(self, name: str, values: list):
         """
-        添加缠论的参数配置
+        添加参数配置
         """
-        self.cl_config_params[name] = values
+        self.data_config_params[name] = values
 
-    def generate_cl_settings(self) -> List[dict]:
+    def generate_settings(self) -> List[dict]:
         """"""
-        keys = self.cl_config_params.keys()
-        values = self.cl_config_params.values()
+        keys = self.data_config_params.keys()
+        values = self.data_config_params.values()
         products = list(product(*values))
 
         settings = []

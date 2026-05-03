@@ -1,7 +1,5 @@
 # 回放行情所需
 import datetime
-import hashlib
-import json
 import time
 from typing import Dict, List, Union
 
@@ -9,10 +7,11 @@ import pandas as pd
 import pytz
 from tqdm.auto import tqdm
 
-from tradingview_zy import cl, fun
 from tradingview_zy.backtesting.base import MarketDatas
-from tradingview_zy.cl_interface import ICL
-from tradingview_zy.exchange.exchange_db import ExchangeDB
+
+
+def _datetime_to_str(_dt: datetime.datetime, _format="%Y-%m-%d %H:%M:%S"):
+    return _dt.strftime(_format)
 
 
 class BackTestKlines(MarketDatas):
@@ -26,7 +25,7 @@ class BackTestKlines(MarketDatas):
         start_date: str,
         end_date: str,
         frequencys: List[str],
-        cl_config=None,
+        data_config=None,
     ):
         """
         配置初始化
@@ -35,7 +34,7 @@ class BackTestKlines(MarketDatas):
         :param start_date:
         :param end_date:
         """
-        super().__init__(market, frequencys, cl_config)
+        super().__init__(market, frequencys)
 
         self.tz = pytz.timezone("Asia/Shanghai")
         if market == "us":
@@ -44,7 +43,7 @@ class BackTestKlines(MarketDatas):
         self.market = market
         self.base_code = None
         self.frequencys = frequencys
-        self.cl_config = cl_config
+        self.data_config = data_config or {}
         if isinstance(start_date, str):
             start_date = datetime.datetime.strptime(
                 start_date, "%Y-%m-%d %H:%M:%S"
@@ -62,13 +61,11 @@ class BackTestKlines(MarketDatas):
         # True 在多代码时会占用太多内存，这时可以设置为 False 增加使用数据库按需获取，增加运行时间，减少占用内存空间
         self.load_data_to_cache = True
         self.load_kline_nums = 10000  # 每次重新加载的K线数量
-        self.cl_data_kline_max_nums = 50000  # 缠论数据中最大保存的k线数量
 
         # 是否使用 cache 保存所有k线数据，True 会将代码周期时间段内所有数据读取并保存到内存，False 在每次使用的时候从数据库中获取
         # True 在多代码时会占用太多内存，这时可以设置为 False 增加使用数据库按需获取，增加运行时间，减少占用内存空间
         self.load_data_to_cache = True
         self.load_kline_nums = 10000  # 每次重新加载的K线数量
-        self.cl_data_kline_max_nums = 50000  # 缠论数据中最大保存的k线数量
         self.del_volume_zero = False  # 是否删除成交量为 0 的K线数据
 
         # 保存k线数据
@@ -76,6 +73,8 @@ class BackTestKlines(MarketDatas):
 
         # 每个周期缓存的k线数据，避免多次请求重复计算
         self.cache_klines: Dict[str, Dict[str, pd.DataFrame]] = {}
+
+        from tradingview_zy.exchange.exchange_db import ExchangeDB
 
         self.ex = ExchangeDB(self.market)
 
@@ -91,7 +90,6 @@ class BackTestKlines(MarketDatas):
         self._use_times = {
             "klines": 0,
             "convert_klines": 0,
-            "get_cl_data": 0,
             "query_db_klines": 0,
         }
 
@@ -106,8 +104,8 @@ class BackTestKlines(MarketDatas):
             klines = self.ex.klines(
                 base_code,
                 _f,
-                start_date=fun.datetime_to_str(self.start_date),
-                end_date=fun.datetime_to_str(self.end_date),
+                start_date=_datetime_to_str(self.start_date),
+                end_date=_datetime_to_str(self.end_date),
                 args={"limit": None},
             )
             if klines is None:
@@ -127,8 +125,6 @@ class BackTestKlines(MarketDatas):
         """
         self.cache_klines = {}
         self.all_klines = {}
-        self.cache_cl_datas = {}
-        self.cl_datas = {}
         return True
 
     def next(self, frequency: str = ""):
@@ -140,8 +136,7 @@ class BackTestKlines(MarketDatas):
         self.now_date = self.loop_datetime_list[frequency].pop(0)
         # for _f, loop_dt_list in self.loop_datetime_list.items():
         #     self.loop_datetime_list[_f] = [d for d in loop_dt_list if d >= self.now_date]
-        # 清除之前的 cl_datas 、klines 缓存，重新计算
-        self.cache_cl_datas = {}
+        # 清除之前的 klines 缓存，重新计算
         self.cache_klines = {}
         self.bar.update(1)
         return True
@@ -155,80 +150,6 @@ class BackTestKlines(MarketDatas):
             "high": float(kline.iloc[-1]["high"]),
             "low": float(kline.iloc[-1]["low"]),
         }
-
-    def get_cl_data(self, code, frequency, cl_config: dict = None) -> ICL:
-        _time = time.time()
-        try:
-            # 根据回测配置，可自定义不同周期所使用的缠论配置项
-            if cl_config is None:
-                if code in self.cl_config.keys():
-                    cl_config = self.cl_config[code]
-                elif frequency in self.cl_config.keys():
-                    cl_config = self.cl_config[frequency]
-                elif "default" in self.cl_config.keys():
-                    cl_config = self.cl_config["default"]
-                else:
-                    cl_config = self.cl_config
-
-            # 将配置项md5哈希，并加入到 key 中，这样可以保存并获取多个缠论配置项的数据
-            cl_config_key = json.dumps(cl_config)
-            cl_config_key = hashlib.md5(
-                cl_config_key.encode(encoding="UTF-8")
-            ).hexdigest()
-
-            key = "%s_%s_%s" % (code, frequency, cl_config_key)
-            if key in self.cache_cl_datas.keys():
-                return self.cache_cl_datas[key]
-
-            if key not in self.cl_datas.keys():
-                # 第一次进行计算
-                klines = self.klines(code, frequency)
-                self.cl_datas[key] = cl.CL(code, frequency, cl_config).process_klines(
-                    klines
-                )
-            else:
-                # 更新计算
-                cd = self.cl_datas[key]
-
-                # 节省内存，最多存 n k线数据，超过就清空重新计算，必须要大于每次K线获取的数量
-                if (
-                    self.cl_data_kline_max_nums is not None
-                    and len(cd.get_klines()) >= self.cl_data_kline_max_nums
-                ):
-                    self.cl_datas[key] = cl.CL(code, frequency, cl_config)
-                    cd = self.cl_datas[key]
-
-                klines = self.klines(code, frequency)
-
-                if len(klines) > 0:
-                    if len(cd.get_klines()) == 0:
-                        self.cl_datas[key].process_klines(klines)
-                    else:
-                        # 判断是追加更新还是从新计算
-                        cl_end_time = cd.get_klines()[-1].date
-                        kline_start_time = klines.iloc[0]["date"]
-                        if cl_end_time > kline_start_time:
-                            self.cl_datas[key].process_klines(klines)
-                        else:
-                            self.cl_datas[key] = cl.CL(
-                                code, frequency, cl_config
-                            ).process_klines(klines)
-
-            # 回测单次循环周期内，计算过后进行缓存，避免多次计算
-            self.cache_cl_datas[key] = self.cl_datas[key]
-
-            if (
-                len(klines) > 0
-                and self.cl_datas[key].get_src_klines()[-1].date
-                != klines.iloc[-1]["date"]
-            ):
-                raise RuntimeError(
-                    f'{code} 计算缠论数据异常，缠论数据最后时间与给定的K线最后时间不一致 【缠论:{self.cl_datas[key].get_src_klines()[-1].date}】 Kline: {klines.iloc[-1]["date"]}'
-                )
-
-            return self.cache_cl_datas[key]
-        finally:
-            self._use_times["get_cl_data"] += time.time() - _time
 
     def klines(self, code, frequency) -> pd.DataFrame:
         if (
@@ -252,7 +173,7 @@ class BackTestKlines(MarketDatas):
                         start_date=self._cal_start_date_by_frequency(
                             self.start_date, _f
                         ),
-                        end_date=fun.datetime_to_str(self.end_date),
+                        end_date=_datetime_to_str(self.end_date),
                         args={"limit": None},
                     )
                     self.all_klines[key] = all_klines.sort_values("date").reset_index(
@@ -283,7 +204,7 @@ class BackTestKlines(MarketDatas):
                 klines[_f] = self.ex.klines(
                     code,
                     _f,
-                    end_date=fun.datetime_to_str(self.now_date),
+                    end_date=_datetime_to_str(self.now_date),
                     args={"limit": 10000},
                 )
                 if self.del_volume_zero and len(klines[_f]) > 0:
@@ -441,21 +362,20 @@ class BackTestKlines(MarketDatas):
 
 
 if __name__ == "__main__":
-    from tradingview_zy.cl_utils import klines_to_heikin_ashi_klines
 
     market = "a"
     start = "2015-01-01 00:00:00"
     end = "2024-05-01 00:00:00"
     code = "SH.000001"
     frequencys = ["w", "d", "30m"]
-    cl_config = {}
-    bkt = BackTestKlines(market, start, end, frequencys, cl_config)
+    data_config = {}
+    bkt = BackTestKlines(market, start, end, frequencys, data_config)
     bkt.init(code, frequencys[-1])
 
     s_time = time.time()
     while bkt.next():
         k = bkt.klines(code, "d")
-        ks = klines_to_heikin_ashi_klines(k.iloc[-1000::])
+
 
         # print(
         #     f"{code} - {f} : kline last date : {k.iloc[-1]['date']} close: {k.iloc[-1]['close']}"

@@ -99,7 +99,7 @@ class BaseStrategy(BaseCtaStrategy):
         context.stra_log_text(opt.msg)
         pos: POSITION = POSITION(
             code=code,
-            mmd=opt.mmd,
+            signal=opt.signal,
             type="long",
             balance=1,
             price=0,
@@ -120,7 +120,7 @@ class BaseStrategy(BaseCtaStrategy):
         context.stra_log_text(opt.msg)
         pos: POSITION = POSITION(
             code=code,
-            mmd=opt.mmd,
+            signal=opt.signal,
             type="short",
             balance=1,
             price=0,

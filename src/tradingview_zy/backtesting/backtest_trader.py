@@ -3,11 +3,16 @@ import datetime
 import time
 from typing import Dict, List, Tuple
 
-from tradingview_zy import fun
 from tradingview_zy.backtesting import futures_contracts
 from tradingview_zy.backtesting.base import POSITION, MarketDatas, Operation, Strategy, Trader
-from tradingview_zy.db import db
-from tradingview_zy.file_db import fdb
+
+
+def _datetime_to_str(_dt: datetime.datetime, _format="%Y-%m-%d %H:%M:%S"):
+    return _dt.strftime(_format)
+
+
+def _datetime_to_int(_dt: datetime.datetime):
+    return int(_dt.timestamp())
 
 
 class BackTestTrader(Trader):
@@ -232,6 +237,8 @@ class BackTestTrader(Trader):
             "results": self.results,
         }
         if key is not None:
+            from tradingview_zy.file_db import fdb
+
             fdb.cache_pkl_to_file(key, save_infos)
         return save_infos
 
@@ -240,6 +247,8 @@ class BackTestTrader(Trader):
         从 pkl 文件 中恢复之前的数据
         """
         if save_infos is None:
+            from tradingview_zy.file_db import fdb
+
             save_infos = fdb.cache_pkl_from_file(key)
             if save_infos is None:
                 return False
@@ -329,7 +338,7 @@ class BackTestTrader(Trader):
                 continue
             _time = time.time()
             opts = self.strategy.close(
-                code=code, mmd=pos.mmd, pos=pos, market_data=self.datas
+                code=code, signal=pos.signal, pos=pos, market_data=self.datas
             )
             self.add_times("strategy_close", time.time() - _time)
 
@@ -988,7 +997,7 @@ class BackTestTrader(Trader):
 
                     # 判断是否平今
                     fee_other = {"close": True}
-                    if pos.open_date == fun.datetime_to_str(
+                    if pos.open_date == _datetime_to_str(
                         self.get_now_datetime(), "%Y-%m-%d"
                     ):
                         fee_other = {"close_today": True}
@@ -1130,7 +1139,7 @@ class BackTestTrader(Trader):
 
                     # 判断是否平今
                     fee_other = {"close": True}
-                    if pos.open_date == fun.datetime_to_str(
+                    if pos.open_date == _datetime_to_str(
                         self.get_now_datetime(), "%Y-%m-%d"
                     ):
                         fee_other = {"close_today": True}
@@ -1259,6 +1268,8 @@ class BackTestTrader(Trader):
         start_dt: datetime = None,
     ):
         # 先删除所有的订单
+        from tradingview_zy.db import db
+
         db.marks_del(market=market, mark_label=mark_label)
         order_colors = {
             "open_long": "red",
@@ -1279,7 +1290,7 @@ class BackTestTrader(Trader):
                     if "close_" in _o["type"] and _o["close_uid"] not in close_uid:
                         continue
                 if start_dt is not None:
-                    if fun.datetime_to_int(_o["datetime"]) < fun.datetime_to_int(
+                    if _datetime_to_int(_o["datetime"]) < _datetime_to_int(
                         start_dt
                     ):
                         continue
@@ -1288,7 +1299,7 @@ class BackTestTrader(Trader):
                     _code,
                     _code,
                     "",
-                    fun.datetime_to_int(_o["datetime"]),
+                    _datetime_to_int(_o["datetime"]),
                     mark_label,
                     _o["info"],
                     order_shape[_o["type"]],

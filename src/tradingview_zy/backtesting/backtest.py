@@ -2,6 +2,7 @@ import copy
 import datetime
 import gc
 import hashlib
+import logging
 import os
 import pickle
 import time
@@ -20,19 +21,36 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar, Grid, Line
 from tqdm.auto import tqdm
 
-from tradingview_zy import cl, fun, kcharts
 from tradingview_zy.backtesting import futures_contracts
 from tradingview_zy.backtesting.backtest_klines import BackTestKlines
 from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 from tradingview_zy.backtesting.base import POSITION, Strategy
-from tradingview_zy.backtesting.klines_generator import KlinesGenerator
 from tradingview_zy.backtesting.optimize import OptimizationSetting
-from tradingview_zy.cl_interface import ICL
 from tradingview_zy.exchange.exchange import (
     convert_currency_kline_frequency,
     convert_futures_kline_frequency,
     convert_stock_kline_frequency,
 )
+
+
+def _get_logger(name: str) -> logging.Logger:
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        logger.addHandler(logging.StreamHandler())
+    logger.setLevel(logging.INFO)
+    return logger
+
+
+def _datetime_to_str(_dt: datetime.datetime, _format="%Y-%m-%d %H:%M:%S"):
+    return _dt.strftime(_format)
+
+
+def _str_to_datetime(_s, _format="%Y-%m-%d %H:%M:%S"):
+    return datetime.datetime.strptime(_s, _format)
+
+
+def _now_dt():
+    return _datetime_to_str(datetime.datetime.now())
 
 
 class BackTest:
@@ -42,7 +60,7 @@ class BackTest:
 
     def __init__(self, config: dict = None):
         # 日志记录
-        self.log = fun.get_logger("my_backtest.log")
+        self.log = _get_logger("my_backtest.log")
         # 资源管理
         self._resources = set()
         # 性能监控
@@ -63,7 +81,6 @@ class BackTest:
             "init_balance",
             "fee_rate",
             "max_pos",
-            "cl_config",
             "strategy",
         ]
         for _k in check_keys:
@@ -89,7 +106,7 @@ class BackTest:
         self.fee_rate: float = config["fee_rate"]
         self.max_pos: int = config["max_pos"]
 
-        self.cl_config: dict = config["cl_config"]
+        self.data_config: dict = config.get("data_config", {})
 
         # 执行策略
         self.strategy: Strategy = config["strategy"]
@@ -112,7 +129,7 @@ class BackTest:
             self.start_datetime,
             self.end_datetime,
             self.frequencys,
-            self.cl_config,
+            self.data_config,
         )
         self.trader.set_data(self.datas)
 
@@ -148,7 +165,7 @@ class BackTest:
             "init_balance": self.init_balance,
             "fee_rate": self.fee_rate,
             "max_pos": self.max_pos,
-            "cl_config": self.cl_config,
+            "data_config": self.data_config,
             "strategy": self.strategy,
             "trader": self.trader,
             "next_frequency": self.next_frequency,
@@ -175,7 +192,7 @@ class BackTest:
         self.init_balance = config_dict["init_balance"]
         self.fee_rate = config_dict["fee_rate"]
         self.max_pos = config_dict["max_pos"]
-        self.cl_config = config_dict["cl_config"]
+        self.data_config = config_dict.get("data_config", {})
         self.strategy = config_dict["strategy"]
         self.trader = config_dict["trader"]
         self.next_frequency = config_dict["next_frequency"]
@@ -184,7 +201,7 @@ class BackTest:
             self.start_datetime,
             self.end_datetime,
             self.frequencys,
-            self.cl_config,
+            self.data_config,
         )
         # self.log.info('Load OK')
         return
@@ -193,7 +210,7 @@ class BackTest:
         """
         输出回测信息
         """
-        self.log.info(fun.now_dt())
+        self.log.info(_now_dt())
         self.log.info(f"保存地址 : {self.save_file}")
         self.log.info(
             f"回测模式 【{self.mode}】市场 【{self.market}】初始资金 【{self.init_balance}】 手续费率 【{self.fee_rate}】"
@@ -205,7 +222,7 @@ class BackTest:
         self.log.info(
             f"起始时间 : {self.start_datetime} 结束时间 : {self.end_datetime}"
         )
-        self.log.info(f"缠论配置 : {self.cl_config}")
+        self.log.info(f"数据配置 : {self.data_config}")
         self.log.info(f"交易总手续费 : {self.trader.fee_total}")
         return True
 
@@ -375,23 +392,18 @@ class BackTest:
                 gc.collect()
         return True
 
-    def run_params(self, new_cl_setting: dict):
+    def run_params(self, new_data_setting: dict):
         """
-        参数优化，执行不同的参数配置
-
-        注意事项：如果有修改过 Strategy 策略文件，并需要重新进行参数优化的，需要手动将 notebook/data/bk/_optimization_*.pkl 文件删除
-        注意事项：如果有修改过 Strategy 策略文件，并需要重新进行参数优化的，需要手动将 notebook/data/bk/_optimization_*.pkl 文件删除
-        注意事项：如果有修改过 Strategy 策略文件，并需要重新进行参数优化的，需要手动将 notebook/data/bk/_optimization_*.pkl 文件删除
-
+        参数优化，执行不同的数据配置。
         """
-        copy_cl_config = copy.deepcopy(self.cl_config)
-        for k, v in new_cl_setting.items():
-            if "default" in copy_cl_config.keys():
-                copy_cl_config["default"][k] = v
+        copy_data_config = copy.deepcopy(self.data_config)
+        for k, v in new_data_setting.items():
+            if "default" in copy_data_config.keys():
+                copy_data_config["default"][k] = v
             else:
-                copy_cl_config[k] = v
+                copy_data_config[k] = v
         # 生成一个唯一的key，用于避免重复执行相同配置的回测
-        key = f"{self.base_code}_{self.market}_{self.codes}_{self.frequencys}_{self.start_datetime}_{self.end_datetime}_{type(self.strategy)}_{copy_cl_config}"
+        key = f"{self.base_code}_{self.market}_{self.codes}_{self.frequencys}_{self.start_datetime}_{self.end_datetime}_{type(self.strategy)}_{copy_data_config}"
         key = hashlib.md5(key.encode(encoding="UTF-8")).hexdigest()
         # 保存到新的文件中，进行落地
         new_save_file = f"./data/bk/_optimization_{key}.pkl"
@@ -421,15 +433,14 @@ class BackTest:
                 "fee_rate": self.fee_rate,
                 # mode 为 trade 生效，最大持仓数量（分仓）
                 "max_pos": self.max_pos,
-                # 缠论计算的配置，详见缠论配置说明
-                "cl_config": copy_cl_config,
+                "data_config": copy_data_config,
             }
         )
 
         BT.load_data_to_cache = self.load_data_to_cache
 
         BT.log.info(
-            f"执行参数优化，参数配置：{new_cl_setting}，落地文件：{new_save_file}"
+            f"执行参数优化，参数配置：{new_data_setting}，落地文件：{new_save_file}"
         )
         balance = 0
         try:
@@ -448,14 +459,14 @@ class BackTest:
             pos_pd = BT.positions()
             balance = pos_pd[self.evaluate].sum() if len(pos_pd) > 0 else 0
 
-            BT.log.info(f"回测{new_cl_setting} : {new_save_file} 结果：{balance}")
+            BT.log.info(f"回测{new_data_setting} : {new_save_file} 结果：{balance}")
         except Exception:
-            BT.log.error(f"执行回测异常：{new_cl_setting} : {new_save_file}")
+            BT.log.error(f"执行回测异常：{new_data_setting} : {new_save_file}")
             BT.log.error(traceback.format_exc())
 
         return {
             "end_balance": balance,
-            "params": new_cl_setting,
+            "params": new_data_setting,
             "save_file": new_save_file,
         }
 
@@ -475,10 +486,10 @@ class BackTest:
         @param evaluate: 评价的指标 允许 profit_rate /  max_profit_rate
         @param load_data_to_cache: 批量优化，如果使用加载数据到内存中的做法，会占用太多内存，这里可以设置为 False，直接读取数据到方式执行
         """
-        cl_settings: List[Dict] = optimization_setting.generate_cl_settings()
+        data_settings: List[Dict] = optimization_setting.generate_settings()
 
         self.log.info("开始执行穷举算法优化")
-        self.log.info(f"参数优化空间：{len(cl_settings)}")
+        self.log.info(f"参数优化空间：{len(data_settings)}")
 
         self.next_frequency = next_frequency  # 每次循环的周期
         self.load_data_to_cache = load_data_to_cache
@@ -489,7 +500,7 @@ class BackTest:
         with ProcessPoolExecutor(
             max_workers, mp_context=get_context("spawn")
         ) as executor:
-            results = list(executor.map(self.run_params, cl_settings))
+            results = list(executor.map(self.run_params, data_settings))
             results.sort(reverse=True, key=lambda _r: _r["end_balance"])
 
             end = time.perf_counter()
@@ -537,83 +548,13 @@ class BackTest:
         to_minutes: int = None,
         to_dt_align_type: str = "bob",
         to_frequency: str = None,
-        change_cl_config=None,
+        change_data_config=None,
         chart_config=None,
     ):
         """
-        显示指定代码指定周期的图表
-
-        @param code: 要展示的代码
-        @param frequency: 要展示的数据周期
-        @param merge_kline_freq: 使用 exchange.py 中的周期转换，转换成指定市场的周期，例如 a:30m  futures:60m
-        @param to_minutes: 使用 K线合成的方法，合成分钟基本的K线
-        @param to_dt_align_type: 使用K线合成的方法，时间对其方式  bob 前对其 eob后对其
-        @param to_frequency: 展示图表时，可以将低周期转换成高周期数据
-        @param change_cl_config: 覆盖回测的缠论配置项
-        @param chart_config: 覆盖画图配置项
+        已移除运行时图表计算；通用回测仅保留 K 线、账户、订单和撮合能力。
         """
-        # 根据配置中指定的缠论配置进行展示图表
-        if code in self.cl_config.keys():
-            cl_config = self.cl_config[code]
-        elif frequency in self.cl_config.keys():
-            cl_config = self.cl_config[frequency]
-        elif "default" in self.cl_config.keys():
-            cl_config = self.cl_config["default"]
-        else:
-            cl_config = self.cl_config
-
-        if change_cl_config is None:
-            change_cl_config = {}
-        if chart_config is None:
-            chart_config = {}
-
-        # 根据传递的参数，暂时修改其缠论配置
-        if change_cl_config is None:
-            change_cl_config = {}
-        show_cl_config = copy.deepcopy(cl_config)
-        for _i, _v in change_cl_config.items():
-            show_cl_config[_i] = _v
-        for _i, _v in chart_config.items():
-            show_cl_config[_i] = _v
-
-        # 获取行情数据（回测周期内所有的）
-        bk = BackTestKlines(
-            self.market,
-            self.start_datetime,
-            self.end_datetime,
-            [frequency],
-            cl_config=show_cl_config,
-        )
-        bk.klines(code, frequency)
-        klines = bk.all_klines["%s-%s" % (code, frequency)]
-        title = "%s - %s" % (code, frequency)
-        if to_minutes is not None:
-            kg = KlinesGenerator(to_minutes, show_cl_config, to_dt_align_type)
-            cd: ICL = kg.update_klines(klines)
-            title = "%s - (%s to %s)" % (code, frequency, to_minutes)
-        elif merge_kline_freq is not None:
-            m_freq_info = merge_kline_freq.split(":")
-            if m_freq_info[0] == "a":
-                klines = convert_stock_kline_frequency(klines, m_freq_info[1])
-            elif m_freq_info[0] == "futures":
-                klines = convert_futures_kline_frequency(klines, m_freq_info[1])
-            else:
-                klines = convert_currency_kline_frequency(klines, m_freq_info[1])
-            cd: ICL = cl.CL(code, m_freq_info[1], show_cl_config).process_klines(klines)
-            title = "%s - %s" % (code, "Merge " + m_freq_info[1])
-        else:
-            cd: ICL = cl.CL(code, frequency, show_cl_config).process_klines(klines)
-        orders = self.trader.orders[code] if code in self.trader.orders else []
-        # 是否屏蔽锁仓订单
-        if (
-            "not_show_lock_order" in show_cl_config
-            and show_cl_config["not_show_lock_order"]
-        ):
-            orders = [o for o in orders if "锁仓" not in o["info"]]
-        render = kcharts.render_charts(
-            title, cd, to_frequency=to_frequency, orders=orders, config=show_cl_config
-        )
-        return render
+        raise NotImplementedError("运行时图表计算已移除")
 
     def result(self, is_print=True):
         """
@@ -641,8 +582,8 @@ class BackTest:
             # 按照日期聚合资产变化
             new_day_balances = {}
             for dt, b in self.trader.balance_history.items():
-                day = fun.str_to_datetime(
-                    fun.datetime_to_str(fun.str_to_datetime(dt), "%Y-%m-%d"), "%Y-%m-%d"
+                day = _str_to_datetime(
+                    _datetime_to_str(_str_to_datetime(dt), "%Y-%m-%d"), "%Y-%m-%d"
                 )
                 new_day_balances[day] = b
             df = pd.DataFrame.from_dict(
@@ -896,7 +837,7 @@ class BackTest:
         new_day_balances = {}
         for dt, b in self.trader.balance_history.items():
             day = dt[0:10]  # 2022-02-22
-            new_day_balances[fun.str_to_datetime(day, "%Y-%m-%d")] = b
+            new_day_balances[_str_to_datetime(day, "%Y-%m-%d")] = b
         df = pd.DataFrame.from_dict(
             new_day_balances, orient="index", columns=["balance"]
         )
@@ -933,7 +874,7 @@ class BackTest:
         # 持仓记录
         positions = {}
         for _dt, _pos_balance in self.trader.positions_balance_history.items():
-            _dt = fun.str_to_datetime(_dt[0:10], "%Y-%m-%d")
+            _dt = _str_to_datetime(_dt[0:10], "%Y-%m-%d")
             if _dt not in positions.keys():
                 positions[_dt] = {}
             for _code, _b in _pos_balance.items():
@@ -948,8 +889,8 @@ class BackTest:
             for _o in _orders:
                 transactions.append(
                     {
-                        "date": fun.str_to_datetime(
-                            fun.datetime_to_str(_o["datetime"])
+                        "date": _str_to_datetime(
+                            _datetime_to_str(_o["datetime"])
                         ),
                         "amount": (
                             _o["amount"]
@@ -972,7 +913,7 @@ class BackTest:
             args={"limit": None},
         )
         base_klines["date"] = base_klines["date"].apply(
-            lambda d: fun.str_to_datetime(d.strftime("%Y-%m-%d"), "%Y-%m-%d")
+            lambda d: _str_to_datetime(d.strftime("%Y-%m-%d"), "%Y-%m-%d")
         )
         base_klines.set_index("date", inplace=True)
         base_klines["return"] = base_klines["close"].pct_change()
@@ -1070,7 +1011,7 @@ class BackTest:
         tmp_total_nps = 0
         for _dt in dts:
             tmp_pos_by_dt = [
-                p for p in positions if p.close_datetime == fun.datetime_to_str(_dt)
+                p for p in positions if p.close_datetime == _datetime_to_str(_dt)
             ]
             if len(tmp_pos_by_dt) > 0:
                 for _p in tmp_pos_by_dt:

@@ -1,10 +1,9 @@
 import datetime
+import logging
 from abc import ABC, abstractmethod
 from typing import Dict, List, Union
 
 import pandas as pd
-
-from tradingview_zy.fun import get_logger
 
 
 class POSITION:
@@ -244,7 +243,10 @@ class Strategy(ABC):
         return True
 
     def write_log(self, file_name: str, msg: str):
-        log = get_logger(file_name)
+        log = logging.getLogger(file_name or __name__)
+        if not log.handlers:
+            log.addHandler(logging.StreamHandler())
+        log.setLevel(logging.INFO)
         log.info(msg)
         return True
 
@@ -262,12 +264,12 @@ class Strategy(ABC):
 
     @abstractmethod
     def close(
-        self, code, mmd: str, pos: POSITION, market_data: MarketDatas
+        self, code, signal: str, pos: POSITION, market_data: MarketDatas
     ) -> Union[Operation, None, List[Operation]]:
         """
         盯当前持仓，给出平仓当下建议
         :param code:
-        :param mmd:
+        :param signal:
         :param pos:
         :param market_data:
         :return:
