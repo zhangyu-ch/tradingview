@@ -481,6 +481,65 @@ def test_alert_js_strategy_config_parser_rejects_null_and_arrays():
     assert "return isPlainObject(config) ? config : {};" in alert_js
 
 
+def test_tv_history_first_request_returns_available_history_for_zoom_out(monkeypatch):
+    import cl_app
+
+    class HistoricalExchange:
+        def support_frequencys(self):
+            return {"d": "日线"}
+
+        def default_code(self):
+            return "SH.000001"
+
+        def now_trading(self):
+            return True
+
+        def klines(self, code, frequency):
+            return pd.DataFrame(
+                [
+                    {
+                        "date": pd.Timestamp("2026-04-29 09:30:00"),
+                        "open": 8.0,
+                        "close": 8.5,
+                        "high": 8.8,
+                        "low": 7.9,
+                        "volume": 80,
+                    },
+                    {
+                        "date": pd.Timestamp("2026-05-01 09:30:00"),
+                        "open": 9.0,
+                        "close": 9.5,
+                        "high": 9.8,
+                        "low": 8.9,
+                        "volume": 90,
+                    },
+                    {
+                        "date": pd.Timestamp("2026-05-03 09:30:00"),
+                        "open": 10.0,
+                        "close": 10.5,
+                        "high": 10.8,
+                        "low": 9.9,
+                        "volume": 100,
+                    },
+                ]
+            )
+
+    monkeypatch.setattr(cl_app, "get_exchange", lambda market: HistoricalExchange())
+
+    app = cl_app.create_app()
+    view = app.view_functions["tv_history"].__wrapped__
+    start_ts = int(pd.Timestamp("2026-05-03 09:00:00").timestamp())
+    end_ts = int(pd.Timestamp("2026-05-03 10:00:00").timestamp())
+    with app.test_request_context(
+        f"/tv/history?symbol=a:SH.000001&resolution=1D&from={start_ts}&to={end_ts}&firstDataRequest=true"
+    ):
+        response = view()
+
+    assert response["s"] == "ok"
+    assert response["o"] == [8.0, 9.0, 10.0]
+    assert response["update"] is False
+
+
 def test_xuangu_task_without_target_group_only_updates_running_results(monkeypatch):
     import cl_app.xuangu_tasks as xuangu_tasks
 

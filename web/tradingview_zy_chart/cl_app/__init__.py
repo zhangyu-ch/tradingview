@@ -593,9 +593,10 @@ def create_app(test_config=None):
         if _to < fun.datetime_to_int(klines.iloc[0]["date"]):
             return {"s": "no_data"}
 
-        klines = filter_klines_by_timestamp_range(klines, _from, _to)
-        if klines is None or len(klines) == 0:
-            return {"s": "no_data"}
+        if firstDataRequest != "true":
+            klines = filter_klines_by_timestamp_range(klines, _from, _to)
+            if klines is None or len(klines) == 0:
+                return {"s": "no_data"}
 
         return klines_to_tv_history(
             klines,
