@@ -425,6 +425,51 @@ def test_xuangu_task_add_without_target_group_passes_empty_target(monkeypatch):
         assert calls[-1]["target_zx_group"] == expected_target
 
 
+def test_tv_history_backfill_returns_ohlcv_when_market_is_closed(monkeypatch):
+    import cl_app
+
+    class ClosedMarketExchange:
+        def support_frequencys(self):
+            return {"d": "日线"}
+
+        def default_code(self):
+            return "SH.000001"
+
+        def now_trading(self):
+            return False
+
+        def klines(self, code, frequency):
+            return pd.DataFrame(
+                [
+                    {
+                        "date": pd.Timestamp("2026-05-03 09:30:00"),
+                        "open": 10.0,
+                        "close": 10.5,
+                        "high": 10.8,
+                        "low": 9.9,
+                        "volume": 100,
+                    }
+                ]
+            )
+
+    monkeypatch.setattr(cl_app, "get_exchange", lambda market: ClosedMarketExchange())
+
+    app = cl_app.create_app()
+    view = app.view_functions["tv_history"].__wrapped__
+    start_ts = int(pd.Timestamp("2026-05-03 09:00:00").timestamp())
+    end_ts = int(pd.Timestamp("2026-05-03 10:00:00").timestamp())
+    with app.test_request_context(
+        f"/tv/history?symbol=a:SH.000001&resolution=1D&from={start_ts}&to={end_ts}&firstDataRequest=false"
+    ):
+        response = view()
+
+    assert response["s"] == "ok"
+    assert response["o"] == [10.0]
+    assert response["c"] == [10.5]
+    assert "bis" not in response
+    assert "mmds" not in response
+
+
 def test_alert_js_strategy_config_parser_rejects_null_and_arrays():
     alert_js = (
         ROOT / "web" / "tradingview_zy_chart" / "cl_app" / "static" / "js" / "alert.js"

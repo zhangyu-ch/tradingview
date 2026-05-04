@@ -578,7 +578,11 @@ def create_app(test_config=None):
         ex = get_exchange(Market(market))
 
         # 判断当前是否可交易时间
-        if firstDataRequest == "false" and ex.now_trading() is False:
+        if (
+            firstDataRequest == "false"
+            and _from >= int(now_time - (10 * 60))
+            and ex.now_trading() is False
+        ):
             return {"s": "no_data", "nextTime": int(now_time + (10 * 60))}
 
         frequency = resolution_maps[resolution]
