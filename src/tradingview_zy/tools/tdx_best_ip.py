@@ -151,17 +151,17 @@ def ping(ip, port=7709, type_="stock"):
         if type_ in ["stock"]:
             with api.connect(ip, port, time_out=0.7):
                 res = api.get_security_list(0, 1)
-                if res is not None:
-                    if len(res) > 800:
-                        print("GOOD RESPONSE {}".format(ip))
-                        return datetime.datetime.now() - __time1
-                    else:
-                        print("BAD RESPONSE {}".format(ip))
-                        return datetime.timedelta(9, 9, 0)
-
-                else:
+                if res is None or len(res) <= 800:
                     print("BAD RESPONSE {}".format(ip))
                     return datetime.timedelta(9, 9, 0)
+                # 部分服务器商品列表可用，但 K 线接口已失效，只查列表会误判为可用，
+                # 因此必须实际拉一次 K 线才能确认服务器真正可用
+                bars = api.get_security_bars(9, 0, "000001", 0, 10)
+                if not bars:
+                    print("BAD KLINE RESPONSE {}".format(ip))
+                    return datetime.timedelta(9, 9, 0)
+                print("GOOD RESPONSE {}".format(ip))
+                return datetime.datetime.now() - __time1
         elif type_ in ["future"]:
             with apix.connect(ip, port, time_out=0.7):
                 res = apix.get_instrument_count()
