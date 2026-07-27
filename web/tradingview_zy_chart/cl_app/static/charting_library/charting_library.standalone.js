@@ -1053,6 +1053,7 @@ const TradingView = ((e) => {
   Le[(Le.LineWithMarkers = 14)] = "LineWithMarkers";
   Le[(Le.Stepline = 15)] = "Stepline";
   Le[(Le.HLCArea = 16)] = "HLCArea";
+  Le[(Le.VolFootprint = 17)] = "VolFootprint";
   Le[(Le.VolCandle = 19)] = "VolCandle";
   Le[(Le.HLCBars = 21)] = "HLCBars";
   Le[(Le.Renko = 4)] = "Renko";

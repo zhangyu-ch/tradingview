@@ -294,6 +294,7 @@ export declare enum ChartStyle {
 	LineWithMarkers = 14,
 	Stepline = 15,
 	HLCArea = 16,
+	VolFootprint = 17,
 	VolCandle = 19,
 	HLCBars = 21
 }
@@ -532,6 +533,7 @@ export declare enum SeriesType {
 	LineWithMarkers = 14,
 	Stepline = 15,
 	HLCArea = 16,
+	VolFootprint = 17,
 	VolCandle = 19,
 	HLCBars = 21,
 	Renko = 4,
@@ -20249,6 +20251,8 @@ export interface SeriesPreferencesMap {
 	[ChartStyle.Column]: ColumnStylePreferences;
 	/** HLC bars Style Preferences */
 	[ChartStyle.HLCBars]: HLCBarsStylePreferences;
+	/** Volume Footprint Style Preferences */
+	[ChartStyle.VolFootprint]: CandleStylePreferences;
 	/** Volume Candle Style Preferences */
 	[ChartStyle.VolCandle]: CandleStylePreferences;
 }
@@ -29402,7 +29406,7 @@ export type ChartDescriptorFunction = (context: ChartDescriptionContext) => Prom
  *
  * See {@link Favorites} for the Widget Constructor option where you can define these favorites, and {@link ChartingLibraryWidgetOptions.favorites} for the Widget Constructor option.
  */
-export type ChartTypeFavorites = "Area" | "Bars" | "Candles" | "Heiken Ashi" | "Hollow Candles" | "Line" | "Line Break" | "Baseline" | "LineWithMarkers" | "Stepline" | "Columns" | "High-low";
+export type ChartTypeFavorites = "Area" | "Bars" | "Candles" | "Heiken Ashi" | "Hollow Candles" | "Line" | "Line Break" | "Baseline" | "LineWithMarkers" | "Stepline" | "Columns" | "High-low" | "Volume Footprint";
 /** This is the list of all [featuresets](https://www.tradingview.com/charting-library-docs/latest/customization/Featuresets) that work in Advanced Charts */
 export type ChartingLibraryFeatureset = 
 /** Allows storing all properties (including favorites) to the localstorage @default true */
@@ -30050,7 +30054,7 @@ export type OrderTableColumn = AccountManagerColumn & {
 	supportedStatusFilters?: OrderStatusFilter[];
 };
 export type OverlayIndicatorOverridesAll = OverlayIndicatorOverridesBar | OverlayIndicatorOverridesCandle | OverlayIndicatorOverridesLine | OverlayIndicatorOverridesArea | OverlayIndicatorOverridesHollowCandle | OverlayIndicatorOverridesBaseline | OverlayIndicatorOverridesHiLo | OverlayIndicatorOverridesColumn | OverlayIndicatorOverridesHLCArea | OverlayIndicatorOverridesLineWithMarkers | OverlayIndicatorOverridesStepline;
-export type OverlayIndicatorStyleExclusions = ChartStyle.Renko | ChartStyle.Kagi | ChartStyle.PnF | ChartStyle.LineBreak | ChartStyle.HeikinAshi | ChartStyle.VolCandle;
+export type OverlayIndicatorStyleExclusions = ChartStyle.Renko | ChartStyle.Kagi | ChartStyle.PnF | ChartStyle.LineBreak | ChartStyle.HeikinAshi | ChartStyle.VolFootprint | ChartStyle.VolCandle;
 export type PageName = "watchlist_details_news" | "data_window" | "object_tree";
 /**
  * Plot shape ID.
