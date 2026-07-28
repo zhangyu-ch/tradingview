@@ -43,7 +43,4 @@ PYTHONPATH="$PWD/src" uv run python web/tradingview_zy_chart/app.py nobrowser
 
 ## 自定义策略
 
-选股、监控、回测和交易信号统一面向普通 K 线数据。接入方式见：
-
-- `docs/custom-strategy-integration.md`
-- `docs/web-right-panel-extension.md`
+选股、监控、回测和交易信号统一面向普通 K 线数据。策略基类见 `src/tradingview_zy/strategies/base.py`。

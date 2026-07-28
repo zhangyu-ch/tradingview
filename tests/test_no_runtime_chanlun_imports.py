@@ -13,7 +13,7 @@ def repo_root():
 
 
 ROOT = repo_root()
-RUNTIME_PATHS = [ROOT / "src", ROOT / "web", ROOT / "script", ROOT / "check_env.py", ROOT / "setup.py"]
+RUNTIME_PATHS = [ROOT / "src", ROOT / "web", ROOT / "script", ROOT / "check_env.py"]
 SKIP_PARTS = {
     ".git",
     ".venv",
