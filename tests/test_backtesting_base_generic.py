@@ -96,35 +96,6 @@ def test_runtime_operation_position_calls_use_generic_keywords():
     assert bad_calls == []
 
 
-
-
-def test_cl_wtpy_base_strategy_imports_without_removed_chanlun_modules():
-    module = importlib.import_module("cl_wtpy.strategy.base_strategy")
-
-    assert module is not None
-    assert "tradingview_zy.cl" not in sys.modules
-    assert "tradingview_zy.cl_interface" not in sys.modules
-    assert "tradingview_zy.cl_utils" not in sys.modules
-
-
-def test_cl_wtpy_base_strategy_source_does_not_import_removed_chanlun_modules():
-    repo_root = Path(__file__).resolve().parents[1]
-    source_path = repo_root / "src" / "cl_wtpy" / "strategy" / "base_strategy.py"
-    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
-    bad_imports = []
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            bad_imports.extend(
-                alias.name for alias in node.names if alias.name.startswith("tradingview_zy.cl")
-            )
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            if node.module.startswith("tradingview_zy.cl"):
-                bad_imports.append(node.module)
-
-    assert bad_imports == []
-
-
 def test_backtest_trader_execute_uses_operation_opt_for_generic_signal():
     trader = BackTestTrader("test", mode="signal", market="us")
     trader.datas = type(

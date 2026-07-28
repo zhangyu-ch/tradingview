@@ -22,7 +22,6 @@ matplotlib
 tqdm
 ipywidgets
 pinyin
-pyarmor
 setuptools
 scipy
 
