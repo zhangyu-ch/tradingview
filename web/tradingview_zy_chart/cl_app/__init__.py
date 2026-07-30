@@ -31,7 +31,7 @@ from tzlocal import get_localzone
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
-from tradingview_zy.db import db
+from tradingview_zy.db import AlertTaskValidationError, db
 from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.web_payloads import filter_klines_by_timestamp_range, klines_to_tv_history
@@ -1324,7 +1324,10 @@ def create_app(test_config=None):
             "is_send_msg": is_send_msg,
             "is_run": is_run,
         }
-        _alert_tasks.alert_save(alert_config)
+        try:
+            _alert_tasks.alert_save(alert_config)
+        except AlertTaskValidationError as error:
+            return {"ok": False, "msg": str(error)}
         return {"ok": True}
 
     @app.route("/alert_del/<id>")

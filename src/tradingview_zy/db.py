@@ -18,18 +18,28 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
+from tradingview_zy.db_schema import ensure_alert_task_unique_key
 
 warnings.filterwarnings("ignore")
 
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
 Base = declarative_base()
+
+
+class AlertTaskValidationError(ValueError):
+    """Base class for user-correctable alert-task validation errors."""
+
+
+class AlertTaskAlreadyExistsError(AlertTaskValidationError):
+    """Raised when a market already contains the requested task name."""
 
 
 class TableByCache(Base):
@@ -49,12 +59,11 @@ class TableByZxGroup(Base):
     __tablename__ = "cl_zixuan_groups"
     __table_args__ = (
         UniqueConstraint("market", "zx_group", name="table_market_group_unique"),
+        {"mysql_collate": "utf8mb4_general_ci"},
     )
     market = Column(String(20), primary_key=True, comment="市场")
     zx_group = Column(String(20), primary_key=True, comment="自选组名称")
     add_dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
 class TableByZixuan(Base):
@@ -77,11 +86,16 @@ class TableByAlertTask(Base):
     # 提醒任务
     __tablename__ = "cl_alert_task"
     __table_args__ = (
-        UniqueConstraint("market", "task_name", name="table_market_task_name_unique"),
+        UniqueConstraint(
+            "market",
+            "task_name",
+            name="uq_cl_alert_task_market_task_name",
+        ),
+        {"mysql_collate": "utf8mb4_general_ci"},
     )
     id = Column(Integer, primary_key=True, autoincrement=True)
-    market = Column(String(20), comment="市场")  # 市场
-    task_name = Column(String(100), comment="任务名称")  # 任务名称
+    market = Column(String(20), nullable=False, comment="市场")  # 市场
+    task_name = Column(String(100), nullable=False, comment="任务名称")  # 任务名称
     zx_group = Column(String(20), comment="自选组")  # 自选组
     frequency = Column(String(20), comment="检查周期")  # 检查周期
     interval_minutes = Column(Integer, comment="检查间隔分钟")  # 检查间隔分钟
@@ -96,8 +110,6 @@ class TableByAlertTask(Base):
     is_run = Column(Integer, comment="是否运行")  # 是否运行
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
     @property
     def strategy_config(self):
@@ -290,6 +302,7 @@ class DB(object):
         self.Session = sessionmaker(bind=self.engine)
 
         Base.metadata.create_all(self.engine)
+        ensure_alert_task_unique_key(self.engine)
 
         self.__cache_tables = {}
 
@@ -326,6 +339,7 @@ class DB(object):
             __tablename__ = table_name
             __table_args__ = (
                 UniqueConstraint("code", "dt", "f", name="table_code_dt_f_unique"),
+                {"mysql_collate": "utf8mb4_general_ci"},
             )
             # 表结构
             code = Column(String(20), primary_key=True, comment="标的代码")
@@ -336,10 +350,6 @@ class DB(object):
             h = Column(Float)
             l = Column(Float)
             v = Column(Float)
-            # 添加配置设置编码
-            __table_args__ = {
-                "mysql_collate": "utf8mb4_general_ci",
-            }
 
         if market == Market.FUTURES.value:
             # 期货市场，添加持仓列
@@ -790,6 +800,57 @@ class DB(object):
 
         return True
 
+    @staticmethod
+    def _normalise_alert_task_identity(market: str, task_name: str) -> tuple[str, str]:
+        market_value = str(market or "").strip()
+        task_name_value = str(task_name or "").strip()
+        if market_value == "":
+            raise AlertTaskValidationError("监控任务必须指定市场")
+        if task_name_value == "":
+            raise AlertTaskValidationError("监控任务名称不能为空")
+        if len(task_name_value) > 100:
+            raise AlertTaskValidationError("监控任务名称不能超过 100 个字符")
+        return market_value, task_name_value
+
+    @staticmethod
+    def _alert_task_name_exists(
+        session, market: str, task_name: str, exclude_id: int | None = None
+    ) -> bool:
+        query = session.query(TableByAlertTask.id).filter(
+            TableByAlertTask.market == market,
+            TableByAlertTask.task_name == task_name,
+        )
+        if exclude_id is not None:
+            query = query.filter(TableByAlertTask.id != exclude_id)
+        return query.first() is not None
+
+    @classmethod
+    def _raise_if_alert_task_name_exists(
+        cls, session, market: str, task_name: str, exclude_id: int | None = None
+    ) -> None:
+        if cls._alert_task_name_exists(session, market, task_name, exclude_id):
+            raise AlertTaskAlreadyExistsError(
+                f"市场 {market!r} 已存在名为 {task_name!r} 的监控任务；"
+                "请修改原任务，或使用不同的任务名称"
+            )
+
+    @classmethod
+    def _commit_alert_task(
+        cls, session, market: str, task_name: str, exclude_id: int | None = None
+    ) -> None:
+        try:
+            session.commit()
+        except IntegrityError as error:
+            session.rollback()
+            # The pre-check gives normal users a friendly error. The database
+            # unique key remains the final protection against concurrent writes.
+            if cls._alert_task_name_exists(session, market, task_name, exclude_id):
+                raise AlertTaskAlreadyExistsError(
+                    f"市场 {market!r} 已存在名为 {task_name!r} 的监控任务；"
+                    "请刷新页面后修改原任务"
+                ) from error
+            raise
+
     def task_save(
         self,
         market: str,
@@ -808,7 +869,9 @@ class DB(object):
         is_run: int,
         is_send_msg: int,
     ):
+        market, task_name = self._normalise_alert_task_identity(market, task_name)
         with self.Session() as session:
+            self._raise_if_alert_task_name_exists(session, market, task_name)
             # 保存任务
             session.add(
                 TableByAlertTask(
@@ -830,7 +893,7 @@ class DB(object):
                     dt=datetime.datetime.now(),
                 )
             )
-            session.commit()
+            self._commit_alert_task(session, market, task_name)
 
         return True
 
@@ -904,7 +967,11 @@ class DB(object):
         is_run: int,
         is_send_msg: int,
     ):
+        market, task_name = self._normalise_alert_task_identity(market, task_name)
         with self.Session() as session:
+            self._raise_if_alert_task_name_exists(
+                session, market, task_name, exclude_id=id
+            )
             session.query(TableByAlertTask).filter(
                 TableByAlertTask.market == market,
                 TableByAlertTask.id == id,
@@ -927,7 +994,9 @@ class DB(object):
                     TableByAlertTask.dt: datetime.datetime.now(),
                 }
             )
-            session.commit()
+            self._commit_alert_task(
+                session, market, task_name, exclude_id=id
+            )
         return True
 
     def task_update_strategy(

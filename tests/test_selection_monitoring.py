@@ -175,7 +175,7 @@ def test_alert_tasks_use_generic_db_methods(monkeypatch):
         task_name="task1",
         zx_group="source",
         frequency="d",
-        strategy_config='{"strategy_path": "unused", "strategy_kwargs": {}}',
+        strategy_config='{"strategy_id": "task1", "strategy_kwargs": {}}',
     )
 
     monkeypatch.setattr(alert_tasks.AlertTasks, "alert_get", lambda self, alert_id: alert_config)
@@ -187,7 +187,11 @@ def test_alert_tasks_use_generic_db_methods(monkeypatch):
             zx_stocks=lambda group: [{"code": "SH.000001", "name": "上证指数"}]
         ),
     )
-    monkeypatch.setattr(alert_tasks, "load_strategy", lambda path, **kwargs: object())
+    monkeypatch.setattr(
+        alert_tasks,
+        "load_registered_strategy",
+        lambda registry, strategy_id, overrides=None: object(),
+    )
     monkeypatch.setattr(
         alert_tasks,
         "MonitoringRunner",
@@ -553,7 +557,11 @@ def test_xuangu_task_without_target_group_only_updates_running_results(monkeypat
             }
         ),
     )
-    monkeypatch.setattr(xuangu_tasks, "load_strategy", lambda path, **kwargs: XuanguTaskStrategy())
+    monkeypatch.setattr(
+        xuangu_tasks,
+        "load_registered_strategy",
+        lambda registry, strategy_id, overrides=None: XuanguTaskStrategy(),
+    )
     monkeypatch.setattr(xuangu_tasks, "get_exchange", lambda market: FakeExchange())
     monkeypatch.setattr(xuangu_tasks, "ZiXuan", FakeZiXuan)
 
@@ -579,7 +587,11 @@ def test_xuangu_task_writes_results_to_target_zx_group(monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(xuangu_tasks, "load_strategy", lambda path, **kwargs: XuanguTaskStrategy())
+    monkeypatch.setattr(
+        xuangu_tasks,
+        "load_registered_strategy",
+        lambda registry, strategy_id, overrides=None: XuanguTaskStrategy(),
+    )
     monkeypatch.setattr(xuangu_tasks, "get_exchange", lambda market: FakeExchange())
     monkeypatch.setattr(xuangu_tasks, "ZiXuan", FakeZiXuan)
 
