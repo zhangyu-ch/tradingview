@@ -25,7 +25,7 @@ var Utils = (function () {
 
       // 将当前选择的项目添加到列表的最前面
       selectedItems.unshift({
-        name: data.arr[0].name,
+        name: data.arr[0].raw_name || data.arr[0].rawName || data.arr[0].name,
         value: data.arr[0].value,
       });
 

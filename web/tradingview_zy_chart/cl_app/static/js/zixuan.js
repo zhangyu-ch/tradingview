@@ -1,3 +1,81 @@
+var SafeDomApi = (function (root) {
+  if (root && root.SafeDom) {
+    return root.SafeDom;
+  }
+  if (typeof module === "object" && module.exports) {
+    return require("./safe_dom.js");
+  }
+  throw new Error("safe_dom.js must be loaded before zixuan.js");
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+function renderZixuanCodeCell(data) {
+  const color = SafeDomApi.safeCssColor(data.color);
+  const style = color === "" ? "" : ' style="color:' + color + '"';
+  return (
+    "<div" +
+    style +
+    ' class="layui-font-14">' +
+    SafeDomApi.escapeHtml(data.name) +
+    "</div>" +
+    '<div class="layui-font-12 layui-font-gray">' +
+    SafeDomApi.escapeHtml(data.code) +
+    "</div>"
+  );
+}
+
+function renderZixuanRateCell(data) {
+  return (
+    '<div class="code_rate" data-code="' +
+    SafeDomApi.escapeHtml(data.code) +
+    '"><div class="layui-font-14">' +
+    SafeDomApi.escapeHtml(data.rate) +
+    "%</div>" +
+    '<div class="layui-font-12">' +
+    SafeDomApi.escapeHtml(data.price) +
+    "</div></div>"
+  );
+}
+
+
+function sanitizeSearchItems(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+  return items.map(function (item) {
+    const source = item || {};
+    const rawName = SafeDomApi.toText(
+      source.raw_name === undefined ? source.name : source.raw_name
+    );
+    return Object.assign({}, source, {
+      raw_name: rawName,
+      name: SafeDomApi.escapeHtml(rawName),
+      value: SafeDomApi.toText(source.value),
+    });
+  });
+}
+
+function updateZixuanRateElements(tick, color) {
+  const code = SafeDomApi.toText(tick.code);
+  document.querySelectorAll(".code_rate").forEach(function (element) {
+    if (element.dataset.code !== code) {
+      return;
+    }
+    element.style.color = color;
+    element.replaceChildren();
+
+    const rate = document.createElement("div");
+    rate.className = "layui-font-14";
+    rate.style.color = color;
+    SafeDomApi.setText(rate, SafeDomApi.toText(tick.rate) + "%");
+
+    const price = document.createElement("div");
+    price.className = "layui-font-12";
+    SafeDomApi.setText(price, tick.price);
+
+    element.append(rate, price);
+  });
+}
+
 var ZiXuan = (function () {
   var zx_group = "我的关注";
 
@@ -7,28 +85,30 @@ var ZiXuan = (function () {
         type: "GET",
         url:
           "/get_stock_zixuan/" +
-          Utils.get_market() +
+          encodeURIComponent(Utils.get_market()) +
           "/" +
-          Utils.get_code().replace("/", "__"),
+          encodeURIComponent(Utils.get_code().replace("/", "__")),
         dataType: "json",
         success: function (res) {
           let data = [];
           layui.each(res, function (i, e) {
-            if (e["exists"] === 0) {
-              templet =
-                '<span><input type="checkbox" /> ' + e["zx_name"] + "</span>";
-            } else {
-              templet =
-                '<span><input type="checkbox" checked /> ' +
-                e["zx_name"] +
-                "</span>";
-            }
+            const groupName = SafeDomApi.toText(e["zx_name"]);
+            const checked = e["exists"] === 0 ? "" : " checked";
+            const templet =
+              '<span><input type="checkbox"' +
+              checked +
+              " /> " +
+              SafeDomApi.escapeHtml(groupName) +
+              "</span>";
             data.push({
-              title: e["zx_name"],
+              // Layui renders title/templet as HTML. Only escaped display values go in
+              // those fields; group_name keeps the original value for the API call.
+              title: SafeDomApi.escapeHtml(groupName),
+              group_name: groupName,
               id: i,
               templet: templet,
               exists: e["exists"],
-              code: e["code"],
+              code: SafeDomApi.toText(e["code"]),
             });
           });
           // 再重新请求一遍自选列表，刷新
@@ -48,61 +128,41 @@ var ZiXuan = (function () {
       if (codes.length === 0) {
         return true;
       }
-      layui.use(["laytpl"], function () {
-        var laytpl = layui.laytpl;
-        var rate_show_tpl = laytpl(
-          "<div style='color:{{= d.color }}' class='code_rate' data-code='{{= d.code }}'><div style='color:{{= d.color }}' class='layui-font-14'>{{= d.rate }}%</div><div class='layui-font-12'>{{= d.price }}</div><div>"
-        );
-        $.ajax({
-          type: "POST",
-          url: "/ticks",
-          data: { market: Utils.get_market(), codes: JSON.stringify(codes) },
-          dataType: "json",
-          success: function (ticks) {
-            for (let i = 0; i < ticks["ticks"].length; i++) {
-              let tick = ticks["ticks"][i];
-              let color = tick["rate"] > 0 ? "#ff5722" : "#16baaa";
-              if (tick["rate"] === 0) {
-                color = "";
-              }
-              let obj_span_rate = $(
-                '.code_rate[data-code="' + tick["code"] + '"]'
-              );
-              obj_span_rate.html(
-                rate_show_tpl.render({
-                  code: tick["code"],
-                  price: tick["price"],
-                  rate: tick["rate"],
-                  color: color,
-                })
-              );
+      $.ajax({
+        type: "POST",
+        url: "/ticks",
+        data: { market: Utils.get_market(), codes: JSON.stringify(codes) },
+        dataType: "json",
+        success: function (ticks) {
+          for (let i = 0; i < ticks["ticks"].length; i++) {
+            const tick = ticks["ticks"][i];
+            let color = tick["rate"] > 0 ? "#ff5722" : "#16baaa";
+            if (tick["rate"] === 0) {
+              color = "";
             }
-            let now_trading = ticks["now_trading"];
-            if (now_trading !== true) {
-              clearInterval(interval_update_rates);
-            }
-          },
-        });
+            updateZixuanRateElements(tick, color);
+          }
+          const now_trading = ticks["now_trading"];
+          if (now_trading !== true) {
+            clearInterval(interval_update_rates);
+          }
+        },
       });
     },
     render_zixuan_stocks: function () {
       // 自选列表渲染与操作
       layui.use(["table", "dropdown", "util"], function () {
-        var laytpl = layui.laytpl;
         let table = layui.table;
         let dropdown = layui.dropdown;
-        var code_show_tpl = laytpl(
-          "<div style='color:{{= d.color }}' class='layui-font-14'>{{= d.name }}</div><div class='layui-font-12 layui-font-gray'>{{= d.code }}</div>"
-        );
-        var rate_show_tpl = laytpl(
-          "<div class='code_rate' data-code='{{= d.code }}'><div class='layui-font-14'>{{= d.rate }}%</div><div class='layui-font-12'>{{= d.price }}</div><div>"
-        );
         // 创建自选列表渲染实例
         table.render({
           elem: "#table_zixuan_list",
           defaultContextmenu: false,
           url:
-            "/get_zixuan_stocks/" + Utils.get_market() + "/" + ZiXuan.zx_group,
+            "/get_zixuan_stocks/" +
+            encodeURIComponent(Utils.get_market()) +
+            "/" +
+            encodeURIComponent(ZiXuan.zx_group),
           page: false,
           className: "layui-font-12",
           size: "sm",
@@ -115,7 +175,7 @@ var ZiXuan = (function () {
                 title: "标的",
                 sort: false,
                 templet: function (d) {
-                  return code_show_tpl.render({
+                  return renderZixuanCodeCell({
                     color: d.color,
                     name: d.name,
                     code: d.code,
@@ -128,7 +188,7 @@ var ZiXuan = (function () {
                 sort: false,
                 width: 70,
                 templet: function (d) {
-                  return rate_show_tpl.render({
+                  return renderZixuanRateCell({
                     code: d.code,
                     price: "-",
                     rate: "-",
@@ -288,7 +348,7 @@ var ZiXuan = (function () {
               } else if (menuData["id"] === "dfcf") {
                 window.open(
                   "https://emweb.securities.eastmoney.com/pc_hsf10/pages/index.html?type=web&code=" +
-                    data.code.replace(".", "")
+                    encodeURIComponent(data.code.replace(".", ""))
                 );
               }
             },
@@ -310,10 +370,12 @@ var ZiXuan = (function () {
           dataType: "json",
           success: function (res) {
             let zixuan_groups = $("#zixuan_groups");
-            $(zixuan_groups).html();
+            zixuan_groups.empty();
             layui.each(res, function (i, r) {
-              $(zixuan_groups).append(
-                "<option value='" + r.name + "'>" + r.name + "</option>"
+              SafeDomApi.appendOption(
+                zixuan_groups[0],
+                r.name,
+                r.name
               );
             });
             layui.form.render($(zixuan_groups));
@@ -339,14 +401,14 @@ var ZiXuan = (function () {
               data: {
                 opt: opt,
                 market: Utils.get_market(),
-                group_name: data["title"],
+                group_name: data["group_name"],
                 code: data["code"],
                 color: "",
                 direction: "",
               },
               dataType: "json",
               success: function (res) {
-                if (data["title"] == ZiXuan.zx_group) {
+                if (data["group_name"] === ZiXuan.zx_group) {
                   ZiXuan.render_zixuan_opts();
                   ZiXuan.render_zixuan_stocks();
                 }
@@ -385,16 +447,21 @@ var ZiXuan = (function () {
                 type: "GET",
                 url:
                   "/tv/search?limit=30&type=&query=" +
-                  val +
+                  encodeURIComponent(val) +
                   "&exchange=" +
-                  Utils.get_market(),
+                  encodeURIComponent(Utils.get_market()),
                 dataType: "json",
                 success: function (res) {
                   let lst = [];
                   layui.each(res, function (i, r) {
+                    const rawName =
+                      SafeDomApi.toText(r["symbol"]) +
+                      ":" +
+                      SafeDomApi.toText(r["description"]);
                     lst.push({
-                      name: r["symbol"] + ":" + r["description"],
-                      value: r["symbol"],
+                      raw_name: rawName,
+                      name: SafeDomApi.escapeHtml(rawName),
+                      value: SafeDomApi.toText(r["symbol"]),
                     });
                   });
                   cb(lst);
@@ -406,7 +473,7 @@ var ZiXuan = (function () {
                 JSON.parse(
                   localStorage.getItem(Utils.get_market() + "_selectedItems")
                 ) || [];
-              cb(storedItems);
+              cb(sanitizeSearchItems(storedItems));
             }
           },
           show: function () {
@@ -416,7 +483,7 @@ var ZiXuan = (function () {
                 localStorage.getItem(Utils.get_market() + "_selectedItems")
               ) || [];
             searchSelect.update({
-              data: storedItems,
+              data: sanitizeSearchItems(storedItems),
             });
           },
           on: function (data) {
@@ -431,3 +498,14 @@ var ZiXuan = (function () {
     },
   };
 })();
+
+if (typeof module === "object" && module.exports) {
+  module.exports = {
+    SafeDomApi: SafeDomApi,
+    renderZixuanCodeCell: renderZixuanCodeCell,
+    renderZixuanRateCell: renderZixuanRateCell,
+    updateZixuanRateElements: updateZixuanRateElements,
+    sanitizeSearchItems: sanitizeSearchItems,
+    ZiXuan: ZiXuan,
+  };
+}

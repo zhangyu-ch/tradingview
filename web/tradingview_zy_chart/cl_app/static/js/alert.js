@@ -1,3 +1,40 @@
+var SafeDomApi = (function (root) {
+  if (root && root.SafeDom) {
+    return root.SafeDom;
+  }
+  if (typeof module === "object" && module.exports) {
+    return require("./safe_dom.js");
+  }
+  throw new Error("safe_dom.js must be loaded before alert.js");
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+var AlertSafeDom = (function (safeDom) {
+  function text(value) {
+    return safeDom.escapeHtml(value === null || value === undefined ? "" : value);
+  }
+
+  function recordRow(data) {
+    return `
+      <div class="alert-record-row">
+        <div style="font-weight: bold; font-size: 14px;">
+          ${text(data.name)} <span style="color: #888;">${text(data.code)}</span>
+          <span style="color: #16baaa;">${text(data.frequency)}</span>
+          <span style="color: #b37feb;">${text(data.event_type)}</span>
+          <span style="color: #fa8c16;">${text(data.action)}</span>
+          <span style="color: #52c41a;">${text(data.score)}</span>
+        </div>
+        <div style="font-size: 16px;">${text(data.msg)}</div>
+        <div style="color: #888; font-size: 12px;">
+          ${text(data.datetime_str)}
+          <span style="margin-left: 10px; color: rgb(203, 243, 183);">${text(data.task_name)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return { text: text, recordRow: recordRow };
+})(SafeDomApi);
+
 var Alert = (function () {
   return {
     init: function () {
@@ -7,13 +44,14 @@ var Alert = (function () {
         // 获取提醒任务列表并填充到select中
         $.get("/alert_list/" + Utils.get_market(), function (res) {
           if (res.code == 0) {
-            let task_name_select = $("#task_name_select");
+            const task_name_select = $("#task_name_select");
             task_name_select.empty();
-            task_name_select.append("<option value=''>全部</option>");
+            $("<option>", { value: "", text: "全部" }).appendTo(task_name_select);
             $.each(res.data, function (index, item) {
-              task_name_select.append(
-                `<option value='${item.task_name}'>${item.task_name}</option>`
-              );
+              $("<option>", {
+                value: String(item.task_name ?? ""),
+                text: String(item.task_name ?? ""),
+              }).appendTo(task_name_select);
             });
             form.render("select");
           }
@@ -37,7 +75,7 @@ var Alert = (function () {
             "/alert_records/" +
             Utils.get_market() +
             "?task_name=" +
-            $("#task_name_select").val(),
+            encodeURIComponent($("#task_name_select").val() || ""),
           page: false,
           className: "layui-font-12",
           size: "sm",
@@ -49,31 +87,7 @@ var Alert = (function () {
                 field: "custom",
                 title: "",
                 templet: function (d) {
-                  return `
-                    <div class="alert-record-row">
-                      <div style="font-weight: bold; font-size: 14px;">
-                        ${d.name || ""} <span style="color: #888;">${
-                    d.code || ""
-                  }</span> <span style="color: #16baaa;">${
-                    d.frequency || ""
-                  }</span> <span style="color: #b37feb;">${
-                    d.event_type || ""
-                  }</span> <span style="color: #fa8c16;">${
-                    d.action || ""
-                  }</span> <span style="color: #52c41a;">${
-                    d.score || ""
-                  }</span>
-                      </div>
-                      <div style="font-size: 16px;">${d.msg || ""}</div>
-                      <div style="color: #888; font-size: 12px;">
-                        ${
-                          d.datetime_str || ""
-                        } <span style="margin-left: 10px; color:rgb(203, 243, 183);">${
-                    d.task_name || ""
-                  }</span>
-                      </div>
-                    </div>
-                  `;
+                  return AlertSafeDom.recordRow(d);
                 },
               },
             ],
@@ -129,19 +143,25 @@ var Alert = (function () {
           size: "sm",
           cols: [
             [
-              { field: "task_name", title: "监控名称" },
+              {
+                field: "task_name",
+                title: "监控名称",
+                templet: function (d) {
+                  return AlertSafeDom.text(d.task_name);
+                },
+              },
               {
                 field: "zx_group",
                 title: "自选组",
                 templet: function (d) {
-                  return d.zx_group;
+                  return AlertSafeDom.text(d.zx_group);
                 },
               },
               {
                 filed: "frequency",
                 title: "周期",
                 templet: function (d) {
-                  return d.frequency;
+                  return AlertSafeDom.text(d.frequency);
                 },
               },
               {
@@ -149,7 +169,7 @@ var Alert = (function () {
                 title: "运行间隔(分钟)",
                 sort: true,
                 templet: function (d) {
-                  return d.interval_minutes;
+                  return AlertSafeDom.text(d.interval_minutes);
                 },
               },
               {
@@ -157,21 +177,21 @@ var Alert = (function () {
                 title: "策略路径（注册 ID）",
                 templet: function (d) {
                   let config = parseStrategyConfig(d);
-                  return config.strategy_id || config.strategy_path || "";
+                  return AlertSafeDom.text(config.strategy_id || config.strategy_path || "");
                 },
               },
               {
                 filed: "strategy_kwargs",
                 title: "策略参数",
                 templet: function (d) {
-                  return strategyKwargsText(d);
+                  return AlertSafeDom.text(strategyKwargsText(d));
                 },
               },
               {
                 filed: "strategy_memo",
                 title: "策略备注",
                 templet: function (d) {
-                  return d.strategy_memo || "";
+                  return AlertSafeDom.text(d.strategy_memo || "");
                 },
               },
               {
@@ -208,7 +228,7 @@ var Alert = (function () {
             type: 2,
             title: "修改警报提醒",
             area: ["1000px", "90vh"],
-            content: "/alert_edit/" + Utils.get_market() + "/" + data.id,
+            content: "/alert_edit/" + encodeURIComponent(Utils.get_market()) + "/" + encodeURIComponent(data.id),
             anim: 1,
             fixed: true, // 不固定
             shadeClose: true,
@@ -226,7 +246,7 @@ var Alert = (function () {
               if (menuData["id"] === "del") {
                 $.ajax({
                   type: "GET",
-                  url: "/alert_del/" + data.id,
+                  url: "/alert_del/" + encodeURIComponent(data.id),
                   dataType: "json",
                   success: function (res) {
                     if (res["ok"]) {
@@ -245,3 +265,7 @@ var Alert = (function () {
     },
   };
 })();
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = AlertSafeDom;
+}
