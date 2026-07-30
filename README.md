@@ -4,6 +4,8 @@
 
 本仓库已从原缠论分析系统迁移为普通行情/交易工具。运行路径中不再保留缠论计算、分型、笔、线段、中枢、买卖点、背驰等模块。历史缠论源码已压缩归档到 `archive/chanlun-runtime-source.zip`，相关文档已迁移到 `archive/docs/`。
 
+原聚宽（JoinQuant）适配示例及其本地导入 notebook 也已从活动树移除，并以 `archive/legacy/joinquant-source.zip` 只读归档。该归档依赖聚宽专用 `jqdata` 环境和已删除的 `cl` 模块，不属于当前可运行或受支持能力；不要将其解压回项目根目录或加入 `PYTHONPATH`。
+
 ## 当前保留能力
 
 - 多市场交易所适配和 K 线查询。
