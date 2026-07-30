@@ -161,6 +161,7 @@ src/xtquant
 
 # 配置文件排除
 /src/tradingview_zy/config.py
+**/web_secret_key
 # 私有代码排除
 web/tradingview_zy_web/charts/static/datafeeds/udf/node_modules
 web/tradingview_zy_chart/app/static/datafeeds/udf/node_modules

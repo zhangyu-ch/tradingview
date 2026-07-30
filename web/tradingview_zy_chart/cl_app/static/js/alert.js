@@ -154,10 +154,10 @@ var Alert = (function () {
               },
               {
                 filed: "strategy_config",
-                title: "策略路径",
+                title: "策略路径（注册 ID）",
                 templet: function (d) {
                   let config = parseStrategyConfig(d);
-                  return config.strategy_path || "";
+                  return config.strategy_id || config.strategy_path || "";
                 },
               },
               {

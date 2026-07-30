@@ -25,7 +25,7 @@ from apscheduler.events import (
 from apscheduler.executors.tornado import TornadoExecutor
 from apscheduler.schedulers.tornado import TornadoScheduler
 from flask import Flask, redirect, render_template, request, send_file
-from flask_login import LoginManager, UserMixin, login_required, login_user
+from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
 from tzlocal import get_localzone
 
 from tradingview_zy import config, fun
@@ -36,9 +36,66 @@ from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.web_payloads import filter_klines_by_timestamp_range, klines_to_tv_history
 from tradingview_zy.zixuan import ZiXuan
+from tradingview_zy.strategies.loader import (
+    StrategyRegistryError,
+    find_registered_strategy_id_by_path,
+    registered_strategy_choices,
+    validate_registered_strategy,
+)
+from tradingview_zy.web_security import (
+    LoginAttemptLimiter,
+    is_loopback_host,
+    resolve_login_credentials,
+    resolve_web_secret_key,
+    validate_web_access,
+    verify_login_password,
+)
 
 
 def create_app(test_config=None):
+    security_overrides = test_config or {}
+    web_host = str(
+        security_overrides.get(
+            "WEB_HOST", getattr(config, "WEB_HOST", "127.0.0.1")
+        )
+    )
+    login_password, login_password_hash = resolve_login_credentials(
+        config, security_overrides
+    )
+    validate_web_access(web_host, login_password, login_password_hash)
+
+    configured_secret = str(
+        security_overrides.get(
+            "WEB_SECRET_KEY", getattr(config, "WEB_SECRET_KEY", "")
+        )
+        or ""
+    )
+    web_secret_key = resolve_web_secret_key(get_data_path(), configured_secret)
+    remember_days = int(
+        security_overrides.get(
+            "WEB_REMEMBER_DAYS", getattr(config, "WEB_REMEMBER_DAYS", 30)
+        )
+    )
+    cookie_secure = bool(
+        security_overrides.get(
+            "WEB_COOKIE_SECURE", getattr(config, "WEB_COOKIE_SECURE", False)
+        )
+    )
+    login_limiter = LoginAttemptLimiter(
+        max_attempts=int(
+            security_overrides.get(
+                "WEB_MAX_LOGIN_ATTEMPTS",
+                getattr(config, "WEB_MAX_LOGIN_ATTEMPTS", 5),
+            )
+        ),
+        window_seconds=int(
+            security_overrides.get(
+                "WEB_LOGIN_ATTEMPT_WINDOW_SECONDS",
+                getattr(config, "WEB_LOGIN_ATTEMPT_WINDOW_SECONDS", 300),
+            )
+        ),
+    )
+
     # 任务对象
     scheduler = TornadoScheduler(timezone=pytz.timezone("Asia/Shanghai"))
     scheduler.add_executor(TornadoExecutor())
@@ -270,46 +327,79 @@ def create_app(test_config=None):
 
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
+    if test_config:
+        app.config.update(test_config)
+    # Security-critical values are derived from the dedicated WEB_* settings above and
+    # cannot be weakened accidentally by a generic Flask config override.
+    app.config.update(
+        SECRET_KEY=web_secret_key,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=cookie_secure,
+        REMEMBER_COOKIE_HTTPONLY=True,
+        REMEMBER_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_SECURE=cookie_secure,
+    )
     app.logger.addFilter(
         lambda record: "/static/" not in record.getMessage().lower()
     )  # 过滤静态资源请求日志
 
-    # 添加登录验证
-    app.secret_key = "cl_pro_secret_key"
-    login_manager = LoginManager()  # 实例化登录管理对象
-    login_manager.init_app(app)  # 初始化应用
-    login_manager.login_view = "login_opt"  # 设置用户登录视图函数 endpoint
+    login_manager = LoginManager()
+    login_manager.session_protection = "basic"
+    login_manager.init_app(app)
+    login_manager.login_view = "login_opt"
 
     class LoginUser(UserMixin):
+        user_id = "tradingview_zy"
+
         def __init__(self) -> None:
             super().__init__()
-            self.id = "cl_pro"
+            self.id = self.user_id
 
     @login_manager.user_loader
     def load_user(user_id):
-        return LoginUser()
+        return LoginUser() if user_id == LoginUser.user_id else None
+
+    auto_login = (
+        login_password == ""
+        and login_password_hash == ""
+        and is_loopback_host(web_host)
+    )
 
     @app.route("/login", methods=["GET", "POST"])
     def login_opt():
-        # 未设置登录密码，默认直接进行登录
-        if config.LOGIN_PWD == "":
-            login_user(
-                LoginUser(), remember=True, duration=datetime.timedelta(days=365)
-            )
+        if auto_login:
+            login_user(LoginUser(), remember=False)
             return redirect("/")
 
         emsg = ""
         if request.method == "POST":
+            remote_key = request.remote_addr or "unknown"
+            if not login_limiter.is_allowed(remote_key):
+                return render_template(
+                    "login.html", emsg="登录失败次数过多，请稍后再试"
+                ), 429
+
             password = request.form.get("password")
-            if password == config.LOGIN_PWD:
+            if verify_login_password(password, login_password, login_password_hash):
+                login_limiter.reset(remote_key)
                 login_user(
-                    LoginUser(), remember=True, duration=datetime.timedelta(days=365)
+                    LoginUser(),
+                    remember=remember_days > 0,
+                    duration=datetime.timedelta(days=max(remember_days, 1)),
                 )
                 return redirect("/")
-            else:
-                emsg = "密码错误"
+
+            login_limiter.record_failure(remote_key)
+            emsg = "密码错误"
 
         return render_template("login.html", emsg=emsg)
+
+    @app.route("/logout", methods=["POST"])
+    @login_required
+    def logout_opt():
+        logout_user()
+        return redirect("/login")
 
     @app.route("/")
     @login_required
@@ -1100,6 +1190,16 @@ def create_app(test_config=None):
         task_error = _guard_task(_alert_tasks)
         if task_error is not None:
             return task_error
+
+        strategy_registry = getattr(config, "ALERT_STRATEGIES", {})
+        try:
+            alert_strategies = registered_strategy_choices(strategy_registry)
+        except (StrategyRegistryError, ValueError, TypeError) as error:
+            return {"ok": False, "msg": f"ALERT_STRATEGIES 配置错误：{error}"}
+
+        default_strategy_id = (
+            alert_strategies[0].strategy_id if alert_strategies else ""
+        )
         alert_config = {
             "id": "",
             "market": market,
@@ -1107,9 +1207,11 @@ def create_app(test_config=None):
             "zx_group": "我的关注",
             "interval_minutes": 5,
             "frequency": "5m",
-            "strategy_path": "",
+            "strategy_id": default_strategy_id,
             "strategy_kwargs": "{}",
             "strategy_memo": "",
+            "legacy_strategy_path": "",
+            "unavailable_strategy_id": "",
             "is_send_msg": 1,
             "is_run": 1,
         }
@@ -1122,6 +1224,20 @@ def create_app(test_config=None):
                     strategy_config = {}
                 if not isinstance(strategy_config, dict):
                     strategy_config = {}
+
+                strategy_id = strategy_config.get("strategy_id", "")
+                legacy_strategy_path = strategy_config.get("strategy_path", "")
+                unavailable_strategy_id = ""
+                if strategy_id and strategy_id not in strategy_registry:
+                    unavailable_strategy_id = str(strategy_id)
+                    strategy_id = ""
+                if not strategy_id and legacy_strategy_path:
+                    strategy_id = (
+                        find_registered_strategy_id_by_path(
+                            strategy_registry, legacy_strategy_path
+                        )
+                        or ""
+                    )
                 alert_config = {
                     "id": _alert_config.id,
                     "market": _alert_config.market,
@@ -1129,26 +1245,28 @@ def create_app(test_config=None):
                     "zx_group": _alert_config.zx_group,
                     "interval_minutes": _alert_config.interval_minutes,
                     "frequency": _alert_config.frequency,
-                    "strategy_path": strategy_config.get("strategy_path", ""),
+                    "strategy_id": strategy_id,
                     "strategy_kwargs": json.dumps(
                         strategy_config.get("strategy_kwargs", {}), ensure_ascii=False
                     ),
                     "strategy_memo": _alert_config.strategy_memo,
+                    "legacy_strategy_path": (
+                        legacy_strategy_path if not strategy_id else ""
+                    ),
+                    "unavailable_strategy_id": unavailable_strategy_id,
                     "is_send_msg": _alert_config.is_send_msg,
                     "is_run": _alert_config.is_run,
                 }
 
-        # 获取自选组
         zx = ZiXuan(market)
         zixuan_groups = zx.zixuan_list
-
-        # 交易所支持周期
         frequencys = get_exchange(Market(market)).support_frequencys()
 
         return render_template(
             "alert.html",
             zixuan_groups=zixuan_groups,
             frequencys=frequencys,
+            alert_strategies=alert_strategies,
             **alert_config,
         )
 
@@ -1158,27 +1276,38 @@ def create_app(test_config=None):
         task_error = _guard_task(_alert_tasks)
         if task_error is not None:
             return task_error
-        strategy_path = request.form.get("strategy_path", "").strip()
-        if strategy_path == "":
-            return {"ok": False, "msg": "strategy_path 不能为空"}
+
+        strategy_id = request.form.get("strategy_id", "").strip()
+        if strategy_id == "":
+            return {"ok": False, "msg": "请选择已注册策略"}
 
         try:
             strategy_kwargs = json.loads(request.form.get("strategy_kwargs") or "{}")
-        except json.JSONDecodeError as e:
-            return {"ok": False, "msg": f"strategy_kwargs 必须是合法 JSON：{e}"}
+        except json.JSONDecodeError as error:
+            return {"ok": False, "msg": f"strategy_kwargs 必须是合法 JSON：{error}"}
         if not isinstance(strategy_kwargs, dict):
             return {"ok": False, "msg": "strategy_kwargs 必须是 JSON 对象"}
+
+        strategy_registry = getattr(config, "ALERT_STRATEGIES", {})
+        try:
+            validate_registered_strategy(
+                strategy_registry, strategy_id, strategy_kwargs
+            )
+        except Exception as error:
+            # Validation may import a trusted registry module. Surface any configuration
+            # or import failure as a form error instead of returning a 500 response.
+            return {"ok": False, "msg": f"策略配置无效：{error}"}
 
         try:
             interval_minutes = int(request.form.get("interval_minutes", "5"))
             is_send_msg = int(request.form.get("is_send_msg", "1"))
             is_run = int(request.form.get("is_run", "1"))
-        except ValueError as e:
-            return {"ok": False, "msg": f"数值字段格式错误：{e}"}
+        except ValueError as error:
+            return {"ok": False, "msg": f"数值字段格式错误：{error}"}
 
         strategy_config = json.dumps(
             {
-                "strategy_path": strategy_path,
+                "strategy_id": strategy_id,
                 "strategy_kwargs": strategy_kwargs,
             },
             ensure_ascii=False,

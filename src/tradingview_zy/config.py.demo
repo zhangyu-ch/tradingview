@@ -5,10 +5,24 @@ import pathlib
 """
 
 # WEB服务访问IP地址，本机部署设置为 127.0.0.1；局域网或外网部署，设置为该机器的IP地址，或者设置 0.0.0.0 则可使用机器所有IP地址进行访问。
-WEB_HOST = '0.0.0.0'
+WEB_HOST = '127.0.0.1'
 
-# WEB 登录密码，为空则无需进行登录
+# WEB 登录设置：
+# - 仅监听 127.0.0.1 / localhost 时，可以保持为空，页面仍会自动登录。
+# - 监听 0.0.0.0、局域网或公网地址时，必须设置 LOGIN_PWD_HASH（推荐）或 LOGIN_PWD。
+# - LOGIN_PWD 保留用于兼容旧配置；新部署建议只设置 LOGIN_PWD_HASH。
 LOGIN_PWD = ''
+LOGIN_PWD_HASH = ''
+
+# Flask 会话签名密钥。留空时首次启动会自动生成并保存到 DATA_PATH/web_secret_key。
+# 容器或多实例部署可通过环境变量 TRADINGVIEW_ZY_WEB_SECRET_KEY 设置固定值（至少 32 字节）。
+WEB_SECRET_KEY = ''
+
+# 本地 HTTP 部署保持 False；经 HTTPS 反向代理访问时改为 True。
+WEB_COOKIE_SECURE = False
+WEB_REMEMBER_DAYS = 30
+WEB_MAX_LOGIN_ATTEMPTS = 5
+WEB_LOGIN_ATTEMPT_WINDOW_SECONDS = 300
 
 # 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来
 DATA_PATH = ".chanlun_pro"
@@ -155,12 +169,30 @@ FEISHU_KEYS = {
     "enable_img": False,
 }
 
+# 自定义监控策略注册表。Web 页面只能选择这里登记的策略，不再接受任意 Python 导入路径。
+# strategy_kwargs 是默认参数；allowed_kwargs 是页面允许覆盖的参数名；
+# strategy_kwargs_schema 可选，用于校验 JSON 类型：str/int/float/number/bool/list/dict/null/any。
+# ALERT_STRATEGIES = {
+#     "demo_monitor": {
+#         "name": "示例监控策略",
+#         "strategy_path": "my_package.my_module:MyStrategy",
+#         "strategy_kwargs": {"window": 20, "threshold": 0.5},
+#         "allowed_kwargs": ["window", "threshold"],
+#         "strategy_kwargs_schema": {"window": "int", "threshold": "number"},
+#         "description": "策略说明",
+#     }
+# }
+ALERT_STRATEGIES = {}
+
+
 # 自定义选股策略配置，格式示例：
 # XUANGU_STRATEGIES = {
 #     "demo": {
 #         "name": "示例策略",
 #         "strategy_path": "my_package.my_module:MyStrategy",
 #         "strategy_kwargs": {},
+#         "allowed_kwargs": [],
+#         "strategy_kwargs_schema": {},
 #         "task_memo": "策略说明",
 #         "frequency_num": 1,
 #         "frequency_memo": "单周期",
