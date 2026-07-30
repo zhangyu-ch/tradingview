@@ -5,6 +5,11 @@ from tradingview_zy.exchange.exchange import Exchange
 # 全局保存交易所对象，避免创建多个交易所对象
 g_exchange_obj = {}
 
+CTP_UNAVAILABLE_MESSAGE = (
+    "CTP 适配器当前不可用（CR-05 尚未修复）。"
+    "请将 EXCHANGE_FUTURES 设置为 tq、tdx_futures 或 db。"
+)
+
 
 def get_exchange(market: Market) -> Exchange:
     """
@@ -70,6 +75,10 @@ def get_exchange(market: Market) -> Exchange:
             from tradingview_zy.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.FUTURES.value)
+        elif config.EXCHANGE_FUTURES == "ctp":
+            # Do not import the unfinished CTP module. Fail closed with a
+            # stable, user-facing explanation until CR-05 is repaired.
+            raise RuntimeError(CTP_UNAVAILABLE_MESSAGE)
         else:
             raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FUTURES}")
     elif market == Market.NY_FUTURES:

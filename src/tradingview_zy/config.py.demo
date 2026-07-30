@@ -83,7 +83,9 @@ TQ_SP_NAME = 'simnow'
 TQ_SP_ACCOUNT = ''
 TQ_SP_PWD = ''
 
-# CTP期货配置
+# CTP期货配置（预留）
+# 注意：CTP 适配器当前不可用（CR-05 尚未修复），不要将 EXCHANGE_FUTURES 设置为 "ctp"。
+# 现阶段请使用 tq、tdx_futures 或 db；以下字段仅为后续修复保留。
 CTP_BROKER_ID = ""      # 期货公司 broker id
 CTP_USER_ID = ""        # 账号
 CTP_PASSWORD = ""       # 密码
