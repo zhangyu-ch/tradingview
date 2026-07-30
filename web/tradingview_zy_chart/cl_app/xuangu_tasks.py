@@ -5,7 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from tradingview_zy import config
 from tradingview_zy.exchange import Market, get_exchange
 from tradingview_zy.selection import SelectionRunner
-from tradingview_zy.strategies.loader import load_strategy
+from tradingview_zy.strategies.loader import load_registered_strategy
 from tradingview_zy.zixuan import ZiXuan
 
 
@@ -18,11 +18,8 @@ class XuanguTasks(object):
         return getattr(config, "XUANGU_STRATEGIES", {})
 
     def _run_xuangu_job(self, market, task_name, frequencys, opt_type, zx_group, target_zx_group):
-        task_config = self.xuangu_task_config_list()[task_name]
-        strategy = load_strategy(
-            task_config["strategy_path"],
-            **task_config.get("strategy_kwargs", {}),
-        )
+        registry = self.xuangu_task_config_list()
+        strategy = load_registered_strategy(registry, task_name)
         ex = get_exchange(Market(market))
         zx = ZiXuan(market)
         if zx_group == "all":
@@ -49,9 +46,7 @@ class XuanguTasks(object):
         return True
 
     def run_xuangu(self, market, task_name, frequencys, opt_type, zx_group, target_zx_group=None):
-        """
-        执行选个股
-        """
+        """执行选股。"""
         if task_name not in self.xuangu_task_config_list().keys():
             return False
 

@@ -70,11 +70,34 @@
             </div>
         </div>
         <div class="layui-form-item">
-            <label class="layui-form-label">策略路径</label>
+            <label class="layui-form-label">监控策略</label>
             <div class="layui-input-block">
-                <input type="text" name="strategy_path" value="{{ strategy_path }}"
-                    placeholder="例如：my_module:MyStrategy" class="layui-input" lay-verify="required"
-                    lay-filter="alert_config" />
+                <select name="strategy_id" lay-filter="alert_config" lay-verify="required">
+                    <option value="">请选择已注册策略</option>
+                    {% for strategy in alert_strategies %}
+                    <option value="{{ strategy.strategy_id }}" {% if strategy_id==strategy.strategy_id %} selected {% endif %}>
+                        {{ strategy.name }}（{{ strategy.strategy_id }}）
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="layui-form-mid layui-word-aux" style="margin-top: 5px; color: #999; font-size: 12px;">
+                    策略由服务端 config.py 的 ALERT_STRATEGIES 注册；页面不再接受任意 Python 导入路径。
+                </div>
+                {% if not alert_strategies %}
+                <div class="layui-form-mid" style="color: #ff5722;">
+                    尚未配置 ALERT_STRATEGIES，当前不能新建或启用监控任务。
+                </div>
+                {% endif %}
+                {% if legacy_strategy_path %}
+                <div class="layui-form-mid" style="color: #ff5722;">
+                    旧任务使用未注册路径 {{ legacy_strategy_path }}。请先在 ALERT_STRATEGIES 登记该策略，再重新选择并保存。
+                </div>
+                {% endif %}
+                {% if unavailable_strategy_id %}
+                <div class="layui-form-mid" style="color: #ff5722;">
+                    旧任务引用的策略 ID {{ unavailable_strategy_id }} 已不在 ALERT_STRATEGIES 中。请重新选择并保存。
+                </div>
+                {% endif %}
             </div>
         </div>
         <div class="layui-form-item layui-form-text">
@@ -137,8 +160,8 @@
                     layer.msg('运行间隔60分钟以上必须是60的整数倍');
                     return false;
                 }
-                if ($.trim(alert_config['strategy_path'] || '') === '') {
-                    layer.msg('策略路径不能为空');
+                if ($.trim(alert_config['strategy_id'] || '') === '') {
+                    layer.msg('请选择已注册策略');
                     return false;
                 }
                 if ($.trim(alert_config['strategy_kwargs'] || '') === '') {
