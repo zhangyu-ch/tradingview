@@ -25,7 +25,13 @@ from tradingview_zy.backtesting import futures_contracts
 from tradingview_zy.backtesting.backtest_klines import BackTestKlines
 from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 from tradingview_zy.backtesting.base import POSITION, Strategy
+from tradingview_zy.backtesting.accounting import add_quantity, subtract_quantity
 from tradingview_zy.backtesting.optimize import OptimizationSetting
+from tradingview_zy.backtesting.run_result import (
+    BackTestRunError,
+    BackTestRunFailure,
+    BackTestRunResult,
+)
 from tradingview_zy.base import Market
 from tradingview_zy.exchange.exchange import (
     convert_currency_kline_frequency,
@@ -92,6 +98,8 @@ class BackTest:
     def __init__(self, config: dict = None):
         # 日志记录
         self.log = _get_logger("my_backtest.log")
+        # 最近一次执行的结构化结果。为兼容旧调用方，run() 仍返回 bool。
+        self.last_run_result: BackTestRunResult | None = None
         # 资源管理
         self._resources = set()
         # 性能监控
@@ -174,10 +182,18 @@ class BackTest:
 
         self._process_re_again = False
 
+    def _require_complete_run(self, operation: str) -> None:
+        if self.last_run_result is not None and not self.last_run_result.is_complete:
+            raise RuntimeError(
+                f"回测状态为 {self.last_run_result.status}，不能{operation}；"
+                "请先修复执行失败并重新完整运行"
+            )
+
     def save(self):
         """
         保存回测结果到配置的文件中
         """
+        self._require_complete_run("保存发布级结果")
         if self.save_file is None:
             return
 
@@ -200,6 +216,7 @@ class BackTest:
             "strategy": self.strategy,
             "trader": self.trader,
             "next_frequency": self.next_frequency,
+            "last_run_result": self.last_run_result,
         }
         # 保存策略结果到 file 中，进行页面查看
         self.log.info(f"save to : {self.save_file}")
@@ -227,6 +244,7 @@ class BackTest:
         self.strategy = config_dict["strategy"]
         self.trader = config_dict["trader"]
         self.next_frequency = config_dict["next_frequency"]
+        self.last_run_result = config_dict.get("last_run_result")
         self.datas = BackTestKlines(
             self.market,
             self.start_datetime,
@@ -257,70 +275,206 @@ class BackTest:
         self.log.info(f"交易总手续费 : {self.trader.fee_total}")
         return True
 
+    def _apply_begin_start_dt(
+        self, begin_start_dt: datetime.datetime, next_frequency: str
+    ) -> None:
+        loop_datetime_list = getattr(self.datas, "loop_datetime_list", None)
+        if not isinstance(loop_datetime_list, dict):
+            raise TypeError("回测数据对象没有可过滤的 loop_datetime_list")
+
+        self.log.info(f"起始数据回放位置：{begin_start_dt}")
+        for frequency, datetimes in list(loop_datetime_list.items()):
+            try:
+                filtered = [dt for dt in datetimes if dt >= begin_start_dt]
+            except TypeError as error:
+                raise ValueError(
+                    "begin_start_dt 与行情时间的时区/类型不兼容："
+                    f"{begin_start_dt!r}"
+                ) from error
+            loop_datetime_list[frequency] = filtered
+
+        if next_frequency not in loop_datetime_list:
+            raise KeyError(f"回放周期不存在：{next_frequency}")
+
+        progress_bar = getattr(self.datas, "bar", None)
+        if progress_bar is not None and hasattr(progress_bar, "reset"):
+            progress_bar.reset(total=len(loop_datetime_list[next_frequency]))
+
+    @staticmethod
+    def _run_failure(
+        phase: str,
+        error: Exception,
+        *,
+        code: str | None = None,
+        timestamp: datetime.datetime | None = None,
+    ) -> BackTestRunFailure:
+        return BackTestRunFailure(
+            phase=phase,
+            code=code,
+            timestamp=timestamp,
+            error_type=type(error).__name__,
+            message=str(error),
+            traceback=traceback.format_exc(),
+        )
+
     def run(
         self,
         next_frequency: str = None,
         begin_start_dt: datetime.datetime = None,
         loop_callback_fun: object = None,
-    ):
+        *,
+        continue_on_error: bool = False,
+    ) -> bool:
+        """Execute a backtest and expose a structured result in ``last_run_result``.
+
+        The default is fail-fast: strategy, matching, position accounting, filtering,
+        callback, and finalisation errors raise :class:`BackTestRunError`. Callers that
+        deliberately want diagnostic best-effort execution may set
+        ``continue_on_error=True``; such a run returns ``False``, is marked ``partial``,
+        skips forced final liquidation, and cannot be saved or used for result metrics.
         """
-        执行回测
-        """
+
         if next_frequency is None:
             next_frequency = self.frequencys[-1]
-
         self.next_frequency = next_frequency
 
-        self.datas.load_data_to_cache = self.load_data_to_cache
-        self.datas.init(self.base_code, next_frequency)
+        started_at = time.time()
+        attempted_timestamps = 0
+        completed_timestamps = 0
+        failures: list[BackTestRunFailure] = []
+        strategy_cleared = False
+        self.last_run_result = None
 
-        if begin_start_dt is not None:
-            self.log.info(f"起始数据回放位置：{begin_start_dt}")
-            for _f, _dts in self.datas.loop_datetime_list.items():
-                _dts = [_d for _d in _dts if _d >= begin_start_dt]
+        def build_result(status: str) -> BackTestRunResult:
+            return BackTestRunResult(
+                status=status,
+                attempted_timestamps=attempted_timestamps,
+                completed_timestamps=completed_timestamps,
+                begin_start_dt=begin_start_dt,
+                duration_seconds=time.time() - started_at,
+                failures=tuple(failures),
+            )
 
-        _st = time.time()
+        def handle_failure(
+            phase: str, error: Exception, *, code: str | None = None, fatal: bool = False
+        ) -> bool:
+            timestamp = getattr(self.datas, "now_date", None)
+            failure = self._run_failure(
+                phase, error, code=code, timestamp=timestamp
+            )
+            failures.append(failure)
+            self.log.error(
+                f"回测执行失败 phase={phase} code={code} timestamp={timestamp}: {error}"
+            )
+            self.log.error(failure.traceback)
 
-        while True:
-            is_ok = self.datas.next(next_frequency)
-            if is_ok is False:
-                break
-            # 更新持仓盈亏与资金变化
+            if fatal or not continue_on_error:
+                result = build_result("failed")
+                self.last_run_result = result
+                raise BackTestRunError(failure, result) from error
+            return False
+
+        try:
             try:
-                self.trader.update_position_record()
-            except Exception:
-                self.log.error(f"执行记录持仓信息 : {self.datas.now_date} 异常")
-                self.log.error(traceback.format_exc())
+                self.datas.load_data_to_cache = self.load_data_to_cache
+                self.datas.init(self.base_code, next_frequency)
+                if begin_start_dt is not None:
+                    self._apply_begin_start_dt(begin_start_dt, next_frequency)
+            except Exception as error:
+                handle_failure("initialization", error, fatal=True)
 
-            for code in self.codes:
+            while True:
                 try:
-                    self.strategy.on_bt_loop_start(self)
-                    self.trader.run(code, is_filter=self.strategy.is_filter_opts())
-                except Exception:
-                    self.log.error(f"执行 {code} : {self.datas.now_date} 异常")
-                    self.log.error(traceback.format_exc())
-                    # raise e
+                    is_ok = self.datas.next(next_frequency)
+                except Exception as error:
+                    handle_failure("data_replay", error, fatal=True)
+                    break
+                if is_ok is False:
+                    break
+
+                attempted_timestamps += 1
+                timestamp_ok = True
+
+                try:
+                    self.trader.update_position_record()
+                except Exception as error:
+                    timestamp_ok = handle_failure("position_update", error)
+                    if continue_on_error:
+                        self.trader.buffer_opts = []
+                        continue
+
+                for code in self.codes:
+                    try:
+                        self.strategy.on_bt_loop_start(self)
+                        self.trader.run(
+                            code, is_filter=self.strategy.is_filter_opts()
+                        )
+                    except Exception as error:
+                        timestamp_ok = False
+                        # A diagnostic partial run must not execute operations collected
+                        # before a strategy failure at this timestamp.
+                        self.trader.buffer_opts = []
+                        handle_failure("strategy", error, code=code)
+
+                if timestamp_ok:
+                    try:
+                        self.trader.buffer_opts = self.strategy.filter_opts(
+                            self.trader.buffer_opts, self.trader
+                        )
+                        self.trader.run_buffer_opts()
+                    except Exception as error:
+                        timestamp_ok = False
+                        # Never carry operations from a failed filtering/matching phase into
+                        # the next timestamp.
+                        self.trader.buffer_opts = []
+                        handle_failure("operation_filter", error)
+                else:
+                    self.trader.buffer_opts = []
+
+                if timestamp_ok and loop_callback_fun is not None:
+                    try:
+                        loop_callback_fun(self)
+                    except Exception as error:
+                        timestamp_ok = False
+                        handle_failure("loop_callback", error)
+
+                if timestamp_ok:
+                    completed_timestamps += 1
+
+            if failures:
+                # A partial replay must not fabricate a clean final liquidation or
+                # publishable metrics from an incomplete event stream.
+                result = build_result("partial")
+            else:
+                try:
+                    self.trader.end()
+                except Exception as error:
+                    handle_failure("final_liquidation", error, fatal=True)
+                result = build_result("success")
+
             try:
-                # 如果有开启操作二次过滤，则调用一下进行执行
-                self.trader.buffer_opts = self.strategy.filter_opts(
-                    self.trader.buffer_opts, self.trader
+                self.strategy.clear()
+                strategy_cleared = True
+            except Exception as error:
+                handle_failure("strategy_cleanup", error, fatal=not continue_on_error)
+                result = build_result("partial")
+
+            self.last_run_result = result
+            if result.is_success:
+                self.log.info(f"运行完成，执行时间：{result.duration_seconds}")
+            else:
+                self.log.error(
+                    "回测以 partial 状态结束；已跳过最终清仓，禁止生成或保存发布级结果"
                 )
-                self.trader.run_buffer_opts()
-            except Exception:
-                self.log.error(f"执行 {code} 操作二次过滤 : {self.datas.now_date} 异常")
-                self.log.error(traceback.format_exc())
-            if loop_callback_fun:
-                loop_callback_fun(self)
-
-        # 清空持仓
-        self.trader.end()
-        self.trader.datas = None
-        # 调用策略的清理方法
-        self.strategy.clear()
-        _et = time.time()
-
-        self.log.info(f"运行完成，执行时间：{_et - _st}")
-        return True
+            return result.is_success
+        finally:
+            self.trader.datas = None
+            if not strategy_cleared and self.strategy is not None:
+                try:
+                    self.strategy.clear()
+                except Exception:
+                    self.log.error("回测异常退出后的策略清理失败")
+                    self.log.error(traceback.format_exc())
 
     def run_by_code(self, code: str):
         # 修改回测类中的属性，进行回测
@@ -592,6 +746,7 @@ class BackTest:
         """
         输出回测结果
         """
+        self._require_complete_run("生成绩效指标")
         res = {"mode": self.mode}
         if self.mode == "trade":
             # 实际交易所需要看的指标
@@ -862,6 +1017,7 @@ class BackTest:
         """
         使用 pyfolio 计算回测结果
         """
+        self._require_complete_run("生成 PyFolio 绩效报告")
         if self.mode != "trade":
             print("只有交易模式才能使用 pyfolio 计算回测结果")
             return None
@@ -965,6 +1121,7 @@ class BackTest:
         """
         输出盈利图表
         """
+        self._require_complete_run("生成回测图表")
         base_prices = {"datetime": [], "val": []}
         balance_history = {"datetime": [], "val": []}
         hold_profit_history = {"datetime": [], "val": []}
@@ -1015,6 +1172,7 @@ class BackTest:
         )
 
     def backtest_charts_by_close_profit(self):
+        self._require_complete_run("生成按平仓收益图表")
         # 获取所有的交易日期节点
         base_prices = {"datetime": [], "val": []}
         base_klines = self.datas.ex.klines(
@@ -1133,8 +1291,12 @@ class BackTest:
         fee = 0
         for _or in pos.open_records:
             hold_balance += _or["hold_balance"]
-            hold_amount += _or["amount"]
-            pos_amount += _or["amount"]
+            hold_amount = add_quantity(
+                hold_amount, _or["amount"], label="opened amount"
+            )
+            pos_amount = add_quantity(
+                pos_amount, _or["amount"], label="remaining amount"
+            )
             fee += _or["fee"]
 
         if uids is None:
@@ -1172,7 +1334,9 @@ class BackTest:
                 release_balance += _r["release_balance"]
                 fee += _r["fee"]
                 close_price = _r["price"]
-                pos_amount -= _r["amount"]
+                pos_amount = subtract_quantity(
+                    pos_amount, _r["amount"], label="remaining amount"
+                )
                 close_datetime = _r["datetime"]
                 close_msg = _r["close_msg"]
                 max_profit_rate = _r["max_profit_rate"]

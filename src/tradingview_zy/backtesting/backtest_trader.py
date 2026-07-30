@@ -1,9 +1,19 @@
 import copy
 import datetime
+import math
 import time
 from typing import Dict, List, Tuple
 
 from tradingview_zy.backtesting import futures_contracts
+from tradingview_zy.backtesting.accounting import (
+    BackTestAccountingError,
+    add_quantity,
+    is_zero_quantity,
+    normalize_nonnegative_quantity,
+    quantities_close,
+    subtract_quantity,
+    weighted_average_price,
+)
 from tradingview_zy.backtesting.base import POSITION, MarketDatas, Operation, Strategy, Trader
 
 
@@ -193,6 +203,135 @@ class BackTestTrader(Trader):
         self.buffer_opts: List[Operation] = []
 
     @staticmethod
+    def _normalise_fill(result):
+        if result is False or result is None:
+            return None
+        if not isinstance(result, dict):
+            raise BackTestAccountingError(
+                f"fill result must be a dict, got {type(result).__name__}"
+            )
+        if "price" not in result or "amount" not in result:
+            raise BackTestAccountingError("fill result must contain price and amount")
+
+        amount = normalize_nonnegative_quantity(
+            result["amount"], label="fill amount"
+        )
+        if amount == 0.0:
+            return None
+        price = float(result["price"])
+        if not math.isfinite(price) or price <= 0:
+            raise BackTestAccountingError(f"fill price must be positive: {price}")
+
+        normalised = dict(result)
+        normalised["price"] = price
+        normalised["amount"] = amount
+        return normalised
+
+    @staticmethod
+    def _remaining_position_after_close(
+        pos: POSITION, closed_amount: float, closed_rate: float
+    ) -> tuple[float, float, bool]:
+        remaining_amount = subtract_quantity(
+            pos.amount, closed_amount, label="position amount"
+        )
+        remaining_rate = subtract_quantity(
+            pos.now_pos_rate, closed_rate, label="position rate"
+        )
+        amount_closed = remaining_amount == 0.0
+        rate_closed = remaining_rate == 0.0
+        if amount_closed != rate_closed:
+            raise BackTestAccountingError(
+                "position amount and position rate diverged after close: "
+                f"amount={remaining_amount}, rate={remaining_rate}"
+            )
+        return remaining_amount, remaining_rate, amount_closed and rate_closed
+
+    @staticmethod
+    def _executed_close_rate(pos: POSITION, close_amount: float) -> float:
+        """Return the logical position rate represented by an actual fill amount."""
+
+        current_amount = normalize_nonnegative_quantity(
+            pos.amount, label="position amount"
+        )
+        current_rate = normalize_nonnegative_quantity(
+            pos.now_pos_rate, label="position rate"
+        )
+        closed_amount = normalize_nonnegative_quantity(
+            close_amount, label="close amount"
+        )
+        if current_amount == 0.0 or current_rate == 0.0 or closed_amount == 0.0:
+            raise BackTestAccountingError(
+                "cannot calculate a close rate from an empty position or fill"
+            )
+        remaining_amount = subtract_quantity(
+            current_amount, closed_amount, label="position amount"
+        )
+        if is_zero_quantity(remaining_amount):
+            return current_rate
+        return normalize_nonnegative_quantity(
+            current_rate * closed_amount / current_amount,
+            label="executed position rate",
+        )
+
+    @classmethod
+    def _validated_executed_close_rate(
+        cls, pos: POSITION, result: dict, requested_rate: float
+    ) -> float:
+        derived_rate = cls._executed_close_rate(pos, result["amount"])
+        requested = normalize_nonnegative_quantity(
+            requested_rate, label="requested position rate"
+        )
+        if requested == 0.0:
+            raise BackTestAccountingError("requested close rate must be greater than zero")
+        # Lot rounding may reduce a fill, but an adapter must never report more than
+        # the requested logical position rate.
+        if derived_rate > requested and not quantities_close(derived_rate, requested):
+            raise BackTestAccountingError(
+                "actual close fill diverged from and exceeds the requested position rate: "
+                f"requested={requested}, executed={derived_rate}"
+            )
+        declared_rate = result.get("pos_rate")
+        if declared_rate is not None:
+            declared = normalize_nonnegative_quantity(
+                declared_rate, label="declared executed position rate"
+            )
+            if not quantities_close(declared, derived_rate):
+                raise BackTestAccountingError(
+                    "fill amount and declared position rate diverged: "
+                    f"amount_rate={derived_rate}, declared_rate={declared}"
+                )
+        return derived_rate
+
+    @staticmethod
+    def _apply_open_fill(pos: POSITION, result: dict, fill_rate: float) -> None:
+        """Apply an opening fill atomically after all calculations have succeeded."""
+
+        old_amount = normalize_nonnegative_quantity(
+            pos.amount, label="position amount"
+        )
+        old_rate = normalize_nonnegative_quantity(
+            pos.now_pos_rate, label="position rate"
+        )
+        new_price = weighted_average_price(
+            pos.price, old_amount, result["price"], result["amount"]
+        )
+        new_amount = add_quantity(
+            old_amount, result["amount"], label="position amount"
+        )
+        new_rate = min(
+            1.0,
+            add_quantity(
+                old_rate,
+                min(1.0, fill_rate),
+                label="position rate",
+            ),
+        )
+
+        pos.price = new_price
+        pos.amount = new_amount
+        pos.now_pos_rate = new_rate
+
+    @staticmethod
     def _empty_result_stats():
         return {"win_num": 0, "loss_num": 0, "win_balance": 0, "loss_balance": 0}
 
@@ -368,7 +507,7 @@ class BackTestTrader(Trader):
 
         # 优先检查持仓情况
         for _open_uid, pos in self.positions.items():
-            if pos.code != code or pos.amount == 0:
+            if pos.code != code or is_zero_quantity(pos.amount):
                 continue
             _time = time.time()
             opts = self.strategy.close(
@@ -395,7 +534,7 @@ class BackTestTrader(Trader):
         poss = [
             _p
             for _uid, _p in self.positions.items()
-            if _p.code == code and _p.amount != 0
+            if _p.code == code and not is_zero_quantity(_p.amount)
         ]  # 只获取有持仓的记录
 
         _time = time.time()
@@ -412,7 +551,7 @@ class BackTestTrader(Trader):
 
         # 只保留有资金的持仓
         self.positions = {
-            _uid: _p for _uid, _p in self.positions.items() if _p.amount != 0
+            _uid: _p for _uid, _p in self.positions.items() if not is_zero_quantity(_p.amount)
         }
 
         return True
@@ -428,7 +567,11 @@ class BackTestTrader(Trader):
     # 运行结束，统一清仓
     def end(self):
         for _uid, pos in self.positions.items():
-            if pos.balance > 0:
+            if (
+                pos.balance > 0
+                and not is_zero_quantity(pos.amount)
+                and not is_zero_quantity(pos.now_pos_rate)
+            ):
                 self.execute(
                     pos.code,
                     Operation(
@@ -451,7 +594,7 @@ class BackTestTrader(Trader):
         total_hold_profit = 0
         total_hold_balance = 0
         for _uid, pos in self.positions.items():
-            if pos.amount == 0:
+            if is_zero_quantity(pos.amount):
                 continue
             now_profit, hold_balance = self.position_record(pos)
             total_hold_profit += now_profit
@@ -467,7 +610,7 @@ class BackTestTrader(Trader):
         # 记录当前的持仓金额
         position_balance = {}
         for _uid, pos in self.positions.items():
-            if pos.amount == 0:
+            if is_zero_quantity(pos.amount):
                 continue
             code_price = self.get_price(pos.code)
             if pos.type == "做多":
@@ -579,7 +722,7 @@ class BackTestTrader(Trader):
         获取当前持仓中的股票代码
         """
         codes = list(
-            set([_p.code for _uid, _p in self.positions.items() if _p.amount != 0])
+            set([_p.code for _uid, _p in self.positions.items() if not is_zero_quantity(_p.amount)])
         )
         return codes
 
@@ -587,7 +730,7 @@ class BackTestTrader(Trader):
         """
         返回所有持仓记录
         """
-        return [_p for _uid, _p in self.positions.items() if _p.amount != 0]
+        return [_p for _uid, _p in self.positions.items() if not is_zero_quantity(_p.amount)]
 
     # 做多买入
     def open_buy(self, code, opt: Operation, amount: float = None):
@@ -685,55 +828,48 @@ class BackTestTrader(Trader):
 
             return {"price": price, "amount": amount}
 
+    @staticmethod
+    def _close_fill(pos: POSITION, opt: Operation, price, market: str):
+        current_amount = normalize_nonnegative_quantity(
+            pos.amount, label="position amount"
+        )
+        current_rate = normalize_nonnegative_quantity(
+            pos.now_pos_rate, label="position rate"
+        )
+        requested_rate = min(
+            current_rate,
+            normalize_nonnegative_quantity(
+                opt.pos_rate, label="requested position rate"
+            ),
+        )
+        if current_amount == 0.0 or current_rate == 0.0 or requested_rate == 0.0:
+            return False
+
+        if is_zero_quantity(current_rate - requested_rate):
+            amount = current_amount
+        else:
+            amount = current_amount * requested_rate / current_rate
+
+        if market == "a":
+            amount = int(amount / 100) * 100
+        elif market == "futures":
+            amount = int(amount)
+        amount = normalize_nonnegative_quantity(amount, label="close amount")
+        if amount == 0.0:
+            return False
+
+        executed_rate = BackTestTrader._executed_close_rate(pos, amount)
+        return {"price": price, "amount": amount, "pos_rate": executed_rate}
+
     # 做多平仓
     def close_buy(self, code, pos: POSITION, opt: Operation):
-        # 如果操作中设置了止损价格，则按照止损价格执行，否则按照最新价格执行
-        if opt.loss_price != 0:
-            price = opt.loss_price
-        else:
-            price = self.get_price(code)["close"]
-
-        # 分仓的情况计算要平仓的数量
-        amount = pos.amount / pos.now_pos_rate * opt.pos_rate
-
-        if self.mode == "signal":
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
-        else:
-            # TODO 如果是分仓，有可能会是 0，或者平完有剩余，需要再测
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
+        price = opt.loss_price if opt.loss_price != 0 else self.get_price(code)["close"]
+        return self._close_fill(pos, opt, price, self.market)
 
     # 做空平仓
     def close_sell(self, code, pos: POSITION, opt: Operation):
-        # 如果操作中设置了止损价格，则按照止损价格执行，否则按照最新价格执行
-        if opt.loss_price != 0:
-            price = opt.loss_price
-        else:
-            price = self.get_price(code)["close"]
-
-        # 分仓的情况计算要平仓的数量
-        amount = pos.amount / pos.now_pos_rate * opt.pos_rate
-
-        if self.mode == "signal":
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
-        else:
-            # TODO 如果是分仓，有可能会是 0，或者平完有剩余，需要再测
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
+        price = opt.loss_price if opt.loss_price != 0 else self.get_price(code)["close"]
+        return self._close_fill(pos, opt, price, self.market)
 
     def cal_fee(
         self, code, price: float, balance: float, amount: float, other_info: dict = {}
@@ -802,7 +938,13 @@ class BackTestTrader(Trader):
                 return False
 
             if pos is not None:
-                if pos.balance == 0.0 or pos.now_pos_rate == 0.0 or pos.amount == 0.0:
+                amount_is_zero = is_zero_quantity(pos.amount)
+                rate_is_zero = is_zero_quantity(pos.now_pos_rate)
+                if amount_is_zero != rate_is_zero:
+                    raise BackTestAccountingError(
+                        "position amount and position rate are inconsistent before execution"
+                    )
+                if pos.balance == 0.0 or amount_is_zero:
                     return True
 
             signal = opt.signal
@@ -819,7 +961,7 @@ class BackTestTrader(Trader):
                 # 检查当前是否有该持仓，如果持仓存在的话，则不进行操作
                 if (
                     opt.open_uid in self.positions.keys()
-                    and self.positions[opt.open_uid].amount != 0
+                    and not is_zero_quantity(self.positions[opt.open_uid].amount)
                 ):
                     pos = self.positions[opt.open_uid]
                     if pos.now_pos_rate >= 1:
@@ -839,13 +981,9 @@ class BackTestTrader(Trader):
                 # 修正错误的开仓比例
                 opt.pos_rate = min(1.0 - pos.now_pos_rate, opt.pos_rate)
 
-                res = self.open_buy(code, opt)
-                if res is False:
+                res = self._normalise_fill(self.open_buy(code, opt))
+                if res is None:
                     return False
-
-                pos.type = "做多"
-                pos.price = res["price"]
-                pos.amount += res["amount"]
 
                 hold_balance = 0  # 此次成交占用的资金
                 fee = 0  # 此次成交的手续费
@@ -870,6 +1008,9 @@ class BackTestTrader(Trader):
                     hold_balance = res["price"] * res["amount"]
                     fee = self.cal_fee(code, res["price"], hold_balance, res["amount"])
 
+                pos.type = "做多"
+                self._apply_open_fill(pos, res, opt.pos_rate)
+
                 # 记录占用资金与手续费
                 pos.balance += hold_balance
                 pos.fee += fee
@@ -890,7 +1031,6 @@ class BackTestTrader(Trader):
                 )
                 pos.open_msg = opt.msg
                 pos.info = opt.info
-                pos.now_pos_rate += min(1.0, opt.pos_rate)
                 pos.open_keys[opt.key] = opt.pos_rate
 
                 # 本次开仓的记录
@@ -922,13 +1062,9 @@ class BackTestTrader(Trader):
                 # 修正错误的开仓比例
                 opt.pos_rate = min(1.0 - pos.now_pos_rate, opt.pos_rate)
 
-                res = self.open_sell(code, opt)
-                if res is False:
+                res = self._normalise_fill(self.open_sell(code, opt))
+                if res is None:
                     return False
-                pos.type = "做空"
-                pos.price = res["price"]
-                pos.amount += res["amount"]
-
                 hold_balance = 0
                 fee = 0
                 if self.market == "futures":  # 期货计算占用保证金
@@ -948,6 +1084,9 @@ class BackTestTrader(Trader):
                 else:
                     hold_balance = res["price"] * res["amount"]
                     fee = self.cal_fee(code, res["price"], hold_balance, res["amount"])
+
+                pos.type = "做空"
+                self._apply_open_fill(pos, res, opt.pos_rate)
 
                 # 记录占用资金与手续费
                 pos.balance += hold_balance
@@ -969,7 +1108,6 @@ class BackTestTrader(Trader):
                 )
                 pos.open_msg = opt.msg
                 pos.info = opt.info
-                pos.now_pos_rate += min(1.0, opt.pos_rate)
                 pos.open_keys[opt.key] = opt.pos_rate
 
                 # 本次开仓的记录
@@ -1016,8 +1154,8 @@ class BackTestTrader(Trader):
                     # 股票交易，当日不能卖出
                     return False
 
-                res = self.close_sell(code, pos, opt)
-                if res is False:
+                res = self._normalise_fill(self.close_sell(code, pos, opt))
+                if res is None:
                     return False
 
                 release_balance = 0  # 平仓释放资金
@@ -1052,6 +1190,15 @@ class BackTestTrader(Trader):
                         code, res["price"], release_balance, res["amount"]
                     )
 
+                executed_pos_rate = self._validated_executed_close_rate(
+                    pos, res, opt.pos_rate
+                )
+                remaining_position = None
+                if opt.close_uid == "clear":
+                    remaining_position = self._remaining_position_after_close(
+                        pos, res["amount"], executed_pos_rate
+                    )
+
                 self._print_log(
                     "[%s - %s] // %s 平仓做空（%s - %s），原因： %s"
                     % (
@@ -1076,22 +1223,22 @@ class BackTestTrader(Trader):
                         "close_msg": opt.msg,
                         "close_key": opt.key,
                         "close_uid": opt.close_uid,
-                        "pos_rate": opt.pos_rate,
+                        "pos_rate": executed_pos_rate,
                     }
                 )
 
                 # 平仓的uid不是 clear，不进行实质性的平仓，只记录当前的盈亏情况
                 if opt.close_uid == "clear":
-                    pos.now_pos_rate -= opt.pos_rate
-                    pos.close_keys[opt.key] = opt.pos_rate
+                    assert remaining_position is not None
+                    pos.amount, pos.now_pos_rate, position_closed = remaining_position
+                    pos.close_keys[opt.key] = executed_pos_rate
                     pos.close_msg = opt.msg
                     pos.close_datetime = self.get_now_datetime()
-                    pos.amount -= res["amount"]
 
                     # 记录释放的保证金与手续费
                     pos.release_balance += release_balance
                     pos.fee += fee
-                    if pos.amount == 0:
+                    if position_closed:
                         # 持仓数量为空，计算持仓总的收益率
                         profit = 0
                         if self.market == "futures":
@@ -1141,8 +1288,8 @@ class BackTestTrader(Trader):
                     # 股票交易，当日不能卖出
                     return False
 
-                res = self.close_buy(code, pos, opt)
-                if res is False:
+                res = self._normalise_fill(self.close_buy(code, pos, opt))
+                if res is None:
                     return False
 
                 release_balance = 0  # 平仓释放资金
@@ -1181,6 +1328,15 @@ class BackTestTrader(Trader):
                         other_info={"sell": True},
                     )
 
+                executed_pos_rate = self._validated_executed_close_rate(
+                    pos, res, opt.pos_rate
+                )
+                remaining_position = None
+                if opt.close_uid == "clear":
+                    remaining_position = self._remaining_position_after_close(
+                        pos, res["amount"], executed_pos_rate
+                    )
+
                 self._print_log(
                     "[%s - %s] // %s 平仓做多（%s - %s），原因： %s"
                     % (
@@ -1205,22 +1361,22 @@ class BackTestTrader(Trader):
                         "close_msg": opt.msg,
                         "close_key": opt.key,
                         "close_uid": opt.close_uid,
-                        "pos_rate": opt.pos_rate,
+                        "pos_rate": executed_pos_rate,
                     }
                 )
 
                 # 平仓的uid不是 clear，不进行实质性的平仓，只记录当前的盈亏情况
                 if opt.close_uid == "clear":
-                    pos.now_pos_rate -= opt.pos_rate
-                    pos.close_keys[opt.key] = opt.pos_rate
+                    assert remaining_position is not None
+                    pos.amount, pos.now_pos_rate, position_closed = remaining_position
+                    pos.close_keys[opt.key] = executed_pos_rate
                     pos.close_msg = opt.msg
                     pos.close_datetime = self.get_now_datetime()
-                    pos.amount -= res["amount"]
 
                     # 记录释放的保证金与手续费
                     pos.release_balance += release_balance
                     pos.fee += fee
-                    if pos.amount == 0:
+                    if position_closed:
                         # 持仓数量为空，计算持仓总的收益率
                         profit = 0
                         if self.market == "futures":
