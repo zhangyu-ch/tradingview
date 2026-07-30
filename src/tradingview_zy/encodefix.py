@@ -16,6 +16,7 @@ class filter:
 
 
 if sys.platform == "win32":
-    sys.stdin = filter(sys.stdin)
+    # 只包装输出流。stdin 包装后没有 readline，会让 input() 抛
+    # AttributeError，异常兜底的“按回车键退出”反而把真正的报错顶掉。
     sys.stdout = filter(sys.stdout)
     sys.stderr = filter(sys.stderr)

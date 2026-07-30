@@ -23,3 +23,10 @@ if not exist "%APP_PATH%" (
 
 echo 启动 tradingview_zy WEB 服务...
 "%UV_DIR%" run "%APP_PATH%"
+
+if errorlevel 1 (
+    echo.
+    echo WEB 服务异常退出，错误码 %errorlevel%，请查看上方报错信息。
+    pause
+    exit /b %errorlevel%
+)
