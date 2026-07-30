@@ -26,11 +26,42 @@ from tradingview_zy.backtesting.backtest_klines import BackTestKlines
 from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 from tradingview_zy.backtesting.base import POSITION, Strategy
 from tradingview_zy.backtesting.optimize import OptimizationSetting
+from tradingview_zy.base import Market
 from tradingview_zy.exchange.exchange import (
     convert_currency_kline_frequency,
     convert_futures_kline_frequency,
     convert_stock_kline_frequency,
 )
+
+
+# Annualisation convention used by the existing backtest reports. Keep the
+# mapping explicit and exhaustive so a typo or a newly-added Market cannot
+# silently scale performance metrics with the wrong number of periods.
+ANNUALIZATION_DAYS_BY_MARKET: dict[str, int] = {
+    Market.A.value: 240,
+    Market.HK.value: 240,
+    Market.US.value: 240,
+    Market.FUTURES.value: 240,
+    Market.NY_FUTURES.value: 240,
+    Market.CURRENCY.value: 365,
+    Market.CURRENCY_SPOT.value: 365,
+    Market.FX.value: 365,
+}
+
+
+def annualization_days_for_market(market: str | Market) -> int:
+    """Return the report annualisation periods for a supported market.
+
+    Unknown markets fail closed because a silent default would make annual
+    return, benchmark annual return, and Sharpe ratio look valid while using
+    the wrong scale.
+    """
+
+    market_value = market.value if isinstance(market, Market) else str(market)
+    try:
+        return ANNUALIZATION_DAYS_BY_MARKET[market_value]
+    except KeyError as error:
+        raise ValueError(f"不支持的回测市场：{market_value}") from error
 
 
 def _get_logger(name: str) -> logging.Logger:
@@ -576,7 +607,7 @@ class BackTest:
             base_close = float(base_klines.iloc[-1]["close"])
 
             # 每年交易日设置
-            annual_days = 240 if self.market in ["a", "us", "hk" "futures"] else 365
+            annual_days = annualization_days_for_market(self.market)
             # 无风险收益率
             risk_free = 0.03
 
