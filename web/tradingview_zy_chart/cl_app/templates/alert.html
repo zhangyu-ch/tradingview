@@ -40,12 +40,12 @@
         </div>
         <div class="layui-form-item">
             <label class="layui-form-label">运行间隔</label>
-            <div class="layui-input-block" title="设置每几分钟检测一次（1-1380分钟，60分钟以上必须是60的整数倍，表示小时数）">
+            <div class="layui-input-block" title="设置每几分钟检测一次（1-1440分钟，支持90、150等非整小时）">
                 <input type="text" name="interval_minutes" value="{{ interval_minutes }}"
                     placeholder="设置每几分钟检测一次" lay-filter="alert_config" lay-verify="required|number"
                     class="layui-input" />
                 <div class="layui-form-mid layui-word-aux" style="margin-top: 5px; color: #999; font-size: 12px;">
-                    <div>单位：分钟；60分钟以上需为60的整数倍；最大不超过1380分钟。</div>
+                    <div>单位：分钟；支持任意 1-1440 的整数，例如 5、90、150、1440。</div>
                 </div>
             </div>
         </div>
@@ -152,12 +152,8 @@
                 });
 
                 let interval = parseInt(alert_config['interval_minutes']);
-                if (isNaN(interval) || interval < 1 || interval > 1380) {
-                    layer.msg('运行间隔必须在1-1380分钟之间');
-                    return false;
-                }
-                if (interval >= 60 && interval % 60 !== 0) {
-                    layer.msg('运行间隔60分钟以上必须是60的整数倍');
+                if (isNaN(interval) || interval < 1 || interval > 1440) {
+                    layer.msg('运行间隔必须在1-1440分钟之间');
                     return false;
                 }
                 if ($.trim(alert_config['strategy_id'] || '') === '') {
