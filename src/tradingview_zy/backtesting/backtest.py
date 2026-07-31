@@ -16,7 +16,6 @@ import empyrical as ep
 import numpy as np
 import pandas as pd
 import prettytable as pt
-import pyfolio as pf
 from pyecharts import options as opts
 from pyecharts.charts import Bar, Grid, Line
 from tqdm.auto import tqdm
@@ -1106,6 +1105,10 @@ class BackTest:
         )
         base_klines.set_index("date", inplace=True)
         base_klines["return"] = base_klines["close"].pct_change()
+
+        # pyfolio is optional and emits a zipline warning at import time.
+        # Import it only when the tear-sheet feature is actually requested.
+        import pyfolio as pf
 
         pf.create_full_tear_sheet(
             returns=df["return"],
