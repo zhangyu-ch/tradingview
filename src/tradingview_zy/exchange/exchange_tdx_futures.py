@@ -21,6 +21,12 @@ from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.tools import tdx_best_ip as best_ip
 
 
+def tdx_futures_cache_code(code: str) -> str:
+    """Return the single versioned key used for both cache reads and writes."""
+
+    return f"v1_{code}"
+
+
 @fun.singleton
 class ExchangeTDXFutures(Exchange):
     """
@@ -197,9 +203,18 @@ class ExchangeTDXFutures(Exchange):
         try:
             client = TdxExHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+                cache_code = tdx_futures_cache_code(code)
                 klines: pd.DataFrame = self.fdb.get_tdx_klines(
-                    Market.FUTURES.value, code, frequency
+                    Market.FUTURES.value, cache_code, frequency
                 )
+                if klines is None or len(klines) == 0:
+                    # One-time compatibility fallback for caches written before the
+                    # versioned key became the canonical read key.
+                    legacy_klines = self.fdb.get_tdx_klines(
+                        Market.FUTURES.value, code, frequency
+                    )
+                    if legacy_klines is not None and len(legacy_klines) > 0:
+                        klines = legacy_klines
                 if klines is None or len(klines) == 0:
                     # 获取 8*700 = 5600 条数据
                     klines = pd.concat(
@@ -252,7 +267,7 @@ class ExchangeTDXFutures(Exchange):
             # 删除重复数据
             klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
             self.fdb.save_tdx_klines(
-                Market.FUTURES.value, f"v1_{code}", frequency, klines
+                Market.FUTURES.value, cache_code, frequency, klines
             )
 
             klines.loc[:, "code"] = code

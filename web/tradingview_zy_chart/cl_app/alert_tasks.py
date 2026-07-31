@@ -4,8 +4,8 @@ from typing import Dict, List
 from apscheduler.schedulers.background import BackgroundScheduler
 from tqdm.auto import tqdm
 
-from tradingview_zy import config, fun
-from tradingview_zy.db import TableByAlertTask, db
+from tradingview_zy import config, fun, utils
+from tradingview_zy.db import AlertTaskValidationError, TableByAlertTask, db
 from tradingview_zy.exchange import Market, get_exchange
 from tradingview_zy.monitoring import MonitoringRunner
 from tradingview_zy.strategies.loader import (
@@ -14,6 +14,27 @@ from tradingview_zy.strategies.loader import (
     load_registered_strategy,
 )
 from tradingview_zy.zixuan import ZiXuan
+
+
+MIN_ALERT_INTERVAL_MINUTES = 1
+MAX_ALERT_INTERVAL_MINUTES = 1440
+
+
+def validate_interval_minutes(value) -> int:
+    try:
+        interval = int(value)
+    except (TypeError, ValueError) as error:
+        raise AlertTaskValidationError("运行间隔必须是整数分钟") from error
+    if (
+        isinstance(value, bool)
+        or (isinstance(value, float) and not value.is_integer())
+        or interval < MIN_ALERT_INTERVAL_MINUTES
+        or interval > MAX_ALERT_INTERVAL_MINUTES
+    ):
+        raise AlertTaskValidationError(
+            f"运行间隔必须在 {MIN_ALERT_INTERVAL_MINUTES}-{MAX_ALERT_INTERVAL_MINUTES} 分钟之间"
+        )
+    return interval
 
 
 class AlertTasks(object):
@@ -34,36 +55,24 @@ class AlertTasks(object):
             self.scheduler.remove_job(_id)
         self.task_ids = []
 
-        task_list = self.task_list()
-        for _t in task_list:
-            if _t.is_run == 1:
-                # 根据interval_minutes设置定时任务
-                if _t.interval_minutes < 60:
-                    # 60分钟以下，按分钟运行
-                    _job = self.scheduler.add_job(
-                        func=self.alert_run,
-                        trigger="cron",
-                        args={_t.id},
-                        id=str(_t.id),
-                        name=f"监控-{_t.task_name}",
-                        minute=f"*/{_t.interval_minutes}",
-                        second="0",
-                    )
-                else:
-                    # 60分钟及以上，按小时运行
-                    hours = _t.interval_minutes // 60
-                    _job = self.scheduler.add_job(
-                        func=self.alert_run,
-                        trigger="cron",
-                        args={_t.id},
-                        id=str(_t.id),
-                        name=f"监控-{_t.task_name}",
-                        hour=f"*/{hours}",
-                        minute="0",
-                        second="0",
-                    )
+        for task in self.task_list():
+            if task.is_run != 1:
+                continue
+            try:
+                interval = validate_interval_minutes(task.interval_minutes)
+            except AlertTaskValidationError as error:
+                self.log.error(f"监控任务 {task.id} 配置无效：{error}")
+                continue
 
-                self.task_ids.append(_job.id)
+            job = self.scheduler.add_job(
+                func=self.alert_run,
+                trigger="interval",
+                args=(task.id,),
+                id=str(task.id),
+                name=f"监控-{task.task_name}",
+                minutes=interval,
+            )
+            self.task_ids.append(job.id)
         return True
 
     def _resolve_strategy_id(self, strategy_config: dict) -> str | None:
@@ -129,6 +138,7 @@ class AlertTasks(object):
             return False
 
         runner = MonitoringRunner(exchange=ex, strategy=strategy)
+        notification_lines = []
         for s in tqdm(stocks):
             try:
                 events = runner.run_code(
@@ -150,8 +160,22 @@ class AlertTasks(object):
                         event_type="sig",
                         event_time=event.event_time,
                     )
+                    notification_lines.append(
+                        f"{event.name}({event.code}) {event.frequency} "
+                        f"{event.action}: {event.message}"
+                    )
             except Exception as e:
                 self.log.error(f'run {s["code"]} alert exception {e}')
+
+        if alert_config.is_send_msg == 1 and notification_lines:
+            try:
+                utils.send_fs_msg(
+                    alert_config.market,
+                    f"{alert_config.task_name} 监控提醒",
+                    notification_lines,
+                )
+            except Exception as error:
+                self.log.error(f"{alert_config.task_name} 发送监控消息失败：{error}")
 
         return True
 
@@ -168,6 +192,9 @@ class AlertTasks(object):
         return alert_config[0]
 
     def alert_save(self, alert_config: Dict):
+        alert_config["interval_minutes"] = validate_interval_minutes(
+            alert_config.get("interval_minutes")
+        )
         if alert_config["id"] == "":
             del alert_config["id"]
             db.task_save_strategy(**alert_config)
