@@ -91,6 +91,8 @@ def get_exchange(market: Market) -> Exchange:
             from tradingview_zy.exchange.exchange_db import ExchangeDB
 
             g_exchange_obj[market.value] = ExchangeDB(Market.NY_FUTURES.value)
+        else:
+            raise Exception(f"不支持的纽约期货交易所 {config.EXCHANGE_NY_FUTURES}")
     elif market == Market.FX:
         # 外汇市场行情
         if config.EXCHANGE_FX == "tdx_fx":
