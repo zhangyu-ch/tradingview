@@ -1,9 +1,9 @@
 name: Export final remediation source snapshot
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/internal-export-master-final-109
+      - master
 
 permissions:
   contents: read
@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/internal-export-master-final-109
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
       - name: Remove exporter workflow from snapshot
         run: rm -f .github/workflows/export-master-final-109.yml
