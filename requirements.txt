@@ -11,9 +11,9 @@ dbutils
 apscheduler
 tenacity
 flask
-flask-login
+flask-login>=0.6.3,<0.7
 gevent
-tornado
+tornado>=6.5.1,<7
 sqlalchemy
 lark-oapi
 
