@@ -1,0 +1,27 @@
+name: Export final remediation source snapshot
+
+on:
+  push:
+    branches:
+      - agent/internal-export-master-final-109
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/internal-export-master-final-109
+          fetch-depth: 1
+      - name: Remove exporter workflow from snapshot
+        run: rm -f .github/workflows/export-master-final-109.yml
+      - name: Package source
+        run: tar -czf /tmp/tradingview-master-final.tar.gz --exclude=.git .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-master-final-source
+          path: /tmp/tradingview-master-final.tar.gz
+          retention-days: 1
