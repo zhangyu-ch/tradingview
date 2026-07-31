@@ -1,0 +1,49 @@
+name: Finalize current comprehensive remediation 2
+
+on:
+  push:
+    branches:
+      - agent/current-comprehensive-remediation
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/current-comprehensive-remediation
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify and remove temporary files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -d .github/remediation
+          test -f src/tradingview_zy/backtesting/accounting.py
+          test -f src/tradingview_zy/market_registry.py
+          rm -f .github/PR_BODY_CURRENT_REMEDIATION.md
+          rm -f .github/workflows/finalize-current-comprehensive-remediation-2.yml
+          python -m compileall -q src web tests check_env.py
+          while IFS= read -r -d '' file; do node --check "$file"; done < <(find web/tradingview_zy_chart/cl_app/static/js -type f -name '*.js' -print0)
+          git diff --check
+      - name: Squash product diff
+        shell: bash
+        env:
+          BASE_SHA: e16418d158a0d02688ad8e3a8dd36f09daca7605
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git reset --soft "$BASE_SHA"
+          git commit -m '综合修复当前已完成问题'
+          git push --force-with-lease origin HEAD:agent/current-comprehensive-remediation
