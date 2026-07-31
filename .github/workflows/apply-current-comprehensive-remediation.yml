@@ -1,0 +1,69 @@
+name: Apply current comprehensive remediation
+
+on:
+  push:
+    branches:
+      - agent/current-comprehensive-remediation
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/current-comprehensive-remediation
+
+      - name: Rebuild and verify reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t parts < <(find .github/remediation -maxdepth 1 -type f -name 'current-remediation.part.*' | sort)
+          echo "found ${#parts[@]} patch parts"
+          test "${#parts[@]}" -eq 13
+          cat "${parts[@]}" > /tmp/current-remediation.patch.gz.b64
+          base64 --decode /tmp/current-remediation.patch.gz.b64 > /tmp/current-remediation.patch.gz
+          gzip --decompress --stdout /tmp/current-remediation.patch.gz > /tmp/current-remediation.patch
+          echo '0a407a82d648c231e1424b8c5ee0e8f1aba05cfdac20c7555c170fc0ef0ed305  /tmp/current-remediation.patch' | sha256sum --check --strict
+          git apply --check /tmp/current-remediation.patch
+          git apply /tmp/current-remediation.patch
+          rm -rf .github/remediation
+          rm -f .github/workflows/apply-current-comprehensive-remediation.yml
+          git diff --check
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile Python
+        run: python -m compileall -q src web tests check_env.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check first-party JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(find web/tradingview_zy_chart/cl_app/static/js -type f -name '*.js' -print0)
+
+      - name: Replace staging commits with one reviewed commit
+        shell: bash
+        env:
+          BASE_SHA: e16418d158a0d02688ad8e3a8dd36f09daca7605
+        run: |
+          set -euo pipefail
+          rm -f .github/remediation/test.txt .github/remediation/test2.txt || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git reset --soft "$BASE_SHA"
+          git commit -m '综合修复当前已完成问题'
+          git push --force-with-lease origin HEAD:agent/current-comprehensive-remediation

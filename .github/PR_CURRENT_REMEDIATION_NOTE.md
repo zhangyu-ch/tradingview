@@ -1,0 +1,1 @@
+Temporary marker to ensure branch activity; removed by the application workflow before the final product commit.

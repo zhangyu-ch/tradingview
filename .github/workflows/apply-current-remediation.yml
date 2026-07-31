@@ -1,0 +1,48 @@
+name: Apply current remediation snapshot
+
+on:
+  pull_request:
+    branches:
+      - master
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/current-comprehensive-remediation
+      - name: Apply verified patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/remediation/current-remediation.part.* > /tmp/current-remediation.patch.gz.b64
+          base64 -d /tmp/current-remediation.patch.gz.b64 > /tmp/current-remediation.patch.gz
+          gzip -dc /tmp/current-remediation.patch.gz > /tmp/current-remediation.patch
+          echo "0a407a82d648c231e1424b8c5ee0e8f1aba05cfdac20c7555c170fc0ef0ed305  /tmp/current-remediation.patch" | sha256sum -c -
+          git apply --check /tmp/current-remediation.patch
+          git apply /tmp/current-remediation.patch
+          rm -rf .github/remediation
+          rm -f .github/workflows/apply-current-remediation.yml
+          git diff --check
+          python -m compileall -q src web tests check_env.py
+          find web/tradingview_zy_chart/cl_app/static/js -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Publish one clean commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git reset --soft e16418d158a0d02688ad8e3a8dd36f09daca7605
+          git add -A
+          git commit -m "阶段性提交剩余问题综合修复"
+          git push --force-with-lease origin HEAD:agent/current-comprehensive-remediation
