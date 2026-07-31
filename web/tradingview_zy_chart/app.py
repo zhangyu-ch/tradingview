@@ -56,27 +56,31 @@ except Exception as e:
         input("出现异常，按回车键退出")
 
 
-async def serve_forever():
+async def serve_forever() -> None:
     """Start the WSGI server inside an explicitly running asyncio loop."""
     app = create_app()
     executor = ThreadPoolExecutor(10)
-    server = HTTPServer(WSGIContainer(app, executor=executor))
-    server.bind(9900, config.WEB_HOST)
-
-    print("启动成功")
-    server.start(1)
-
-    if len(sys.argv) < 2 or sys.argv[1] != "nobrowser":
-        webbrowser.open("http://127.0.0.1:9900")
+    server = None
 
     try:
+        server = HTTPServer(WSGIContainer(app, executor=executor))
+        server.bind(9900, config.WEB_HOST)
+
+        print("启动成功")
+        server.start(1)
+
+        if len(sys.argv) < 2 or sys.argv[1] != "nobrowser":
+            webbrowser.open("http://127.0.0.1:9900")
+
         await asyncio.Event().wait()
     finally:
-        server.stop()
+        if server is not None:
+            server.stop()
+            await server.close_all_connections()
         executor.shutdown(wait=False, cancel_futures=True)
 
 
-def main():
+def main() -> None:
     try:
         asyncio.run(serve_forever())
     except KeyboardInterrupt:
