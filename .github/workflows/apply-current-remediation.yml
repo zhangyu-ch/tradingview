@@ -1,9 +1,13 @@
 name: Apply current remediation snapshot
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/current-comprehensive-remediation
+      - master
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
@@ -42,5 +46,3 @@ jobs:
           git add -A
           git commit -m "阶段性提交剩余问题综合修复"
           git push --force-with-lease origin HEAD:agent/current-comprehensive-remediation
-
-# Triggered after all verified patch chunks were uploaded.
