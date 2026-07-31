@@ -3676,7 +3676,7 @@ requires-dist = [
     { name = "dbutils", specifier = ">=3.1.1" },
     { name = "dtaidistance", specifier = ">=2.3.13" },
     { name = "flask", specifier = ">=3.1.1" },
-    { name = "flask-login", specifier = ">=0.6.3" },
+    { name = "flask-login", specifier = ">=0.6.3,<0.7" },
     { name = "futu-api", specifier = ">=9.2.5208" },
     { name = "gevent", specifier = ">=25.5.1" },
     { name = "ib-insync", specifier = ">=0.9.86" },
@@ -3711,7 +3711,7 @@ requires-dist = [
     { name = "ta-lib", marker = "platform_machine == 'amd64' and sys_platform == 'win32'", path = "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl" },
     { name = "ta-lib", marker = "platform_machine == 'arm64' and sys_platform == 'win32'", path = "package/ta_lib-0.6.8-cp311-cp311-win_arm64.whl" },
     { name = "tenacity", specifier = ">=9.1.2" },
-    { name = "tornado", specifier = ">=6.5.1" },
+    { name = "tornado", specifier = ">=6.5.1,<7" },
     { name = "tqdm", specifier = ">=4.67.1" },
     { name = "tqsdk", specifier = ">=3.8.2" },
 ]

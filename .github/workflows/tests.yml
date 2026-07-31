@@ -1,0 +1,56 @@
+name: Tests
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  project-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Verify lock file and install dependencies
+        run: uv sync --locked
+      - name: Prepare test configuration
+        run: cp src/tradingview_zy/config.py.demo src/tradingview_zy/config.py
+      - name: Run complete test suite with strict warnings
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: uv run pytest -q
+
+  dependency-warning-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install warning probe dependencies
+        run: >-
+          python -m pip install
+          "Flask>=3.1.1,<4"
+          "Flask-Login>=0.6.3,<0.7"
+          "Tornado>=6.5.1,<7"
+          "pytest>=8.4.1,<10"
+      - name: Verify the explicit upstream warning baseline
+        run: python scripts/check_dependency_warning_baseline.py
+      - name: Verify warning policy and Tornado entrypoint
+        run: pytest -q tests/test_new01_warning_policy.py
