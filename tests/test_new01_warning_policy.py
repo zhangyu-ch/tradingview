@@ -1,3 +1,4 @@
+import ast
 from datetime import timedelta
 from pathlib import Path
 import tomllib
@@ -72,3 +73,32 @@ def test_tornado_entrypoint_runs_inside_asyncio_and_avoids_legacy_ioloop_api():
     assert "await server.close_all_connections()" in source
     assert "IOLoop.instance" not in source
     assert "IOLoop.current" not in source
+
+
+def test_optional_pyfolio_import_is_limited_to_the_report_method():
+    source = (
+        ROOT / "src" / "tradingview_zy" / "backtesting" / "backtest.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    top_level_imports = {
+        alias.name
+        for node in tree.body
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    assert "pyfolio" not in top_level_imports
+
+    report_method = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "result_by_pyfolio"
+    )
+    local_imports = {
+        alias.name
+        for node in ast.walk(report_method)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    assert "pyfolio" in local_imports
