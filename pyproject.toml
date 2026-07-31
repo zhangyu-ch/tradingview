@@ -14,7 +14,7 @@ dependencies = [
     "dbutils>=3.1.1",
     "dtaidistance>=2.3.13",
     "flask>=3.1.1",
-    "flask-login>=0.6.3",
+    "flask-login>=0.6.3,<0.7",
     "futu-api>=9.2.5208",
     "gevent>=25.5.1",
     "ib-insync>=0.9.86",
@@ -43,9 +43,17 @@ dependencies = [
     "sqlalchemy>=2.0.41",
     "ta-lib",
     "tenacity>=9.1.2",
-    "tornado>=6.5.1",
+    "tornado>=6.5.1,<7",
     "tqdm>=4.67.1",
     "tqsdk>=3.8.2",
+]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    # Flask-Login 0.6.3 still calls datetime.utcnow() while writing a
+    # remember-me cookie. Upstream PR #815 fixes it but has not been released.
+    'ignore:datetime\.datetime\.utcnow\(\) is deprecated.*:DeprecationWarning:flask_login\.login_manager',
 ]
 
 [tool.uv.sources]
