@@ -1,0 +1,28 @@
+name: Export master snapshot for v6 revalidation
+
+on:
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+      - name: Remove exporter workflow from snapshot
+        run: rm -f .github/workflows/export-v6-revalidation.yml
+      - name: Package source
+        run: tar -czf /tmp/tradingview-master-v6-revalidation.tar.gz --exclude=.git .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tradingview-master-v6-revalidation-source
+          path: /tmp/tradingview-master-v6-revalidation.tar.gz
+          retention-days: 1
