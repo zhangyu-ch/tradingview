@@ -120,6 +120,40 @@ class SignalToTrade(BackTestTrader):
     def get_now_datetime(self):
         return self.now_datetime
 
+    @staticmethod
+    def _parse_trade_boundary(value, field_name: str):
+        if value is None:
+            return None
+        if isinstance(value, datetime.datetime):
+            return value
+        if isinstance(value, datetime.date):
+            return datetime.datetime.combine(value, datetime.time.min)
+        if not isinstance(value, str):
+            raise TypeError(
+                f"{field_name} must be str, date, datetime, or None; "
+                f"got {type(value).__name__}"
+            )
+        text = value.strip()
+        if text == "":
+            raise ValueError(f"{field_name} cannot be empty")
+        return datetime.datetime.fromisoformat(text)
+
+    def _apply_trade_window(self, bt):
+        if self.trade_start_date is not None:
+            bt.start_datetime = self.trade_start_date
+        if self.trade_end_date is not None:
+            bt.end_datetime = self.trade_end_date
+
+        start = self._parse_trade_boundary(bt.start_datetime, "trade_start_date")
+        end = self._parse_trade_boundary(bt.end_datetime, "trade_end_date")
+        if start is not None and end is not None:
+            if (start.tzinfo is None) != (end.tzinfo is None):
+                raise ValueError(
+                    "trade_start_date and trade_end_date must use the same timezone style"
+                )
+            if start > end:
+                raise ValueError("trade_start_date must not be later than trade_end_date")
+
     def run_bt(self, bt_file: str):
         BT = BackTest()
         BT.save_file = bt_file
@@ -140,10 +174,7 @@ class SignalToTrade(BackTestTrader):
             BT.base_code = self.base_code
         if self.trade_max_pos is not None:
             self.max_pos = self.trade_max_pos
-        if self.trade_end_date is not None:
-            BT.start_datetime = self.trade_start_date
-        if self.trade_end_date is not None:
-            BT.end_datetime = self.trade_end_date
+        self._apply_trade_window(BT)
         if self.trade_strategy is not None:
             BT.strategy = self.trade_strategy
 

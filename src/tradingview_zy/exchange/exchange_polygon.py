@@ -12,6 +12,7 @@ from tenacity import retry_if_result, wait_random, stop_after_attempt, retry
 from tradingview_zy import config
 from tradingview_zy import fun
 from tradingview_zy.exchange.exchange import *
+from tradingview_zy.exchange.date_utils import parse_optional_datetime
 
 
 @fun.singleton
@@ -110,17 +111,12 @@ class ExchangePolygon(Exchange):
         }
 
         try:
+            end_date = parse_optional_datetime(end_date, field_name="end_date")
             if end_date is None:
-                end_date = datetime.datetime.now()
-                end_date = end_date + dt.timedelta(days=1)
+                end_date = dt.datetime.now() + dt.timedelta(days=1)
                 end_date = fun.str_to_datetime(
                     fun.datetime_to_str(end_date, "%Y-%m-%d"), "%Y-%m-%d"
                 )
-            else:
-                if len(end_date) == 10:
-                    end_date = fun.str_to_datetime(end_date, "%Y-%m-%d")
-                else:
-                    end_date = fun.str_to_datetime(end_date)
             if start_date is None:
                 if frequency == "1m":
                     start_date = end_date - dt.timedelta(days=15)
@@ -139,10 +135,9 @@ class ExchangePolygon(Exchange):
                 elif frequency == "y":
                     start_date = end_date - dt.timedelta(days=15000)
             else:
-                if len(end_date) == 10:
-                    start_date = fun.str_to_datetime(start_date, "%Y-%m-%d")
-                else:
-                    start_date = fun.str_to_datetime(start_date)
+                start_date = parse_optional_datetime(
+                    start_date, field_name="start_date"
+                )
 
             resp = self.client.get_aggs(
                 code.upper(),

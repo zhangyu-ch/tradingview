@@ -7,6 +7,10 @@ import datetime
 from pytdx.exhq import TdxExHq_API
 from pytdx.hq import TdxHq_API
 
+
+class TdxServerUnavailable(RuntimeError):
+    """Raised when no configured TDX endpoint passes the health probe."""
+
 stock_ip = [
     # 旧有的数据源
     # {"ip": "106.120.74.86", "port": 7711, "name": "北京行情主站1"},
@@ -184,30 +188,25 @@ def ping(ip, port=7709, type_="stock"):
 
 
 def select_best_ip(_type="stock"):
-    """目前这里给的是单线程的选优, 如果需要多进程的选优/ 最优ip缓存 可以参考
-    https://github.com/QUANTAXIS/QUANTAXIS/blob/master/QUANTAXIS/QAFetch/QATdx.py#L106
+    """Return the fastest healthy endpoint or a descriptive unavailable error."""
 
-
-    Keyword Arguments:
-        _type {str} -- [description] (default: {'stock'})
-
-    Returns:
-        [type] -- [description]
-    """
+    if _type not in {"stock", "future"}:
+        raise ValueError(f"unsupported TDX server type: {_type}")
 
     ip_list = stock_ip if _type == "stock" else future_ip
+    data = [ping(item["ip"], item["port"], _type) for item in ip_list]
+    results = [
+        (latency, ip_list[index])
+        for index, latency in enumerate(data)
+        if latency < datetime.timedelta(0, 9, 0)
+    ]
+    if not results:
+        market_name = "股票" if _type == "stock" else "期货"
+        raise TdxServerUnavailable(
+            f"没有可用的 TDX {market_name}行情服务器；已检查 {len(ip_list)} 个候选节点"
+        )
 
-    data = [ping(x["ip"], x["port"], _type) for x in ip_list]
-    results = []
-    for i in range(len(data)):
-        # 删除ping不通的数据
-        if data[i] < datetime.timedelta(0, 9, 0):
-            results.append((data[i], ip_list[i]))
-
-    # 按照ping值从小大大排序
-    results = [x[1] for x in sorted(results, key=lambda x: x[0])]
-
-    return results[0]
+    return min(results, key=lambda item: item[0])[1]
 
 
 if __name__ == "__main__":
