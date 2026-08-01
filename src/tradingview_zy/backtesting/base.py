@@ -64,6 +64,11 @@ class POSITION:
         self.open_records: List[dict] = []
         # 平仓记录信息
         self.close_records: List[dict] = []
+        # 逐笔开仓 lot；用于 FIFO 成本、部分平仓和 A 股 T+1。
+        self.lots = []
+        self.realized_profit: float = 0.0
+        self.total_open_balance: float = 0.0
+        self.cash_settled_incrementally: bool = False
 
     def __close_records_by_uids(self, uids: List[str] = None):
         """

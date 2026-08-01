@@ -1,158 +1,72 @@
 from tradingview_zy import config
 from tradingview_zy.base import Market
-from tradingview_zy.exchange.exchange import Exchange
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from tradingview_zy.exchange.exchange import Exchange
+else:
+    Exchange = Any
 
 # 全局保存交易所对象，避免创建多个交易所对象
-g_exchange_obj = {}
+# Keyed by market; provider configuration is validated before construction.
+g_exchange_obj: dict[str, Exchange] = {}
 
 CTP_UNAVAILABLE_MESSAGE = (
     "CTP 适配器当前不可用（CR-05 尚未修复）。"
     "请将 EXCHANGE_FUTURES 设置为 tq、tdx_futures 或 db。"
 )
 
+_PROVIDER_ERROR_LABELS = {
+    Market.A: "沪深交易所",
+    Market.HK: "香港交易所",
+    Market.FUTURES: "期货交易所",
+    Market.NY_FUTURES: "纽约期货交易所",
+    Market.FX: "外汇交易所",
+    Market.CURRENCY: "数字货币交易所",
+    Market.CURRENCY_SPOT: "数字货币现货交易所",
+    Market.US: "美股交易所",
+}
+
 
 def get_exchange(market: Market) -> Exchange:
-    """
-    获取市场的交易所对象，根据config配置中设置的进行获取
+    """Return the configured provider for ``market`` from the central registry.
+
+    Provider imports are lazy. Invalid configuration fails before an object is
+    cached, so a half-constructed adapter cannot poison later requests.
     """
     global g_exchange_obj
-    if market.value in g_exchange_obj.keys():
+    if not isinstance(market, Market):
+        market = Market(market)
+    if market.value in g_exchange_obj:
         return g_exchange_obj[market.value]
 
-    if market == Market.A:
-        # 沪深 A股 交易所
-        if config.EXCHANGE_A == "tdx":
-            from tradingview_zy.exchange.exchange_tdx import ExchangeTDX
+    if market is Market.FUTURES and getattr(config, "EXCHANGE_FUTURES", None) == "ctp":
+        # Do not import the unfinished CTP module. Fail closed with a stable,
+        # user-facing explanation until CR-05 is repaired.
+        raise RuntimeError(CTP_UNAVAILABLE_MESSAGE)
 
-            g_exchange_obj[market.value] = ExchangeTDX()
-        elif config.EXCHANGE_A == "futu":
-            from tradingview_zy.exchange.exchange_futu import ExchangeFutu
+    from tradingview_zy.domain import InvalidRequestError
+    from tradingview_zy.market_registry import configured_provider, construct_provider
 
-            g_exchange_obj[market.value] = ExchangeFutu()
-        elif config.EXCHANGE_A == "baostock":
-            from tradingview_zy.exchange.exchange_baostock import ExchangeBaostock
+    try:
+        configured_provider(market, config)
+        provider = construct_provider(market, config)
+    except InvalidRequestError as error:
+        from tradingview_zy.market_registry import descriptor_for
 
-            g_exchange_obj[market.value] = ExchangeBaostock()
-        elif config.EXCHANGE_A == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
+        spec = descriptor_for(market)
+        configured = getattr(config, spec.config_attribute, None)
+        labels = {
+            Market.A: "沪深交易所",
+            Market.HK: "香港交易所",
+            Market.FUTURES: "期货交易所",
+            Market.NY_FUTURES: "纽约期货交易所",
+            Market.FX: "外汇交易所",
+            Market.CURRENCY: "数字货币交易所",
+            Market.CURRENCY_SPOT: "数字货币现货交易所",
+            Market.US: "美股交易所",
+        }
+        raise Exception(f"不支持的{labels[market]} {configured}") from error
 
-            g_exchange_obj[market.value] = ExchangeDB(Market.A.value)
-        elif config.EXCHANGE_A == "qmt":
-            from tradingview_zy.exchange.exchange_qmt import ExchangeQMT
-
-            g_exchange_obj[market.value] = ExchangeQMT()
-        else:
-            raise Exception(f"不支持的沪深交易所 {config.EXCHANGE_A}")
-
-    elif market == Market.HK:
-        # 港股 交易所
-        if config.EXCHANGE_HK == "tdx_hk":
-            from tradingview_zy.exchange.exchange_tdx_hk import ExchangeTDXHK
-
-            g_exchange_obj[market.value] = ExchangeTDXHK()
-        elif config.EXCHANGE_HK == "futu":
-            from tradingview_zy.exchange.exchange_futu import ExchangeFutu
-
-            g_exchange_obj[market.value] = ExchangeFutu()
-        elif config.EXCHANGE_HK == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
-
-            g_exchange_obj[market.value] = ExchangeDB(Market.HK.value)
-        else:
-            raise Exception(f"不支持的香港交易所 {config.EXCHANGE_HK}")
-
-    elif market == Market.FUTURES:
-        # 期货 交易所
-        if config.EXCHANGE_FUTURES == "tq":
-            from tradingview_zy.exchange.exchange_tq import ExchangeTq
-
-            g_exchange_obj[market.value] = ExchangeTq()
-        elif config.EXCHANGE_FUTURES == "tdx_futures":
-            from tradingview_zy.exchange.exchange_tdx_futures import ExchangeTDXFutures
-
-            g_exchange_obj[market.value] = ExchangeTDXFutures()
-        elif config.EXCHANGE_FUTURES == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
-
-            g_exchange_obj[market.value] = ExchangeDB(Market.FUTURES.value)
-        elif config.EXCHANGE_FUTURES == "ctp":
-            # Do not import the unfinished CTP module. Fail closed with a
-            # stable, user-facing explanation until CR-05 is repaired.
-            raise RuntimeError(CTP_UNAVAILABLE_MESSAGE)
-        else:
-            raise Exception(f"不支持的期货交易所 {config.EXCHANGE_FUTURES}")
-    elif market == Market.NY_FUTURES:
-        # 美股期货 交易所
-        if config.EXCHANGE_NY_FUTURES == "tdx_ny_futures":
-            from tradingview_zy.exchange.exchange_tdx_ny_futures import ExchangeTDXNYFutures
-
-            g_exchange_obj[market.value] = ExchangeTDXNYFutures()
-        elif config.EXCHANGE_NY_FUTURES == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
-
-            g_exchange_obj[market.value] = ExchangeDB(Market.NY_FUTURES.value)
-        else:
-            raise Exception(f"不支持的纽约期货交易所 {config.EXCHANGE_NY_FUTURES}")
-    elif market == Market.FX:
-        # 外汇市场行情
-        if config.EXCHANGE_FX == "tdx_fx":
-            from tradingview_zy.exchange.exchange_tdx_fx import ExchangeTDXFX
-
-            g_exchange_obj[market.value] = ExchangeTDXFX()
-        elif config.EXCHANGE_FX == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
-
-            g_exchange_obj[market.value] = ExchangeDB(Market.FX.value)
-        else:
-            raise Exception(f"不支持的外汇交易所 {config.EXCHANGE_FX}")
-
-    elif market == Market.CURRENCY:
-        # 数字货币 交易所
-        if config.EXCHANGE_CURRENCY == "binance":
-            from tradingview_zy.exchange.exchange_binance import ExchangeBinance
-
-            g_exchange_obj[market.value] = ExchangeBinance()
-        elif config.EXCHANGE_CURRENCY == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
-
-            g_exchange_obj[market.value] = ExchangeDB(Market.CURRENCY.value)
-        else:
-            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY}")
-    elif market == Market.CURRENCY_SPOT:
-        # 数字货币 交易所
-        if config.EXCHANGE_CURRENCY_SPOT == "binance_spot":
-            from tradingview_zy.exchange.exchange_binance_spot import ExchangeBinanceSpot
-
-            g_exchange_obj[market.value] = ExchangeBinanceSpot()
-        elif config.EXCHANGE_CURRENCY_SPOT == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
-
-            g_exchange_obj[market.value] = ExchangeDB(Market.CURRENCY_SPOT.value)
-        else:
-            raise Exception(f"不支持的数字货币交易所 {config.EXCHANGE_CURRENCY_SPOT}")
-    elif market == Market.US:
-        # 美股 交易所
-        if config.EXCHANGE_US == "alpaca":
-            from tradingview_zy.exchange.exchange_alpaca import ExchangeAlpaca
-
-            g_exchange_obj[market.value] = ExchangeAlpaca()
-        elif config.EXCHANGE_US == "polygon":
-            from tradingview_zy.exchange.exchange_polygon import ExchangePolygon
-
-            g_exchange_obj[market.value] = ExchangePolygon()
-        elif config.EXCHANGE_US == "ib":
-            from tradingview_zy.exchange.exchange_ib import ExchangeIB
-
-            g_exchange_obj[market.value] = ExchangeIB()
-        elif config.EXCHANGE_US == "tdx_us":
-            from tradingview_zy.exchange.exchange_tdx_us import ExchangeTDXUS
-
-            g_exchange_obj[market.value] = ExchangeTDXUS()
-        elif config.EXCHANGE_US == "db":
-            from tradingview_zy.exchange.exchange_db import ExchangeDB
-
-            g_exchange_obj[market.value] = ExchangeDB(Market.US.value)
-        else:
-            raise Exception(f"不支持的美股交易所 {config.EXCHANGE_US}")
-
-    return g_exchange_obj[market.value]
+    g_exchange_obj[market.value] = provider
+    return provider

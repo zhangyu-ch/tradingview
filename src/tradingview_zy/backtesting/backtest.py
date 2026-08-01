@@ -26,6 +26,11 @@ from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 from tradingview_zy.backtesting.base import POSITION, Strategy
 from tradingview_zy.backtesting.accounting import add_quantity, subtract_quantity
 from tradingview_zy.backtesting.optimize import OptimizationSetting
+from tradingview_zy.backtesting.metrics import (
+    finite_or_zero,
+    safe_return_drawdown_ratio,
+    safe_sharpe_ratio,
+)
 from tradingview_zy.backtesting.run_result import (
     BackTestRunError,
     BackTestRunFailure,
@@ -780,7 +785,7 @@ class BackTest:
             pre_balance.iloc[0] = self.init_balance
             x = df["balance"] / pre_balance
             x[x <= 0] = np.nan
-            df["return"] = np.log(x).fillna(0)
+            df["return"] = (x - 1.0).fillna(0.0)
             df["highlevel"] = (
                 df["balance"].rolling(min_periods=1, window=len(df), center=False).max()
             )
@@ -802,18 +807,16 @@ class BackTest:
 
             total_return = (end_balance / self.init_balance - 1) * 100
             annual_return = total_return / total_days * annual_days
-            daily_return = df["return"].mean() * 100
-            return_std = df["return"].std() * 100
-
-            if return_std:
-                daily_risk_free = risk_free / np.sqrt(annual_days)
-                sharpe_ratio = (
-                    (daily_return - daily_risk_free) / return_std * np.sqrt(annual_days)
-                )
-            else:
-                sharpe_ratio = 0
-
-            return_drawdown_ratio = -total_return / max_ddpercent
+            daily_return = finite_or_zero(df["return"].mean() * 100)
+            return_std = finite_or_zero(df["return"].std() * 100)
+            sharpe_ratio = safe_sharpe_ratio(
+                df["return"].tolist(),
+                annual_periods=annual_days,
+                annual_risk_free_rate=risk_free,
+            )
+            return_drawdown_ratio = safe_return_drawdown_ratio(
+                total_return, max_ddpercent
+            )
 
             # 总的手续费
             total_fee = self.trader.fee_total
@@ -831,8 +834,8 @@ class BackTest:
             res["base_annual_return"] = base_annual_return
             res["total_return"] = total_return
             res["annual_return"] = annual_return
-            res["max_drawdown"] = max_drawdown
-            res["max_ddpercent"] = max_ddpercent
+            res["max_drawdown"] = finite_or_zero(max_drawdown)
+            res["max_ddpercent"] = finite_or_zero(max_ddpercent)
             res["max_drawdown_duration"] = max_drawdown_duration
             res["daily_return"] = daily_return
             res["return_std"] = return_std
