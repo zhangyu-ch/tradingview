@@ -8,10 +8,8 @@ on:
     branches:
       - master
 
-# Temporary write permission is used only by the lock refresh step below. It
-# will be removed after the regenerated uv.lock is committed to the PR branch.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.ref }}
@@ -23,26 +21,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-        with:
-          # A pull_request checkout normally points at a synthetic merge ref.
-          # The lock refresh must be committed to the real PR head branch.
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Install uv
         run: python -m pip install uv
-      - name: Refresh lock file after dependency changes
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          uv lock
-          if ! git diff --quiet -- uv.lock; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add uv.lock
-            git commit -m "更新依赖锁文件"
-            git push origin "HEAD:${GITHUB_HEAD_REF}"
-          fi
       - name: Verify lock file and install dependencies
         run: uv sync --locked
       - name: Prepare test configuration
