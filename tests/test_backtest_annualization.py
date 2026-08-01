@@ -80,12 +80,14 @@ def test_result_uses_market_annualization_for_account_and_benchmark(market, annu
     assert result["annual_return"] == pytest.approx(10.0 / 3 * annual_days)
     assert result["base_annual_return"] == pytest.approx(6.0 / 3 * annual_days)
 
-    log_returns = pd.Series([0.0, np.log(0.9), np.log(110.0 / 90.0)])
-    daily_return = log_returns.mean() * 100
-    return_std = log_returns.std() * 100
+    # BackTest.result() computes period returns in decimal units. The annual
+    # risk-free rate must therefore be converted to one period by compounding,
+    # rather than mixed into percentage units or divided by sqrt(N).
+    period_returns = pd.Series([0.0, 0.9 - 1.0, 110.0 / 90.0 - 1.0])
+    period_risk_free = (1.0 + 0.03) ** (1.0 / annual_days) - 1.0
     expected_sharpe = (
-        (daily_return - 0.03 / np.sqrt(annual_days))
-        / return_std
+        (period_returns.mean() - period_risk_free)
+        / period_returns.std()
         * np.sqrt(annual_days)
     )
     assert result["sharpe_ratio"] == pytest.approx(expected_sharpe)
