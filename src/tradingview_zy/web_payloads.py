@@ -7,10 +7,37 @@ import pandas as pd
 
 from tradingview_zy.domain import DataContractError
 from tradingview_zy.kline_schema import normalize_kline_frame
+from tradingview_zy.market_registry import descriptor_for
 
 
 def _datetime_to_timestamp_seconds(value: dt.datetime | pd.Timestamp) -> int:
     return int(value.timestamp())
+
+
+def _prepare_strict_history_frame(
+    klines: pd.DataFrame,
+    *,
+    market: str | None,
+    code: str | None,
+) -> pd.DataFrame:
+    """Adapt legacy provider frames before applying the strict Kline contract.
+
+    Several existing providers return a single-symbol frame without repeating
+    the requested symbol in every row, and expose exchange-local datetimes as
+    naive values.  The history endpoint already owns both pieces of context, so
+    it can make them explicit on a copy.  Frames that do provide a code still
+    pass through the normal mismatch check; timezone-aware values are preserved
+    and converted by ``normalize_kline_frame``.
+    """
+
+    result = klines.copy(deep=True)
+    if code is not None and "code" not in result.columns:
+        result["code"] = str(code)
+    if market is not None and "date" in result.columns:
+        dates = pd.to_datetime(result["date"], errors="raise")
+        if dates.dt.tz is None:
+            result["date"] = dates.dt.tz_localize(descriptor_for(market).timezone)
+    return result
 
 
 def _validate_history_frame(
@@ -24,8 +51,13 @@ def _validate_history_frame(
     # KlineFrame contract. The compatibility path still validates the payload
     # fields that TradingView consumes, without importing project config.
     if market is not None or code is not None:
-        return normalize_kline_frame(
+        strict_frame = _prepare_strict_history_frame(
             klines,
+            market=market,
+            code=code,
+        )
+        return normalize_kline_frame(
+            strict_frame,
             market=market,
             code=code,
             frequency=frequency,
