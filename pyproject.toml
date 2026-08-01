@@ -54,6 +54,11 @@ filterwarnings = [
     # Flask-Login 0.6.3 still calls datetime.utcnow() while writing a
     # remember-me cookie. Upstream PR #815 fixes it but has not been released.
     'ignore:datetime\.datetime\.utcnow\(\) is deprecated.*:DeprecationWarning:flask_login\.login_manager',
+    # The locked environment currently resolves chardet 7.x while Requests
+    # still emits its legacy <6 compatibility warning. This warning is emitted
+    # during third-party import and is unrelated to the application behavior
+    # under test, so keep warnings-as-errors while excluding only this message.
+    "ignore:urllib3 .* or chardet .* doesn't match a supported version!:Warning:requests",
 ]
 
 [tool.uv.sources]
