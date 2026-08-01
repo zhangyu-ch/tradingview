@@ -14,6 +14,8 @@ from tradingview_zy.market_registry import (
 )
 
 
+# Keep the registry, provider capabilities and database partition rules under
+# one executable contract so future markets cannot be added only partially.
 def test_registry_exhaustively_covers_market_enum_and_has_db_provider():
     assert set(MARKET_REGISTRY) == set(Market)
     for market, spec in MARKET_REGISTRY.items():
