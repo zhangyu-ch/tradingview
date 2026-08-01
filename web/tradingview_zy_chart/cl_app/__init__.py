@@ -692,6 +692,9 @@ def create_app(test_config=None):
             klines,
             update=False if firstDataRequest == "true" else True,
             status=s,
+            market=market,
+            code=code,
+            frequency=frequency,
         )
 
     @app.route("/tv/timescale_marks")

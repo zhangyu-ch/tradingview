@@ -235,3 +235,182 @@ def ensure_alert_task_unique_key(engine: Engine) -> AlertTaskUniqueMigrationResu
         unique_key_created=True,
         resolved_duplicates=resolutions,
     )
+
+# ---------------------------------------------------------------------------
+# v6 data-integrity migrations
+# ---------------------------------------------------------------------------
+import hashlib
+
+from sqlalchemy import text
+
+TV_MARKS_PRICE_TABLE_NAME = "cl_tv_marks_price"
+TV_MARKS_PRICE_UNIQUE_COLUMNS = ("market", "stock_code", "mark_time", "mark_label")
+TV_MARKS_PRICE_UNIQUE_INDEX_NAME = "uq_cl_tv_marks_price_business_key"
+ALERT_RECORD_TABLE_NAME = "cl_alert_record"
+ALERT_RECORD_EVENT_KEY_COLUMN = "event_key"
+ALERT_RECORD_UNIQUE_INDEX_NAME = "uq_cl_alert_record_event_key"
+
+
+@dataclass(frozen=True)
+class UniqueKeyMigrationResult:
+    table: str
+    created: bool
+    duplicates_removed: int = 0
+    rows_backfilled: int = 0
+
+
+def _normalise_event_time(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime.datetime):
+        value = value.replace(tzinfo=None, microsecond=0)
+        return value.isoformat(sep=" ")
+    return str(value)
+
+
+def build_alert_event_key(
+    *,
+    market: str,
+    task_name: str,
+    stock_code: str,
+    frequency: str,
+    action: str,
+    score: str,
+    event_type: str,
+    event_time: Any,
+) -> str:
+    """Return a stable event identity independent from polling time."""
+    # Score and display text may be recalculated on every poll. They are
+    # deliberately excluded from identity so one logical signal remains one
+    # event even when its presentation metadata changes.
+    fields = (
+        market,
+        task_name,
+        stock_code,
+        frequency,
+        action,
+        event_type,
+        _normalise_event_time(event_time),
+    )
+    payload = "\x1f".join("" if value is None else str(value).strip() for value in fields)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _has_unique_columns(bind: Engine | Connection, table_name: str, columns: tuple[str, ...]) -> bool:
+    inspector = inspect(bind)
+    expected = set(columns)
+    for constraint in inspector.get_unique_constraints(table_name):
+        if set(constraint.get("column_names") or ()) == expected:
+            return True
+    for index in inspector.get_indexes(table_name):
+        if index.get("unique") and set(index.get("column_names") or ()) == expected:
+            return True
+    return False
+
+
+def ensure_tv_marks_price_unique_key(engine: Engine) -> UniqueKeyMigrationResult:
+    inspector = inspect(engine)
+    if TV_MARKS_PRICE_TABLE_NAME not in inspector.get_table_names():
+        return UniqueKeyMigrationResult(TV_MARKS_PRICE_TABLE_NAME, False)
+    if _has_unique_columns(engine, TV_MARKS_PRICE_TABLE_NAME, TV_MARKS_PRICE_UNIQUE_COLUMNS):
+        return UniqueKeyMigrationResult(TV_MARKS_PRICE_TABLE_NAME, False)
+
+    metadata = MetaData()
+    table = Table(TV_MARKS_PRICE_TABLE_NAME, metadata, autoload_with=engine)
+    missing = set(TV_MARKS_PRICE_UNIQUE_COLUMNS) - set(table.c.keys())
+    if missing:
+        raise RuntimeError(f"{TV_MARKS_PRICE_TABLE_NAME} 缺少字段 {sorted(missing)}")
+
+    removed = 0
+    with engine.begin() as connection:
+        groups = connection.execute(
+            select(
+                *(table.c[name] for name in TV_MARKS_PRICE_UNIQUE_COLUMNS),
+                func.max(table.c.id).label("keep_id"),
+                func.count(table.c.id).label("row_count"),
+            )
+            .group_by(*(table.c[name] for name in TV_MARKS_PRICE_UNIQUE_COLUMNS))
+            .having(func.count(table.c.id) > 1)
+        ).mappings().all()
+        for group in groups:
+            filters = [
+                _where_equal(table.c[name], group[name])
+                for name in TV_MARKS_PRICE_UNIQUE_COLUMNS
+            ]
+            result = connection.execute(
+                table.delete().where(*filters, table.c.id != group["keep_id"])
+            )
+            removed += int(result.rowcount or 0)
+        index = Index(
+            TV_MARKS_PRICE_UNIQUE_INDEX_NAME,
+            *(table.c[name] for name in TV_MARKS_PRICE_UNIQUE_COLUMNS),
+            unique=True,
+        )
+        connection.execute(CreateIndex(index))
+
+    if not _has_unique_columns(engine, TV_MARKS_PRICE_TABLE_NAME, TV_MARKS_PRICE_UNIQUE_COLUMNS):
+        raise RuntimeError("价格标记唯一键迁移失败")
+    return UniqueKeyMigrationResult(TV_MARKS_PRICE_TABLE_NAME, True, removed)
+
+
+def ensure_alert_record_event_key(engine: Engine) -> UniqueKeyMigrationResult:
+    inspector = inspect(engine)
+    if ALERT_RECORD_TABLE_NAME not in inspector.get_table_names():
+        return UniqueKeyMigrationResult(ALERT_RECORD_TABLE_NAME, False)
+
+    columns = {column["name"] for column in inspector.get_columns(ALERT_RECORD_TABLE_NAME)}
+    added_column = ALERT_RECORD_EVENT_KEY_COLUMN not in columns
+    with engine.begin() as connection:
+        if added_column:
+            connection.execute(
+                text(
+                    f"ALTER TABLE {ALERT_RECORD_TABLE_NAME} "
+                    f"ADD COLUMN {ALERT_RECORD_EVENT_KEY_COLUMN} VARCHAR(64)"
+                )
+            )
+
+    metadata = MetaData()
+    table = Table(ALERT_RECORD_TABLE_NAME, metadata, autoload_with=engine)
+    backfilled = 0
+    removed = 0
+    with engine.begin() as connection:
+        rows = connection.execute(select(table)).mappings().all()
+        seen: dict[str, int] = {}
+        for row in rows:
+            key = row.get(ALERT_RECORD_EVENT_KEY_COLUMN) or build_alert_event_key(
+                market=row.get("market") or "",
+                task_name=row.get("task_name") or "",
+                stock_code=row.get("stock_code") or "",
+                frequency=row.get("frequency") or "",
+                action=row.get("bi_is_done") or "",
+                score=row.get("bi_is_td") or "",
+                event_type=row.get("line_type") or "",
+                event_time=row.get("line_dt"),
+            )
+            previous = seen.get(key)
+            if previous is None or int(row["id"]) > previous:
+                if previous is not None:
+                    connection.execute(table.delete().where(table.c.id == previous))
+                    removed += 1
+                seen[key] = int(row["id"])
+                if row.get(ALERT_RECORD_EVENT_KEY_COLUMN) != key:
+                    connection.execute(
+                        update(table).where(table.c.id == row["id"]).values(event_key=key)
+                    )
+                    backfilled += 1
+            else:
+                connection.execute(table.delete().where(table.c.id == row["id"]))
+                removed += 1
+
+        if not _has_unique_columns(connection, ALERT_RECORD_TABLE_NAME, ("event_key",)):
+            index = Index(ALERT_RECORD_UNIQUE_INDEX_NAME, table.c.event_key, unique=True)
+            connection.execute(CreateIndex(index))
+
+    if not _has_unique_columns(engine, ALERT_RECORD_TABLE_NAME, ("event_key",)):
+        raise RuntimeError("监控事件唯一键迁移失败")
+    return UniqueKeyMigrationResult(
+        ALERT_RECORD_TABLE_NAME,
+        added_column or backfilled > 0 or removed > 0,
+        removed,
+        backfilled,
+    )

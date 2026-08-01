@@ -12,12 +12,20 @@ from tradingview_zy.backtesting.backtest import BackTest
 from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 
 
+def _temporarily_remove_module(monkeypatch, module_name: str) -> None:
+    """Remove a module and its parent attribute, restoring both after the test."""
+
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+    parent_name, attribute = module_name.rsplit(".", 1)
+    parent = sys.modules.get(parent_name)
+    if parent is not None:
+        monkeypatch.delattr(parent, attribute, raising=False)
 
 
-def test_backtesting_base_import_does_not_load_hidden_config_or_fun():
-    sys.modules.pop("tradingview_zy.backtesting.base", None)
-    sys.modules.pop("tradingview_zy.fun", None)
-    sys.modules.pop("tradingview_zy.config", None)
+def test_backtesting_base_import_does_not_load_hidden_config_or_fun(monkeypatch):
+    _temporarily_remove_module(monkeypatch, "tradingview_zy.backtesting.base")
+    _temporarily_remove_module(monkeypatch, "tradingview_zy.fun")
+    _temporarily_remove_module(monkeypatch, "tradingview_zy.config")
 
     module = importlib.import_module("tradingview_zy.backtesting.base")
 

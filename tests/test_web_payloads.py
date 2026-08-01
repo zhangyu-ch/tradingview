@@ -7,10 +7,20 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
-def test_import_web_payloads_does_not_import_config_dependent_fun():
-    sys.modules.pop("tradingview_zy.web_payloads", None)
-    sys.modules.pop("tradingview_zy.fun", None)
-    sys.modules.pop("tradingview_zy.config", None)
+def _temporarily_remove_module(monkeypatch, module_name: str) -> None:
+    """Remove a module and its parent attribute, restoring both after the test."""
+
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+    parent_name, attribute = module_name.rsplit(".", 1)
+    parent = sys.modules.get(parent_name)
+    if parent is not None:
+        monkeypatch.delattr(parent, attribute, raising=False)
+
+
+def test_import_web_payloads_does_not_import_config_dependent_fun(monkeypatch):
+    _temporarily_remove_module(monkeypatch, "tradingview_zy.web_payloads")
+    _temporarily_remove_module(monkeypatch, "tradingview_zy.fun")
+    _temporarily_remove_module(monkeypatch, "tradingview_zy.config")
 
     importlib.import_module("tradingview_zy.web_payloads")
 

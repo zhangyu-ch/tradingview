@@ -1,126 +1,123 @@
+from __future__ import annotations
+
 import pandas as pd
 
 
 class KlinesGenerator:
+    """Incrementally aggregate minute bars without mutating caller data.
+
+    ``bob`` labels a bar with the beginning of its half-open interval
+    ``[start, end)``. ``eob`` labels a bar with the end of its interval
+    ``(start, end]``. Recomputing from the retained source bars makes the
+    incremental path deterministic and identical to a one-shot aggregation.
     """
-    K线合成，目前只支持分钟线合成，小时、日，需要考虑不同市场的交易时间，比较麻烦，不搞呢
-    """
+
+    _MAX_SOURCE_ROWS = 40_000
+    _MAX_OUTPUT_ROWS = 20_000
 
     def __init__(self, minute: int, dt_align_type: str = "eob"):
-        """
-        如果源的分钟数是 1分钟，可以合成 3、5、7、30，如果是 5分钟，可以合成 10、15、30，
-        如果源是 5分钟，非要合成 13分钟数据，合出来的数据则是错误的
+        if not isinstance(minute, int) or isinstance(minute, bool) or minute <= 0:
+            raise ValueError("minute 必须是正整数")
+        if dt_align_type not in {"bob", "eob"}:
+            raise ValueError("dt_align_type 只支持 bob 或 eob")
 
-        bob 前对齐：如15分钟数据，10:15:00 这个时间表示的数据范围是 10:15:00 - 10:30:00
-        eob 后对齐：如15分钟数据，10:15:00 这个时间表示的数据范围是 10:00:00 - 10:15:00
+        self.minute = minute
+        self.dt_align_type = dt_align_type
+        self.to_klines: pd.DataFrame | None = None
+        self._source_klines: pd.DataFrame | None = None
 
-        合并到源的对齐方式与合并后的要一致
+    def _merge_source(self, from_klines: pd.DataFrame) -> pd.DataFrame:
+        required = {"date", "open", "high", "low", "close", "volume"}
+        missing = required.difference(from_klines.columns)
+        if missing:
+            raise ValueError(f"源 K 线缺少字段：{sorted(missing)}")
 
-        @param minute: 需要合成的分钟数
-        @param dt_align_type: 时间对齐方式，bob 前对齐，eob 后对齐
-        """
+        incoming = from_klines.copy(deep=True)
+        incoming["date"] = pd.to_datetime(incoming["date"], errors="raise")
 
-        self.minute = minute  # 合成后的分钟数据
-        self.dt_align_type = dt_align_type  # 时间对齐类型
+        if self._source_klines is None:
+            merged = incoming
+        else:
+            merged = pd.concat([self._source_klines, incoming], ignore_index=True)
 
-        self.to_klines: pd.DataFrame
-        self.to_klines = None
-
-    def update_klines(self, from_klines: pd.DataFrame) -> pd.DataFrame:
-        if len(from_klines) == 0:
-            return self.to_klines
-
-        convert_klines = (
-            from_klines
-            if self.to_klines is None or len(self.to_klines) < 10
-            else from_klines[from_klines["date"] >= self.to_klines["date"].iloc[-4]]
+        duplicate_key = ["date"]
+        if "code" in merged.columns:
+            duplicate_key.insert(0, "code")
+        merged = (
+            merged.drop_duplicates(duplicate_key, keep="last")
+            .sort_values(duplicate_key)
+            .reset_index(drop=True)
         )
+        if len(merged) > self._MAX_SOURCE_ROWS:
+            merged = merged.iloc[-self._MAX_SOURCE_ROWS :].reset_index(drop=True)
+        self._source_klines = merged
+        return merged
 
-        convert_klines.insert(0, column="date_index", value=convert_klines["date"])
-        convert_klines.set_index("date_index", inplace=True)
-        period_type = f"{self.minute}min"
-
+    def _aggregate(self, source: pd.DataFrame) -> pd.DataFrame:
+        indexed = source.copy(deep=True).set_index("date", drop=False)
+        period = f"{self.minute}min"
         if self.dt_align_type == "bob":
-            label = "right"
-            closed = "left"
-            period_klines = convert_klines.resample(
-                period_type, label=label, closed=closed
-            ).first()
+            label, closed = "left", "left"
         else:
-            label = "left"
-            closed = "right"
-            period_klines = convert_klines.resample(
-                period_type, label=label, closed=closed
-            ).last()
-        period_klines["open"] = (
-            convert_klines["open"]
-            .resample(period_type, label=label, closed=closed)
-            .first()
-        )
-        period_klines["close"] = (
-            convert_klines["close"]
-            .resample(period_type, label=label, closed=closed)
-            .last()
-        )
-        period_klines["high"] = (
-            convert_klines["high"]
-            .resample(period_type, label=label, closed=closed)
-            .max()
-        )
-        period_klines["low"] = (
-            convert_klines["low"]
-            .resample(period_type, label=label, closed=closed)
-            .min()
-        )
-        period_klines["volume"] = (
-            convert_klines["volume"]
-            .resample(period_type, label=label, closed=closed)
-            .sum()
-        )
-        if "position" in convert_klines.columns:
-            period_klines["position"] = (
-                convert_klines["position"]
-                .resample(period_type, label=label, closed=closed)
-                .last()
+            label, closed = "right", "right"
+
+        aggregations: dict[str, str] = {
+            "date": "first",
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        }
+        for column in ("code", "position"):
+            if column in indexed.columns:
+                aggregations[column] = "last" if column == "position" else "first"
+
+        result = indexed.resample(
+            period,
+            label=label,
+            closed=closed,
+            origin="start_day",
+        ).agg(aggregations)
+        result = result.dropna(subset=["open", "high", "low", "close"])
+        result["date"] = result.index
+        if "frequency" in source.columns:
+            result["frequency"] = f"{self.minute}m"
+
+        result = result.reset_index(drop=True)
+        preferred = [
+            column
+            for column in (
+                "date",
+                "frequency",
+                "code",
+                "open",
+                "close",
+                "high",
+                "low",
+                "volume",
+                "position",
             )
-        period_klines.dropna(inplace=True)
-        period_klines.reset_index(inplace=True)
-        period_klines.drop("date_index", axis=1, inplace=True)
+            if column in result.columns
+        ]
+        remaining = [column for column in result.columns if column not in preferred]
+        result = result[preferred + remaining]
+        if len(result) > self._MAX_OUTPUT_ROWS:
+            result = result.iloc[-self._MAX_OUTPUT_ROWS :].reset_index(drop=True)
+        return result
 
-        if self.to_klines is None:
-            self.to_klines = period_klines
-        else:
-            self.to_klines = pd.concat(
-                [self.to_klines.iloc[:-1:], period_klines.iloc[1::]], ignore_index=True
-            )
-            self.to_klines = self.to_klines.drop_duplicates(
-                ["date"], keep="last"
-            ).sort_values("date")
+    def update_klines(self, from_klines: pd.DataFrame) -> pd.DataFrame | None:
+        if from_klines is None or len(from_klines) == 0:
+            return None if self.to_klines is None else self.to_klines.copy(deep=True)
 
-        # 控制一下大小
-        if len(self.to_klines) > 20000:
-            self.to_klines = self.to_klines.iloc[-10000::]
-
-        return self.to_klines
+        source = self._merge_source(from_klines)
+        self.to_klines = self._aggregate(source)
+        return self.to_klines.copy(deep=True)
 
 
 if __name__ == "__main__":
-    from tradingview_zy.exchange.exchange import convert_futures_kline_frequency
     from tradingview_zy.exchange.exchange_db import ExchangeDB
 
-    market = "futures"
-    code = "SHFE.RB"
-    freq = "1m"
-    ex = ExchangeDB(market)
-
-    klines = ex.klines(code, freq)
-    # 合成前的K线
-    print(klines[["date", "open", "close", "high", "low", "volume"]].tail(10))
-
-    kg = KlinesGenerator(30, "eob")
-    to_klines = kg.update_klines(klines)
-    # 合成后的K线
-    print(to_klines[["date", "open", "close", "high", "low", "volume"]].tail())
-
-    klines_day = convert_futures_kline_frequency(to_klines, "d")
-    print(klines_day.tail())
+    ex = ExchangeDB("futures")
+    klines = ex.klines("SHFE.RB", "1m")
+    print(KlinesGenerator(30, "eob").update_klines(klines).tail())

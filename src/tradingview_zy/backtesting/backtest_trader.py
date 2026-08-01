@@ -7,7 +7,11 @@ from typing import Dict, List, Tuple
 from tradingview_zy.backtesting import futures_contracts
 from tradingview_zy.backtesting.accounting import (
     BackTestAccountingError,
+    PositionLot,
     add_quantity,
+    available_lot_amount,
+    close_settlement,
+    consume_fifo_lots,
     is_zero_quantity,
     normalize_nonnegative_quantity,
     quantities_close,
@@ -351,7 +355,7 @@ class BackTestTrader(Trader):
             result_stats["loss_num"] += 1
             result_stats["loss_balance"] += abs(pos.profit)
 
-        if self.mode == "trade":
+        if self.mode == "trade" and not pos.cash_settled_incrementally:
             self.balance += pos.balance + pos.profit
 
         # 将持仓添加到历史持仓
@@ -694,14 +698,14 @@ class BackTestTrader(Trader):
                 high_profit_rate = round(
                     (pos.price - price_info["low"])
                     / pos.price
-                    / contract_info["margin_rate_long"]
+                    / contract_info["margin_rate_short"]
                     * 100,
                     4,
                 )
                 low_profit_rate = round(
                     (pos.price - price_info["high"])
                     / pos.price
-                    / contract_info["margin_rate_long"]
+                    / contract_info["margin_rate_short"]
                     * 100,
                     4,
                 )
@@ -1016,7 +1020,8 @@ class BackTestTrader(Trader):
                 pos.fee += fee
 
                 if self.mode == "trade":
-                    self.balance -= hold_balance
+                    self.balance -= hold_balance + fee
+                    pos.cash_settled_incrementally = True
 
                 pos.loss_price = opt.loss_price
                 pos.open_date = (
@@ -1047,6 +1052,18 @@ class BackTestTrader(Trader):
                         "pos_rate": opt.pos_rate,
                     }
                 )
+
+                pos.lots.append(
+                    PositionLot(
+                        opened_at=self.get_now_datetime(),
+                        amount=res["amount"],
+                        price=res["price"],
+                        hold_balance=hold_balance,
+                        opening_fee=fee,
+                        pos_rate=opt.pos_rate,
+                    )
+                )
+                pos.total_open_balance += hold_balance
 
                 order_type = "open_long"
 
@@ -1093,7 +1110,8 @@ class BackTestTrader(Trader):
                 pos.fee += fee
 
                 if self.mode == "trade":
-                    self.balance -= hold_balance
+                    self.balance -= hold_balance + fee
+                    pos.cash_settled_incrementally = True
 
                 pos.loss_price = opt.loss_price
                 pos.open_date = (
@@ -1125,6 +1143,18 @@ class BackTestTrader(Trader):
                     }
                 )
 
+                pos.lots.append(
+                    PositionLot(
+                        opened_at=self.get_now_datetime(),
+                        amount=res["amount"],
+                        price=res["price"],
+                        hold_balance=hold_balance,
+                        opening_fee=fee,
+                        pos_rate=opt.pos_rate,
+                    )
+                )
+                pos.total_open_balance += hold_balance
+
                 order_type = "open_short"
 
                 self._print_log(
@@ -1147,11 +1177,21 @@ class BackTestTrader(Trader):
                     else opt.pos_rate
                 )
 
-                if (
-                    self.can_close_today is False
-                    and pos.open_date == self.get_now_datetime().strftime("%Y-%m-%d")
-                ):
-                    # 股票交易，当日不能卖出
+                now_datetime = self.get_now_datetime()
+                sellable_amount = available_lot_amount(
+                    pos.lots,
+                    as_of=now_datetime,
+                    can_close_today=self.can_close_today,
+                )
+                if is_zero_quantity(sellable_amount):
+                    return False
+                max_sellable_rate = (
+                    pos.now_pos_rate * sellable_amount / pos.amount
+                    if not is_zero_quantity(pos.amount)
+                    else 0.0
+                )
+                opt.pos_rate = min(opt.pos_rate, max_sellable_rate)
+                if is_zero_quantity(opt.pos_rate):
                     return False
 
                 res = self._normalise_fill(self.close_sell(code, pos, opt))
@@ -1194,9 +1234,30 @@ class BackTestTrader(Trader):
                     pos, res, opt.pos_rate
                 )
                 remaining_position = None
+                consumption = None
+                cash_delta = 0.0
+                realised_delta = 0.0
                 if opt.close_uid == "clear":
                     remaining_position = self._remaining_position_after_close(
                         pos, res["amount"], executed_pos_rate
+                    )
+                    consumption = consume_fifo_lots(
+                        pos.lots,
+                        res["amount"],
+                        as_of=self.get_now_datetime(),
+                        can_close_today=self.can_close_today,
+                    )
+                    symbol_size = (
+                        self.futures_contracts[code]["symbol_size"]
+                        if self.market == "futures"
+                        else None
+                    )
+                    cash_delta, realised_delta = close_settlement(
+                        direction="short",
+                        consumption=consumption,
+                        close_price=res["price"],
+                        closing_fee=fee,
+                        futures_symbol_size=symbol_size,
                     )
 
                 self._print_log(
@@ -1235,23 +1296,16 @@ class BackTestTrader(Trader):
                     pos.close_msg = opt.msg
                     pos.close_datetime = self.get_now_datetime()
 
-                    # 记录释放的保证金与手续费
+                    # 记录释放的保证金、手续费和逐笔已实现盈亏。
                     pos.release_balance += release_balance
                     pos.fee += fee
+                    pos.realized_profit += realised_delta
+                    if self.mode == "trade":
+                        self.balance += cash_delta
                     if position_closed:
-                        # 持仓数量为空，计算持仓总的收益率
-                        profit = 0
-                        if self.market == "futures":
-                            # 期货盈利的计算方式
-                            contract_config = self.futures_contracts[code]
-                            profit = (
-                                pos.balance - pos.release_balance
-                            ) / contract_config["margin_rate_short"] - pos.fee
-                            profit_rate = profit / pos.balance * 100
-                        else:
-                            # 其他市场的计算方式
-                            profit = pos.balance - pos.release_balance - pos.fee
-                            profit_rate = profit / pos.balance * 100
+                        profit = pos.realized_profit
+                        denominator = pos.total_open_balance or pos.balance
+                        profit_rate = 0.0 if denominator == 0 else profit / denominator * 100
 
                         pos.profit = profit
                         pos.profit_rate = profit_rate
@@ -1281,11 +1335,21 @@ class BackTestTrader(Trader):
                     else opt.pos_rate
                 )
 
-                if (
-                    self.can_close_today is False
-                    and pos.open_date == self.get_now_datetime().strftime("%Y-%m-%d")
-                ):
-                    # 股票交易，当日不能卖出
+                now_datetime = self.get_now_datetime()
+                sellable_amount = available_lot_amount(
+                    pos.lots,
+                    as_of=now_datetime,
+                    can_close_today=self.can_close_today,
+                )
+                if is_zero_quantity(sellable_amount):
+                    return False
+                max_sellable_rate = (
+                    pos.now_pos_rate * sellable_amount / pos.amount
+                    if not is_zero_quantity(pos.amount)
+                    else 0.0
+                )
+                opt.pos_rate = min(opt.pos_rate, max_sellable_rate)
+                if is_zero_quantity(opt.pos_rate):
                     return False
 
                 res = self._normalise_fill(self.close_buy(code, pos, opt))
@@ -1332,9 +1396,30 @@ class BackTestTrader(Trader):
                     pos, res, opt.pos_rate
                 )
                 remaining_position = None
+                consumption = None
+                cash_delta = 0.0
+                realised_delta = 0.0
                 if opt.close_uid == "clear":
                     remaining_position = self._remaining_position_after_close(
                         pos, res["amount"], executed_pos_rate
+                    )
+                    consumption = consume_fifo_lots(
+                        pos.lots,
+                        res["amount"],
+                        as_of=self.get_now_datetime(),
+                        can_close_today=self.can_close_today,
+                    )
+                    symbol_size = (
+                        self.futures_contracts[code]["symbol_size"]
+                        if self.market == "futures"
+                        else None
+                    )
+                    cash_delta, realised_delta = close_settlement(
+                        direction="long",
+                        consumption=consumption,
+                        close_price=res["price"],
+                        closing_fee=fee,
+                        futures_symbol_size=symbol_size,
                     )
 
                 self._print_log(
@@ -1373,23 +1458,16 @@ class BackTestTrader(Trader):
                     pos.close_msg = opt.msg
                     pos.close_datetime = self.get_now_datetime()
 
-                    # 记录释放的保证金与手续费
+                    # 记录释放的保证金、手续费和逐笔已实现盈亏。
                     pos.release_balance += release_balance
                     pos.fee += fee
+                    pos.realized_profit += realised_delta
+                    if self.mode == "trade":
+                        self.balance += cash_delta
                     if position_closed:
-                        # 持仓数量为空，计算持仓总的收益率
-                        profit = 0
-                        if self.market == "futures":
-                            # 期货盈利的计算方式
-                            contract_config = self.futures_contracts[code]
-                            profit = (
-                                pos.release_balance - pos.balance
-                            ) / contract_config["margin_rate_long"] - pos.fee
-                            profit_rate = profit / pos.balance * 100
-                        else:
-                            # 其他市场的计算方式
-                            profit = pos.release_balance - pos.balance - pos.fee
-                            profit_rate = profit / pos.balance * 100
+                        profit = pos.realized_profit
+                        denominator = pos.total_open_balance or pos.balance
+                        profit_rate = 0.0 if denominator == 0 else profit / denominator * 100
 
                         pos.profit = profit
                         pos.profit_rate = profit_rate

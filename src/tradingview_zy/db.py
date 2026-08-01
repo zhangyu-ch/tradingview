@@ -1,6 +1,8 @@
 import datetime
+import hashlib
 import json
 import time
+import uuid
 import warnings
 from typing import List, Union
 
@@ -17,7 +19,8 @@ from sqlalchemy import (
     create_engine,
     func,
 )
-from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -25,13 +28,19 @@ from sqlalchemy.pool import QueuePool
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
-from tradingview_zy.db_schema import ensure_alert_task_unique_key
+from tradingview_zy.db_schema import (
+    build_alert_event_key,
+    ensure_alert_record_event_key,
+    ensure_alert_task_unique_key,
+    ensure_tv_marks_price_unique_key,
+)
 
 warnings.filterwarnings("ignore")
 
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
 Base = declarative_base()
+_KLINE_MODEL_CACHE = {}
 
 
 class AlertTaskValidationError(ValueError):
@@ -137,8 +146,11 @@ class TableByAlertRecord(Base):
     bi_is_td = Column(String(10), comment="笔是否停顿")  # 笔是否停顿
     line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+    event_key = Column(String(64), nullable=True, comment="稳定事件唯一键")
+    __table_args__ = (
+        UniqueConstraint("event_key", name="uq_cl_alert_record_event_key"),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
 
     @property
     def event_type(self):
@@ -191,7 +203,28 @@ class TableByTVMarksPrice(Base):
     mark_min_size = Column(Integer, comment="最小尺寸")  # 最小尺寸
 
     dt = Column(DateTime, comment="添加时间")
-    # 添加配置设置编码
+    __table_args__ = (
+        UniqueConstraint(
+            "market", "stock_code", "mark_time", "mark_label",
+            name="uq_cl_tv_marks_price_business_key",
+        ),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
+
+
+class TableByKlineSyncBatch(Base):
+    __tablename__ = "cl_kline_sync_batch"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    batch_id = Column(String(36), nullable=False, unique=True)
+    market = Column(String(20), nullable=False)
+    stock_code = Column(String(40), nullable=False)
+    frequency = Column(String(10), nullable=False)
+    schema_version = Column(String(20), nullable=False)
+    row_count = Column(Integer, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+    first_dt = Column(DateTime)
+    last_dt = Column(DateTime)
+    created_at = Column(DateTime, nullable=False)
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
@@ -303,60 +336,49 @@ class DB(object):
 
         Base.metadata.create_all(self.engine)
         ensure_alert_task_unique_key(self.engine)
+        ensure_tv_marks_price_unique_key(self.engine)
+        ensure_alert_record_event_key(self.engine)
 
         self.__cache_tables = {}
 
     def klines_tables(self, market: str, stock_code: str):
-        stock_code = (
-            stock_code.replace(".", "_")
-            .replace("-", "_")
-            .replace("/", "_")
-            .replace("@", "_")
-            .lower()
-        )
-        if market == Market.HK.value:
-            table_name = f"{market}_klines_{stock_code[-3:]}"
-        elif market == Market.A.value:
-            table_name = f"{market}_klines_{stock_code[:7]}"
-        elif market == Market.US.value:
-            table_name = f"{market}_klines_{stock_code[0]}"
-        elif market == Market.FX.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.CURRENCY.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.CURRENCY_SPOT.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.FUTURES.value:
-            table_name = f"{market}_klines_{stock_code}"
-        else:
-            raise Exception(f"市场错误：{market}")
+        from tradingview_zy.market_registry import kline_table_name
+
+        table_name = kline_table_name(market, stock_code)
 
         if table_name in self.__cache_tables:
             return self.__cache_tables[table_name]
+        if table_name in _KLINE_MODEL_CACHE:
+            table_model = _KLINE_MODEL_CACHE[table_name]
+            self.__cache_tables[table_name] = table_model
+            table_model.__table__.create(self.engine, checkfirst=True)
+            return table_model
 
-        class TableByKlines(Base):
-            # 表名
-            __tablename__ = table_name
-            __table_args__ = (
+        model_attributes = {
+            "__tablename__": table_name,
+            "__table_args__": (
                 UniqueConstraint("code", "dt", "f", name="table_code_dt_f_unique"),
                 {"mysql_collate": "utf8mb4_general_ci"},
-            )
-            # 表结构
-            code = Column(String(20), primary_key=True, comment="标的代码")
-            dt = Column(DateTime, primary_key=True, comment="日期")
-            f = Column(String(5), primary_key=True, comment="周期")
-            o = Column(Float)
-            c = Column(Float)
-            h = Column(Float)
-            l = Column(Float)
-            v = Column(Float)
+            ),
+            "code": Column(String(20), primary_key=True, comment="标的代码"),
+            "dt": Column(DateTime, primary_key=True, comment="日期"),
+            "f": Column(String(5), primary_key=True, comment="周期"),
+            "o": Column(Float),
+            "c": Column(Float),
+            "h": Column(Float),
+            "l": Column(Float),
+            "v": Column(Float),
+        }
+        if market in [Market.FUTURES.value, Market.NY_FUTURES.value]:
+            model_attributes["p"] = Column(Float, comment="持仓量")
+        class_name = "TableByKlines_" + "".join(
+            char if char.isalnum() else "_" for char in table_name
+        )
+        TableByKlines = type(class_name, (Base,), model_attributes)
 
-        if market == Market.FUTURES.value:
-            # 期货市场，添加持仓列
-            TableByKlines.p = Column(Float, comment="持仓量")
-
+        _KLINE_MODEL_CACHE[table_name] = TableByKlines
         self.__cache_tables[table_name] = TableByKlines
-        Base.metadata.create_all(self.engine)
+        TableByKlines.__table__.create(self.engine, checkfirst=True)
         return TableByKlines
 
     def klines_query(
@@ -421,88 +443,97 @@ class DB(object):
             else:
                 return last_date[0].strftime("%Y-%m-%d %H:%M:%S")
 
+    @staticmethod
+    def _kline_rows(code: str, frequency: str, klines: pd.DataFrame) -> list[dict]:
+        rows = []
+        in_position = "position" in klines.columns
+        for _, row in klines.iterrows():
+            value = {
+                "code": code,
+                "f": frequency,
+                "dt": pd.Timestamp(row["date"]).to_pydatetime().replace(tzinfo=None),
+                "o": float(row["open"]),
+                "c": float(row["close"]),
+                "h": float(row["high"]),
+                "l": float(row["low"]),
+                "v": float(row["volume"]),
+            }
+            if in_position:
+                value["p"] = float(row["position"])
+            rows.append(value)
+        return rows
+
+    def _execute_kline_chunk(self, session, table, rows: list[dict], in_position: bool):
+        update_keys = ["o", "c", "h", "l", "v"] + (["p"] if in_position else [])
+        dialect = session.get_bind().dialect.name
+        if dialect == "sqlite":
+            statement = sqlite_insert(table).values(rows)
+            statement = statement.on_conflict_do_update(
+                index_elements=["code", "dt", "f"],
+                set_={key: getattr(statement.excluded, key) for key in update_keys},
+            )
+            session.execute(statement)
+            return
+        if dialect == "mysql":
+            statement = mysql_insert(table).values(rows)
+            session.execute(
+                statement.on_duplicate_key_update(
+                    **{key: getattr(statement.inserted, key) for key in update_keys}
+                )
+            )
+            return
+        for row in rows:
+            session.merge(table(**row))
+
     def klines_insert(
         self, market: str, code: str, frequency: str, klines: pd.DataFrame
     ):
+        """Atomically validate and upsert one logical K-line batch.
+
+        Chunking is an implementation detail only: no chunk is committed until
+        every chunk and the audit row have succeeded.
         """
-        插入k线
-        :param market:
-        :param code:
-        :param frequency:
-        :param klines:
-        :return:
-        """
-        with self.Session() as session:
-            table = self.klines_tables(market, code)
+        from tradingview_zy.kline_schema import normalize_kline_frame
 
-            # 如果是 sqlite ，则慢慢更新吧
-            if config.DB_TYPE == "sqlite":
-                for _, _k in klines.iterrows():
-                    _in_k = {
-                        "code": code,
-                        "f": frequency,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
-                    if "position" in _k.keys():
-                        _in_k["p"] = _k["position"]
-                    db_k = (
-                        session.query(table)
-                        .filter(
-                            table.code == code,
-                            table.f == frequency,
-                            table.dt == _in_k["dt"],
-                        )
-                        .first()
-                    )
-                    if db_k is None:
-                        session.add(table(**_in_k))
-                    else:
-                        session.query(table).filter(
-                            table.code == code,
-                            table.f == frequency,
-                            table.dt == _in_k["dt"],
-                        ).update(_in_k)
-                session.commit()
-                return True
+        normalized = normalize_kline_frame(
+            klines, market=market, code=code, frequency=frequency, allow_empty=True
+        )
+        if normalized.empty:
+            return True
+        table = self.klines_tables(market, code)
+        rows = self._kline_rows(code, frequency, normalized)
+        payload = json.dumps(
+            [
+                {**row, "dt": row["dt"].isoformat(sep=" ")}
+                for row in rows
+            ],
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        content_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        batch_id = str(uuid.uuid4())
+        in_position = "position" in normalized.columns
 
-            # 将 klines 数据拆分为每 500 条一组，批量插入
-            group = np.arange(len(klines)) // 500
-            groups = [
-                group.reset_index(drop=True) for _, group in klines.groupby(group)
-            ]
-            in_position = "position" in klines.columns
-            for g_klines in groups:
-                insert_klines = []
-                for _, _k in g_klines.iterrows():
-                    _insert_k = {
-                        "code": code,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "f": frequency,
-                        "o": _k["open"],
-                        "c": _k["close"],
-                        "h": _k["high"],
-                        "l": _k["low"],
-                        "v": _k["volume"],
-                    }
-                    if in_position:
-                        _insert_k["p"] = _k["position"]
-                    insert_klines.append(_insert_k)
-                insert_stmt = insert(table).values(insert_klines)
-                update_keys = ["o", "c", "h", "l", "v"]
-                if in_position:
-                    update_keys.append("p")
-                update_columns = {
-                    x.name: x for x in insert_stmt.inserted if x.name in update_keys
-                }
-                upsert_stmt = insert_stmt.on_duplicate_key_update(**update_columns)
-                session.execute(upsert_stmt)
-                session.commit()
-
+        with self.Session.begin() as session:
+            for offset in range(0, len(rows), 500):
+                self._execute_kline_chunk(
+                    session, table, rows[offset : offset + 500], in_position
+                )
+            session.add(
+                TableByKlineSyncBatch(
+                    batch_id=batch_id,
+                    market=market,
+                    stock_code=code,
+                    frequency=frequency,
+                    schema_version="ohlcv-v1",
+                    row_count=len(rows),
+                    content_hash=content_hash,
+                    first_dt=rows[0]["dt"],
+                    last_dt=rows[-1]["dt"],
+                    created_at=datetime.datetime.now(),
+                )
+            )
         return True
 
     def klines_delete(
@@ -1043,21 +1074,21 @@ class DB(object):
         bi_is_td: str,
         line_type: str,
         line_dt: datetime.datetime,
+        *,
+        event_key: str | None = None,
     ):
-        """
-        保存预警记录
-        :param market:
-        :param stock_code:
-        :param stock_name:
-        :param frequency:
-        :param alert_msg:
-        :param bi_is_down:
-        :param bi_is_td:
-        :param line_dt:
-        :return:
-        """
+        event_key = event_key or build_alert_event_key(
+            market=market,
+            task_name=task_name,
+            stock_code=stock_code,
+            frequency=frequency,
+            action=bi_is_done,
+            score=bi_is_td,
+            event_type=line_type,
+            event_time=line_dt,
+        )
         with self.Session() as session:
-            recored = TableByAlertRecord(
+            record = TableByAlertRecord(
                 market=market,
                 task_name=task_name,
                 stock_code=stock_code,
@@ -1069,10 +1100,14 @@ class DB(object):
                 line_type=line_type,
                 line_dt=line_dt.replace(tzinfo=None),
                 alert_dt=datetime.datetime.now(),
+                event_key=event_key,
             )
-            session.add(recored)
-            session.commit()
-
+            session.add(record)
+            try:
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                return False
         return True
 
     def alert_event_save(
@@ -1088,6 +1123,16 @@ class DB(object):
         event_type: str,
         event_time: datetime.datetime,
     ):
+        event_key = build_alert_event_key(
+            market=market,
+            task_name=task_name,
+            stock_code=stock_code,
+            frequency=frequency,
+            action=action,
+            score=score,
+            event_type=event_type,
+            event_time=event_time,
+        )
         return self.alert_record_save(
             market=market,
             task_name=task_name,
@@ -1099,6 +1144,7 @@ class DB(object):
             bi_is_td=score,
             line_type=event_type,
             line_dt=event_time,
+            event_key=event_key,
         )
 
     def alert_record_query_by_code(
@@ -1244,13 +1290,12 @@ class DB(object):
         添加代码在 tv 价格主图显示的信息
         """
         with self.Session() as session:
-            # 相同的 market,code/mark_time/mark_label 只能有一个，先删除一下
-            session.query(TableByTVMarks).filter(
-                TableByTVMarks.market == market,
-                TableByTVMarks.stock_code == stock_code,
-                TableByTVMarks.mark_time == mark_time,
-                TableByTVMarks.mark_label == mark_label,
-            ).delete()
+            session.query(TableByTVMarksPrice).filter(
+                TableByTVMarksPrice.market == market,
+                TableByTVMarksPrice.stock_code == stock_code,
+                TableByTVMarksPrice.mark_time == mark_time,
+                TableByTVMarksPrice.mark_label == mark_label,
+            ).delete(synchronize_session=False)
 
             mark = TableByTVMarksPrice(
                 market=market,
@@ -1291,9 +1336,9 @@ class DB(object):
     def marks_del_by_price(self, market: str, mark_label: str):
         with self.Session() as session:
             session.query(TableByTVMarksPrice).filter(
-                TableByTVMarks.market == market,
+                TableByTVMarksPrice.market == market,
                 TableByTVMarksPrice.mark_label == mark_label,
-            ).delete()
+            ).delete(synchronize_session=False)
             session.commit()
 
         return True

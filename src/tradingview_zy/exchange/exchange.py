@@ -157,6 +157,11 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
     :param to_f:
     :return:
     """
+    if len(klines) == 0:
+        return klines.copy(deep=True)
+    klines = klines.copy(deep=True)
+    klines["date"] = pd.to_datetime(klines["date"], errors="raise")
+
     # 直接使用 pandas 的 resample 方法进行合并周期
     period_maps = {
         "1m": "1min",
@@ -239,7 +244,7 @@ def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFra
     if to_f not in freq_config_maps.keys():
         raise Exception(f"不支持的转换周期：{to_f}")
 
-    klines["new_dt"] = pd.NaT
+    klines["new_dt"] = pd.Series(pd.NaT, index=klines.index, dtype=klines["date"].dtype)
     date_only = klines["date"].dt.date.astype(str)
     for new_time_str, range_time_str in freq_config_maps[to_f].items():
         start_time_str, end_time_str = range_time_str
@@ -300,25 +305,25 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
         "d": "D",
     }
     if len(klines) == 0:
-        return klines
+        return klines.copy(deep=True)
 
+    klines = klines.copy(deep=True)
+    klines["date"] = pd.to_datetime(klines["date"], errors="raise")
+    if klines["date"].dt.tz is None:
+        klines["date"] = klines["date"].dt.tz_localize(__tz)
+    else:
+        klines["date"] = klines["date"].dt.tz_convert(__tz)
     code = klines.iloc[0]["code"]
 
     if to_f == "d":
-        # 日期的特殊处理
-        mask = (klines["date"].dt.time >= pd.to_datetime("08:00:00").time()) | (
-            klines["date"].dt.time < pd.to_datetime("08:00:00").time()
-        )
-        klines = klines.assign(
-            trade_day=lambda x: pd.to_datetime(x["date"].dt.date)
-            - pd.to_timedelta((x["date"].dt.hour < 8).astype(int), unit="D")
-        )
-        grouped = klines[mask].groupby("trade_day")
+        # 数字货币交易日以北京时间 08:00 为明确边界。
+        klines["trade_day"] = (
+            klines["date"] - pd.Timedelta(hours=8)
+        ).dt.normalize()
+        grouped = klines.sort_values("date").groupby("trade_day", sort=True)
         period_klines = pd.DataFrame(
             {
-                "date": grouped["trade_day"]
-                .first()
-                .apply(lambda x: x.replace(hour=8, minute=0, second=0, tzinfo=__tz)),
+                "date": grouped["trade_day"].first() + pd.Timedelta(hours=8),
                 "frequency": to_f,
                 "code": grouped["code"].first(),
                 "open": grouped["open"].first(),
@@ -327,15 +332,13 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
                 "low": grouped["low"].min(),
                 "volume": grouped["volume"].sum(),
             }
-        )
-        period_klines = period_klines.reset_index(drop=True)
-        # period_klines["date"] = period_klines["date"].dt.tz_convert(__tz)
+        ).reset_index(drop=True)
         return period_klines[
             ["date", "frequency", "code", "high", "low", "open", "close", "volume"]
         ]
 
     # 删除 volume 列为 0 的行
-    klines = klines[klines["volume"] != 0]
+    klines = klines.loc[klines["volume"] != 0].copy()
 
     klines.insert(0, column="date_index", value=klines["date"])
     klines.set_index("date_index", inplace=True)
@@ -378,6 +381,11 @@ def convert_futures_kline_frequency(
     :param to_f:
     :return:
     """
+
+    if len(klines) == 0:
+        return klines.copy(deep=True)
+    klines = klines.copy(deep=True)
+    klines["date"] = pd.to_datetime(klines["date"], errors="raise")
 
     # 直接使用 pandas 的 resample 方法进行合并周期
     period_maps = {
@@ -439,8 +447,8 @@ def convert_futures_kline_frequency(
                 "14:45:00": ["14:45:00", "14:59:59"],
                 "21:00:00": ["21:00:00", "21:29:59"],
                 "21:30:00": ["21:30:00", "21:59:59"],
-                "22:00:00": ["21:00:00", "22:29:59"],
-                "22:30:00": ["21:30:00", "22:59:59"],
+                "22:00:00": ["22:00:00", "22:29:59"],
+                "22:30:00": ["22:30:00", "22:59:59"],
                 "23:00:00": ["23:00:00", "23:29:59"],
                 "23:30:00": ["23:30:00", "23:59:59"],
                 "00:00:00": ["00:00:00", "00:29:59"],
@@ -456,7 +464,7 @@ def convert_futures_kline_frequency(
                 "11:15:00": ["11:15:00", "14:14:59"],
                 "14:15:00": ["14:15:00", "14:59:59"],
                 "21:00:00": ["21:00:00", "21:59:59"],
-                "22:00:00": ["21:00:00", "22:59:59"],
+                "22:00:00": ["22:00:00", "22:59:59"],
                 "23:00:00": ["23:00:00", "23:59:59"],
                 "00:00:00": ["00:00:00", "00:59:59"],
                 "01:00:00": ["01:00:00", "01:59:59"],
@@ -507,35 +515,31 @@ def convert_futures_kline_frequency(
     if to_f not in freq_config_maps.keys():
         raise Exception(f"不支持的转换周期：{to_f}")
 
-    klines["new_dt"] = pd.Series(dtype="datetime64[ns, Asia/Shanghai]")
-    # 如果是 hour 0 minutes 0 的日期，则减一分钟
-    mask = (klines["date"].dt.hour == 0) & (klines["date"].dt.minute == 0)
-    klines.loc[mask, "date"] = klines.loc[mask, "date"] - pd.Timedelta(minutes=1)
-
+    klines["new_dt"] = pd.Series(
+        pd.NaT, index=klines.index, dtype=klines["date"].dtype
+    )
+    match_count = pd.Series(0, index=klines.index, dtype="int64")
     date_only = klines["date"].dt.normalize()
     for new_time_str, range_time_str in freq_config_maps[to_f].items():
         start_time_str, end_time_str = range_time_str
-        start_time = pd.to_timedelta(start_time_str)
-        end_time = pd.to_timedelta(end_time_str)
-
-        range_start_dt = date_only + start_time
-
-        if end_time_str == "00:00:00":
-            range_end_dt = date_only + pd.Timedelta(days=1)
-        else:
-            range_end_dt = date_only + end_time
-        if end_time_str == "00:00:00":
-            target_new_dt = date_only + pd.Timedelta(days=1)
-        else:
-            target_new_dt = date_only + pd.to_timedelta(new_time_str)
+        range_start_dt = date_only + pd.to_timedelta(start_time_str)
+        range_end_dt = date_only + pd.to_timedelta(end_time_str)
+        target_new_dt = date_only + pd.to_timedelta(new_time_str)
 
         mask = (klines["date"] >= range_start_dt) & (klines["date"] <= range_end_dt)
-        klines.loc[mask, "new_dt"] = target_new_dt
+        match_count.loc[mask] += 1
+        klines.loc[mask, "new_dt"] = target_new_dt.loc[mask]
 
-    if klines["new_dt"].isnull().any():
-        failed_dates = klines.loc[klines["new_dt"].isnull(), "date"]
-        raise Exception(
-            f"期货周期转换时间范围错误，{code} - {to_f} 以下时间未能匹配配置： {failed_dates.tolist()}"
+    invalid = match_count != 1
+    if invalid.any():
+        details = [
+            {"date": str(date), "matches": int(matches)}
+            for date, matches in zip(
+                klines.loc[invalid, "date"], match_count.loc[invalid], strict=True
+            )
+        ]
+        raise ValueError(
+            f"期货周期转换窗口必须恰好命中一次，{code} - {to_f}: {details}"
         )
     agg_config = {
         "code": "first",
