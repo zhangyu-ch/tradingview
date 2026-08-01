@@ -10,7 +10,6 @@ dependencies = [
     "apscheduler>=3.11.0",
     "baostock>=0.8.9",
     "ccxt==4.4.88",
-    "chardet>=5.2.0",
     "dbutils>=3.1.1",
     "dtaidistance>=2.3.13",
     "flask>=3.1.1",
@@ -54,11 +53,6 @@ filterwarnings = [
     # Flask-Login 0.6.3 still calls datetime.utcnow() while writing a
     # remember-me cookie. Upstream PR #815 fixes it but has not been released.
     'ignore:datetime\.datetime\.utcnow\(\) is deprecated.*:DeprecationWarning:flask_login\.login_manager',
-    # The locked environment currently resolves chardet 7.x while Requests
-    # still emits its legacy <6 compatibility warning. This warning is emitted
-    # during third-party import and is unrelated to the application behavior
-    # under test, so keep warnings-as-errors while excluding only this message.
-    "ignore:urllib3 .* or chardet .* doesn't match a supported version!:Warning:requests",
 ]
 
 [tool.uv.sources]
@@ -69,7 +63,7 @@ ta-lib = [
     { marker = "sys_platform == 'darwin' and platform_machine == 'x86_64'", path = "package/ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl" },
     { marker = "sys_platform == 'linux' and platform_machine == 'x86_64'", path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" },
     { marker = "sys_platform == 'linux' and platform_machine == 'aarch64'", path = "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" }
-] 
+]
 pytdx = { path = "package/pytdx-1.72r2-py3-none-any.whl" }
 
 [[tool.uv.index]]
