@@ -45,6 +45,7 @@ dependencies = [
     "tornado>=6.5.1,<7",
     "tqdm>=4.67.1",
     "tqsdk>=3.8.2",
+    "websockets>=13.1,<14",
 ]
 
 [tool.pytest.ini_options]
