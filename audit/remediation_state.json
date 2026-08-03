@@ -98,16 +98,30 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（本地已不存在，已加防回归）",
+      "problem_verified": false,
+      "problem_summary": "原报告固定点的远程 master 含临时补丁分片、临时 PR 元数据和具备 contents:write/force-push 的修复传输工作流；当前用户提供的本地 ZIP 已不包含这些文件，因此本地当前代码不再存在直接风险。",
+      "fix_summary": "未对已缺失的文件做伪删除；新增仓库卫生扫描器，拒绝 `.github/remediation`、current-remediation 分片/元数据、contents:write、git reset --soft 和强制推送；新增只读 GitHub Actions 门禁，权限仅为 contents:read。",
+      "verification_performed": true,
+      "verification_method": [
+        "执行 `find` 与 `rg` 扫描当前工作树，确认本地没有原报告列出的临时文件和危险工作流。",
+        "运行 `python3 script/remediation/check_repository_hygiene.py`，当前仓库通过。",
+        "运行 `pytest -q tests/test_new02_repository_hygiene.py`，覆盖当前仓库、恶意 fixture 与只读工作流 fixture。"
+      ],
+      "verification_result": "通过（本地风险不存在，3 项防回归测试通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        ".github/workflows/repository-hygiene.yml",
+        "script/remediation/check_repository_hygiene.py",
+        "tests/test_new02_repository_hygiene.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "远程 GitHub master 仍可能保留历史临时文件；用户明确要求不推送远程，本提交只修复并保护本地交付仓库。"
+      ],
+      "commit_subject": "fix(NEW-02): add repository hygiene gate"
     }
   },
   {

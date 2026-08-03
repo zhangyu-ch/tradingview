@@ -56,3 +56,11 @@
 - 修复：停止回显/日志泄露，增加留空不改与 no-store。
 - 专项测试：`tests/test_cr02_settings_secret.py`，3 passed。
 - 提交：`fix(CR-02): stop echoing saved Feishu secrets`。
+
+### 问题 02：NEW-02
+- **状态：** complete
+- **完成时间：** 2026-08-03T11:24:10+00:00
+- 验证结论：本地 ZIP 已无危险临时工作流/分片；远程固定点仍是历史来源。
+- 修复：新增只读仓库卫生门禁和恶意 fixture 防回归测试。
+- 专项测试：`tests/test_new02_repository_hygiene.py`，3 passed。
+- 提交：`fix(NEW-02): add repository hygiene gate`。

@@ -12,7 +12,7 @@
 |序号|编号|严重度|领域|原状态|本轮状态|验证结果|提交|
 |---:|---|---|---|---|---|---|---|
 |1|`CR-02`|严重|Web Security|🟡 部分修复|已完成|通过（3 项专项测试通过）|`fix(CR-02)`|
-|2|`NEW-02`|高|CI / Supply Chain|🆕 新问题（未修复）|待处理|—|—|
+|2|`NEW-02`|高|CI / Supply Chain|🆕 新问题（未修复）|已完成（本地已不存在，已加防回归）|通过（本地风险不存在，3 项防回归测试通过）|`fix(NEW-02)`|
 |3|`NEW-03`|高|Dependencies / Packaging|🆕 新问题（未修复）|待处理|—|—|
 |4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|待处理|—|—|
 |5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|待处理|—|—|
@@ -118,16 +118,20 @@
 ### 02. NEW-02 · 临时修复传输分片与可写 force-push 工作流被合并进 master
 
 - **原始状态 / 严重度 / 领域：** 🆕 新问题（未修复） / 高 / CI / Supply Chain
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（本地已不存在，已加防回归）
+- **问题是否存在：** 否
+- **a. 这个问题是什么？** 原报告固定点的远程 master 含临时补丁分片、临时 PR 元数据和具备 contents:write/force-push 的修复传输工作流；当前用户提供的本地 ZIP 已不包含这些文件，因此本地当前代码不再存在直接风险。
+- **b. 我是怎么修复的？** 未对已缺失的文件做伪删除；新增仓库卫生扫描器，拒绝 `.github/remediation`、current-remediation 分片/元数据、contents:write、git reset --soft 和强制推送；新增只读 GitHub Actions 门禁，权限仅为 contents:read。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 执行 `find` 与 `rg` 扫描当前工作树，确认本地没有原报告列出的临时文件和危险工作流。
+  - 运行 `python3 script/remediation/check_repository_hygiene.py`，当前仓库通过。
+  - 运行 `pytest -q tests/test_new02_repository_hygiene.py`，覆盖当前仓库、恶意 fixture 与只读工作流 fixture。
+- **e. 验证是否通过？** 通过（本地风险不存在，3 项防回归测试通过）
+- **提交：** fix(NEW-02): add repository hygiene gate
+- **修改文件：** `.github/workflows/repository-hygiene.yml`, `script/remediation/check_repository_hygiene.py`, `tests/test_new02_repository_hygiene.py`, `audit/remediation_state.json`, `remediation_report.md`, `progress.md`
+- **验证限制：**
+  - 远程 GitHub master 仍可能保留历史临时文件；用户明确要求不推送远程，本提交只修复并保护本地交付仓库。
 - **原报告最新结论：** master 仍包含 .github/remediation/current-remediation.part.*、临时 PR body 文件和 3 个 contents:write 工作流；这些工作流能重组补丁、git reset --soft，并向 agent/current-comprehensive-remediation 执行 force-with-lease。临时元数据文件自身写明“must not be merged”。
 - **原报告建议：** 删除 3 个临时工作流、全部 remediation 分片/marker/test 文件和临时 PR 元数据；增加仓库卫生检查，禁止此类 transport artifacts 合并。
 
