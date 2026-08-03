@@ -35,3 +35,15 @@ All remaining live order and cancellation entry points now fail closed. See
 [`live-trading-disabled.md`](live-trading-disabled.md) for the required Order/Fill state
 machine, idempotency, reconciliation, and sandbox acceptance criteria. Market-data and
 backtesting capabilities remain available.
+
+## ZB cryptocurrency provider (`MX-02`)
+
+The orphaned `ExchangeZB` adapter was removed from the runtime package. The configuration
+template previously listed `zb` as supported even though the standard exchange factory never
+registered it, so a documented configuration could not start. The legacy adapter also disabled
+TLS certificate verification, which made directly importing it unsafe.
+
+`EXCHANGE_CURRENCY = "zb"` now fails closed before any provider import or exchange-cache
+mutation. Supported built-in cryptocurrency-futures providers are `binance` and `db`. Restoring
+ZB requires a newly reviewed adapter with verified TLS, an explicit registry entry, provider
+contract tests, and maintained upstream API compatibility.

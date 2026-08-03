@@ -55,7 +55,7 @@ REDIS_PORT = 6379
 # 期货市场支持：tq / tdx_futures / db
 # 纽约期货市场支持：tdx_ny_futures / db
 # 外汇市场支持 tdx_fx / db
-# 数字货币（合约）支持： binance / zb / db
+# 数字货币（合约）支持： binance / db
 # 数字货币（现货）支持：binance_spot / db
 # 美股市场支持： alpaca / polygon / ib / tdx_us / db
 EXCHANGE_A = "tdx"  # 沪深A股市场
@@ -90,10 +90,6 @@ TQ_SP_PWD = ''
 # 币安交易所配置
 BINANCE_APIKEY = ''
 BINANCE_SECRET = ''
-
-# ZB交易所配置
-ZB_APIKEY = ''
-ZB_SECRET = ''
 
 # 美股 Ploygon API 配置（申请网址 https://polygon.io/）
 POLYGON_APIKEY = ''

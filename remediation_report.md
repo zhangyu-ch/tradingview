@@ -32,7 +32,7 @@
 |19|`ME-05`|中|Web Startup|❌ 未修复|已完成|通过（3 项专项测试通过；应用启动元数据不再实例化任何外部适配器）|`fix(ME-05)`|
 |20|`MX-01`|中|Configuration / Messaging|❌ 未修复|已完成（通过移除废弃能力）|通过（3 项专项测试通过；破裂钉钉配置与不可达 HK 分支已从运行树移除）|`fix(MX-01)`|
 |21|`MX-06`|中|Database / Operations|❌ 未修复|已完成|通过（3 项专项测试通过；直接执行文件不再触发测试业务写入）|`fix(MX-06)`|
-|22|`MX-02`|中|Exchange Factory|❌ 未修复|待处理|—|—|
+|22|`MX-02`|中|Exchange Factory|❌ 未修复|已完成（通过移除不支持能力）|通过（4 项 MX-02 专项测试及 3 项相邻 provider 下线测试通过；支持声明与可选工厂已一致）|`fix(MX-02)`|
 |23|`MX-04`|中|ExchangeDB / Scheduling|❌ 未修复|待处理|—|—|
 |24|`MX-05`|中|Frontend|❌ 未修复|待处理|—|—|
 |25|`MX-17`|中|TDX / Performance|❌ 未修复|待处理|—|—|
@@ -553,16 +553,22 @@
 ### 22. MX-02 · ZB 被配置文档声明支持，但工厂无法选择
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Exchange Factory
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通过移除不支持能力）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 配置模板把 ZB 列为数字货币合约 provider，但标准工厂从未注册 zb；遗留 exchange_zb.py 只能被直接导入，并显式关闭 TLS 证书校验。因此文档支持矩阵、工厂可选项与运行包能力互相矛盾。
+- **b. 我是怎么修复的？** 从配置模板和本地运行配置移除 zb 支持声明与 ZB 密钥项；删除孤立 ExchangeZB 运行时代码；在统一工厂为旧 EXCHANGE_CURRENCY=zb 配置增加导入/缓存前 fail-closed 错误；补充不支持 provider 文档与防回归测试。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_mx02_zb_removed.py tests/test_cr05_ctp_removed.py`，7 项测试全部通过。
+  - 动态将 EXCHANGE_CURRENCY 设为 zb，确认抛 UnsupportedProviderError，未导入 exchange_zb 且未污染 exchange cache。
+  - 扫描 src/script/web，确认无 exchange_zb 或 ccxt.zb 运行时引用；配置模板不再包含 zb/ZB_APIKEY/ZB_SECRET。
+  - 执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（4 项 MX-02 专项测试及 3 项相邻 provider 下线测试通过；支持声明与可选工厂已一致）
+- **提交：** fix(MX-02): remove unsupported ZB provider
+- **修改文件：** `src/tradingview_zy/config.py.demo`, `src/tradingview_zy/exchange/__init__.py`, `src/tradingview_zy/exchange/exchange_zb.py（删除）`, `docs/unsupported-providers.md`, `tests/test_mx02_zb_removed.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 本条选择正式移除 ZB，不提供旧 API 兼容层；外部私有脚本必须迁移到 binance/db。
+  - 本地部署用 config.py 被 .gitignore 排除，但已同步清除旧 ZB 项；可版本化契约以 config.py.demo 为准。
 - **原报告最新结论：** config.py.demo 仍声明数字货币支持 binance / zb / db；MarketRegistry/工厂只有 binance 与 db，zb 配置仍不可选择。
 - **原报告建议：** 从配置与文档删除 zb，或重新实现并注册；支持矩阵必须由注册表自动生成。
 

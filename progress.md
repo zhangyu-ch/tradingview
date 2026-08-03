@@ -225,3 +225,11 @@
 - 修复：删除 db.py 可执行 demo/main 测试写入，保留生产 DB 单例。
 - 专项测试：`tests/test_mx06_db_module_safe.py`，3 passed。
 - 提交：`fix(MX-06): remove executable database demo writes`。
+
+### 问题 22：MX-02
+- **状态：** complete（通过移除不支持能力）
+- **完成时间：** 2026-08-03
+- 验证结论：配置宣称支持 ZB，工厂从未注册，孤立实现还关闭 TLS 校验。
+- 修复：删除 ZB 适配器/配置密钥/支持声明；旧配置在导入和缓存前 fail-closed；补不支持 provider 文档。
+- 专项测试：`tests/test_mx02_zb_removed.py` 与相邻 provider 下线测试共 7 passed。
+- 提交：`fix(MX-02): remove unsupported ZB provider`。

@@ -15,6 +15,10 @@ _REMOVED_PROVIDERS = {
         "CTP provider 已从运行包移除（CR-05）：原实现不满足行情、订单状态、"
         "重连与资源释放契约。请选择 tq、tdx_futures 或 db。"
     ),
+    (Market.CURRENCY, "zb"): (
+        "ZB provider 已从运行包移除（MX-02）：配置曾宣称支持，但标准工厂从未"
+        "注册该适配器，且遗留实现关闭 TLS 校验。请选择 binance 或 db。"
+    ),
 }
 
 
@@ -115,7 +119,8 @@ def get_exchange(market: Market) -> Exchange:
             raise Exception(f"不支持的外汇交易所 {config.EXCHANGE_FX}")
 
     elif market == Market.CURRENCY:
-        # 数字货币 交易所
+        # 数字货币交易所；已移除 provider 在惰性导入与缓存写入前 fail closed。
+        _reject_removed_provider(Market.CURRENCY, config.EXCHANGE_CURRENCY)
         if config.EXCHANGE_CURRENCY == "binance":
             from tradingview_zy.exchange.exchange_binance import ExchangeBinance
 
