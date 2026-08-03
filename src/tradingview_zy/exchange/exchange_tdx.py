@@ -15,10 +15,13 @@ from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
+from tradingview_zy.exchange.tdx_reliability import call_with_bounded_retry
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.exchange.tdx_a_codes import tdx_codes_by_bj, tdx_codes_by_error
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -83,70 +86,84 @@ class ExchangeTDX(Exchange):
         }
 
     def all_stocks(self):
-        """
-        使用 通达信的方式获取所有股票代码
-        """
+        """Return the TDX A-share catalogue with bounded recovery."""
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
 
-        __all_stocks = []
-        __codes = []
-        try:
+        def load_catalog(remaining_seconds: float):
+            all_stocks = []
+            codes = set()
+            per_market_timeout = max(0.1, min(remaining_seconds / 2.0, 4.0))
             for market in range(2):
                 client = TdxHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+                with client.connect(
+                    self.connect_info["ip"],
+                    self.connect_info["port"],
+                    time_out=per_market_timeout,
+                ):
                     count = client.get_security_count(market)
                     data = pd.concat(
                         [
-                            client.to_df(client.get_security_list(market, i * 1000))
+                            client.to_df(
+                                client.get_security_list(market, i * 1000)
+                            )
                             for i in range(int(count / 1000) + 1)
                         ],
                         axis=0,
                         sort=False,
                     )
-                    for _d in data.iterrows():
-                        code = _d[1]["code"]
-                        name = _d[1]["name"]
-                        sse = "SZ" if market == 0 else "SH"
-                        _type = self.for_sz(code) if market == 0 else self.for_sh(code)
-                        if _type in ["bond_cn", "undefined", "stockB_cn"]:
+                    for _, row in data.iterrows():
+                        raw_code = row["code"]
+                        name = row["name"]
+                        exchange = "SZ" if market == 0 else "SH"
+                        stock_type = (
+                            self.for_sz(raw_code)
+                            if market == 0
+                            else self.for_sh(raw_code)
+                        )
+                        if stock_type in ["bond_cn", "undefined", "stockB_cn"]:
                             continue
-                        code = f"{sse}.{str(code)}"
-                        if code in __codes:
+                        code = f"{exchange}.{str(raw_code)}"
+                        if code in codes:
                             continue
-                        __codes.append(code)
-                        precision = 100 if _type == "stock_cn" else 1000
-                        __all_stocks.append(
+                        codes.add(code)
+                        all_stocks.append(
                             {
                                 "code": code,
                                 "name": name,
-                                "type": _type,
-                                "precision": precision,
+                                "type": stock_type,
+                                "precision": (
+                                    100 if stock_type == "stock_cn" else 1000
+                                ),
                             }
                         )
-        except TdxConnectionError:
-            print("连接失败，重新选择最优服务器")
-            self.reset_tdx_ip()
-            return self.all_stocks()
+            return all_stocks
 
-        # 添加北京A股的股票
-        for _c, _n in tdx_codes_by_bj.items():
-            __all_stocks.append(
+        all_stocks = call_with_bounded_retry(
+            load_catalog,
+            recover=self.reset_tdx_ip,
+            retry_on=(TdxConnectionError,),
+            max_attempts=3,
+            deadline_seconds=12.0,
+            description="exchange_tdx A-share catalogue",
+        )
+
+        for code, name in tdx_codes_by_bj.items():
+            all_stocks.append(
                 {
-                    "code": _c,
-                    "name": _n,
+                    "code": code,
+                    "name": name,
                     "type": "stock_cn",
                     "precision": 100,
                 }
             )
 
-        # 错误的代码过滤
-        __all_stocks = [
-            _s for _s in __all_stocks if _s["code"] not in tdx_codes_by_error
+        all_stocks = [
+            stock
+            for stock in all_stocks
+            if stock["code"] not in tdx_codes_by_error
         ]
-
-        self.g_all_stocks = __all_stocks
-        # print(f"股票共获取数量：{len(self.g_all_stocks)}")
+        self.g_all_stocks = all_stocks
         return self.g_all_stocks
 
     def to_tdx_code(self, code):
@@ -436,33 +453,15 @@ class ExchangeTDX(Exchange):
                     volume=_q["vol"],
                     open=_q["open"],
                     rate=(
-                        round(
-                            (_q["price"] - _q["last_close"]) / _q["last_close"] * 100, 2
-                        )
-                        if _q["price"] != 0
-                        else 0
+                        calculate_change_rate(_q["price"], _q["last_close"])
                     ),
                 )
 
         return ticks
 
     def now_trading(self):
-        """
-        返回当前是否是交易时间
-        周一至周五，09:30-11:30 13:00-15:00
-        """
-        now_dt = datetime.datetime.now()
-        if now_dt.weekday() in [5, 6]:  # 周六日不交易
-            return False
-        hour = now_dt.hour
-        minute = now_dt.minute
-        if hour == 9 and minute >= 30:
-            return True
-        if hour in [10, 13, 14]:
-            return True
-        if hour == 11 and minute < 30:
-            return True
-        return False
+        """Return a strict market-open bool from the shared calendar."""
+        return is_market_open("a")
 
     @staticmethod
     def for_sz(code):

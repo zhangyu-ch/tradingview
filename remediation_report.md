@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 39
-- **待处理：** 42
+- **已完成：** 40
+- **待处理：** 41
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -50,7 +50,7 @@
 |37|`RV-07`|中|Web API Robustness|❌ 未修复|已完成|通过（77 项专项与相邻测试通过；相关公开入口的畸形参数在外部副作用前被拒绝）|`fix(RV-07)`|
 |38|`ME-11`|中|Baostock|❌ 未修复|已完成|通过（11 项专项与相邻测试通过；目录日期、源分钟时间和有限重登录三项根因均关闭）|`fix(ME-11)`|
 |39|`HI-17`|中|Scripts|❌ 未修复|已完成|通过（10 项 HI-17 专项、18 项组合测试通过；导入副作用、无界循环、不可恢复状态和无限外部等待均已移除或有界化）|`fix(HI-17)`|
-|40|`ME-12`|中|TDX Adapters|❌ 未修复|待处理|—|—|
+|40|`ME-12`|中|TDX Adapters|❌ 未修复|已完成|通过（11 项 ME-12 专项、74 项相邻组合、235 项可收集广泛回归通过；3 skipped；递归重连、错误分母、不可用价格伪装和四个证据适配器的硬编码时段根因均已关闭）|`fix(ME-12)`|
 |41|`ME-23`|中|Backtesting Config|❌ 未修复|待处理|—|—|
 |42|`HI-16`|中|File Cache|❌ 未修复|待处理|—|—|
 |43|`ME-17`|中|QMT Market Data|❌ 未修复|待处理|—|—|
@@ -961,16 +961,28 @@
 ### 40. ME-12 · TDX 适配器存在递归重连、涨跌幅分母错误和硬编码交易时段
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / TDX Adapters
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** TDX A 股目录在连接异常时通过 `return self.all_stocks()` 递归重进完整方法，没有最大深度或总时限；HK、US、FX、国内期货和纽约期货 Tick 的涨跌幅多处使用当前价而不是前收价作分母，且前收价为 0/缺失时被伪装成 0% 涨跌；A/HK/US/FX 的 `now_trading()` 分别依赖服务器本地时间、粗粒度小时判断或恒真返回，未处理午休、节假日、半日市和美国 DST。
+- **b. 我是怎么修复的？** A 股证券目录改为复用现有 `call_with_bounded_retry`，最多 3 次、12 秒总预算，每个市场连接 timeout 不超过剩余预算的一半，失败时重选节点且不再递归。新增纯函数 `calculate_change_rate()`，全部六个 TDX Tick 路径统一按 `(last - previous_close) / previous_close` 计算；价格缺失、非数值、非有限或非正时明确返回 `None`。`Tick.rate` 和 `/ticks` JSON 保留该 unavailable 状态，前端以 `-` 和中性色显示而不是 `null%` 或伪造 0%。新增无外部依赖的版本化市场日历服务：A 股按 SSE 2026 休市与 09:30–11:30/13:00–15:00，港股按 HKEX 上午/下午、2026 公共假期和春节/圣诞/元旦前半日市，美股按 NYSE 2026 假日、9:30–16:00、感恩节后和圣诞前 13:00 提前收市，并使用 zoneinfo 自动处理 DST；FX 至少收敛为纽约时间周日 17:00 至周五 17:00 的 24x5 周界。现金市场日历超出已版本化年份时 fail-closed。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前逐个读取六个 TDX adapter：确认 A 股 `all_stocks()` 在 `TdxConnectionError` 后递归自调用；HK/US/FX/Futures/NY Futures 均可定位 `/ current_price` 错误分母；A/HK/US/FX 分别存在手写时段或恒真返回。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me12_tdx_contracts.py`，11 项专项测试通过；覆盖正确涨跌幅正负算例、0/None/NaN/Inf/非法文本、全部 TDX `Tick(rate=...)` 的共享函数门禁、A 股无递归和三次连接失败/两次 recovery 动态故障注入。
+  - 以 timezone-aware 固定时间验证 SSE 午休/周末/2026 国庆休市，HKEX 午休/春节休市/农历新年前半日市，NYSE 冬夏 DST、感恩节休市和 2026-11-27 13:00 提前收市；naive datetime 被明确拒绝，A 股 2027 未配置日历按 fail-closed 返回 False。
+  - 验证 FX 周界：周五 16:59 ET 为开、17:00 为闭，周日 16:59 为闭、17:00 为开；不再永久返回 True。
+  - 运行 ME-12、NX-20、MX-17、NX-16、MX-05、RV-07 与报告统计组合测试，共 74 passed；执行 Node `--check`、compileall 和 `git diff --check`。
+  - 逐个检查 9 个原 CRLF 文件，确认 bare-LF 均为 0；Web 对 nullable rate 的 JSON/前端契约与既有 tick 调用 deadline、限流和定时器测试均未回归。
+  - 在同一 Python 进程运行大范围回归时，旧 singleton 模块缓存使专项测试把装饰器包装函数误当成类；测试改为通过 `__wrapped__` 取得真实 provider 类型后，ME-12 与相邻组合仍为 74 passed。
+  - 在排除仓库既有的缺失本地 `config.py`、缺失可选 `empyrical`/`pinyin` 依赖和基线 footprint 私有符号漂移等收集阻断后，运行其余广泛回归，结果为 235 passed、3 skipped。
+- **e. 验证是否通过？** 通过（11 项 ME-12 专项、74 项相邻组合、235 项可收集广泛回归通过；3 skipped；递归重连、错误分母、不可用价格伪装和四个证据适配器的硬编码时段根因均已关闭）
+- **提交：** fix(ME-12): unify TDX quote and calendar contracts
+- **修改文件：** `src/tradingview_zy/exchange/tdx_quotes.py`, `src/tradingview_zy/trading_calendar.py`, `src/tradingview_zy/exchange/exchange.py`, `src/tradingview_zy/exchange/exchange_tdx.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_us.py`, `src/tradingview_zy/exchange/exchange_tdx_fx.py`, `src/tradingview_zy/exchange/exchange_tdx_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_ny_futures.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/static/js/zixuan.js`, `tests/test_me12_tdx_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器没有安装 pytdx，也未连接真实 TDX 节点；重试终止性使用协议一致的 fake API 动态验证，字段公式和调用路径用 AST/源码契约覆盖，真实供应商网络联调仍需具备 pytdx 与网络的环境。
+  - A/HK/US 现金市场日历当前快照只覆盖 2026，并在其他年份明确 fail-closed；每年必须依据交易所公告发布新版本。该显式覆盖边界优于静默把未知假日当开市，但也意味着跨年部署前必须更新数据。
+  - FX 只定义通用 24x5 周界，未猜测具体 venue 的每日维护与假日；国内/纽约期货的品种级夜盘与节假日缩短时段需要 instrument/venue 参数，保留给问题 48 ME-30 的全市场日历治理。本条已修复其全部涨跌幅路径和原报告列出的 A/HK/US/FX 时段证据。
+  - 未排除的全量 `pytest` 在收集/导入阶段仍受仓库既有环境与基线问题阻断：缺少未纳入 ZIP 的本地 `tradingview_zy/config.py`、当前执行环境未安装 `empyrical`/`pinyin`，以及 `footprint.py` 从导入基线起就引用不存在的 `_datetime_to_timestamp_seconds`。这些均在 ME-12 修改前的基线可复现；本条没有将它们伪装为通过或混入本提交修复。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_tdx.py、src/tradingview_zy/exchange/exchange_tdx_hk.py、src/tradingview_zy/exchange/exchange_tdx_us.py、src/tradingview_zy/exchange/exchange_tdx_fx.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 使用有界重试循环；统一 Tick 计算函数；引入交易所日历服务；对 0/缺失前收价明确返回 unavailable。
 

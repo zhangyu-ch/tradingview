@@ -374,3 +374,13 @@
 - 修复：新增共享可恢复批次引擎；三脚本改为无副作用 CLI；1,210/495 个代码和所有周期参数外置 JSON；原子 checkpoint、配置 digest、逐项审计、有限调用/批次 deadline、无进展/max_pages 和稳定退出码全部落地。
 - 专项测试：`tests/test_hi17_sync_batch.py` 10 passed；与 ME-11/报告测试组合共 18 passed；compileall、CRLF 和 diff 检查通过。
 - 提交：`fix(HI-17): make market sync batches recoverable`。
+
+### 问题 40：ME-12
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：A 股目录在连接失败后递归自调用；六个 TDX Tick 路径存在当前价分母或无效前收价伪装；A/HK/US/FX 使用服务器本地时间、粗粒度时段或恒真返回，问题存在。
+- 修复：A 股目录改为 3 次/12 秒有界节点恢复；新增统一涨跌幅函数，全部 TDX adapter 按前收价计算并用 `None` 表示不可用；Web/前端保留 unavailable；新增 SSE/HKEX/NYSE 2026 版本化日历与 DST/半日市，FX 改为 24x5 周界。
+- 专项测试：`tests/test_me12_tdx_contracts.py` 11 passed；专项及相邻 TDX/Web/前端/报告组合 74 passed；排除既有配置/可选依赖/footprint 收集阻断后的广泛回归 235 passed、3 skipped；Node 语法、compileall、CRLF 与 diff 检查通过。
+- 同进程扩展回归曾暴露专项测试对 singleton 包装函数的隔离不足；测试改为通过 `__wrapped__` 获取真实 provider 类型后恢复稳定，产品代码无需回退。
+- 联调限制：无真实 pytdx/TDX 网络；现金日历当前覆盖 2026，FX venue 细节和期货品种时段留给 ME-30。未排除全量测试仍被基线缺少本地 config.py、环境缺 empyrical/pinyin 和既有 footprint 私有符号漂移阻断。
+- 提交：`fix(ME-12): unify TDX quote and calendar contracts`。

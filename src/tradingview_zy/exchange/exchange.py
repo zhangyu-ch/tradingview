@@ -33,7 +33,7 @@ class Tick:
     low: float
     open: float
     volume: float
-    rate: float = 0
+    rate: float | None = 0.0
 
 
 class Exchange(ABC):

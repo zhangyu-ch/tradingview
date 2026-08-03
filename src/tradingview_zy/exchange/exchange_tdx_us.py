@@ -14,8 +14,10 @@ from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_us_tdx_kline_frequency
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -298,33 +300,14 @@ class ExchangeTDXUS(Exchange):
                         volume=_quote["zongliang"],
                         open=_quote["open"],
                         rate=(
-                            round(
-                                (_quote["price"] - _quote["pre_close"])
-                                / _quote["price"]
-                                * 100,
-                                2,
-                            )
-                            if _quote["pre_close"] > 0 and _quote["price"] > 0
-                            else 0
+                            calculate_change_rate(_quote["price"], _quote["pre_close"])
                         ),
                     )
         return ticks
 
     def now_trading(self):
-        """
-        TODO 暂时还没有找到接口，直接硬编码
-        周一致周五，美国东部时间，9:30 - 16:00
-        """
-        tz = pytz.timezone("US/Eastern")
-        now = datetime.datetime.now(tz)
-        weekday = now.weekday()
-        hour = now.hour
-        minute = now.minute
-        if weekday in [0, 1, 2, 3, 4] and (
-            (10 <= hour < 16) or (hour == 9 and minute >= 30)
-        ):
-            return True
-        return False
+        """Return a strict market-open bool from the shared calendar."""
+        return is_market_open("us")
 
     def klines_qfq(self, code: str, klines: pd.DataFrame):
         try:

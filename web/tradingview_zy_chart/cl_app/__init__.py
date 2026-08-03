@@ -1032,7 +1032,15 @@ def create_app(test_config=None):
             stock_ticks = tick_provider_caller.call(ex.ticks, list(tick_request.codes))
             now_trading = bool(ex.now_trading())
             res_ticks = [
-                {"code": code, "price": tick.last, "rate": round(float(tick.rate), 2)}
+                {
+                    "code": code,
+                    "price": tick.last,
+                    "rate": (
+                        None
+                        if tick.rate is None
+                        else round(float(tick.rate), 2)
+                    ),
+                }
                 for code, tick in stock_ticks.items()
             ]
             return {"now_trading": now_trading, "ticks": res_ticks}

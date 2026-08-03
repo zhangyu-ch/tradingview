@@ -18,6 +18,7 @@ from tradingview_zy.exchange.exchange import (
     convert_tdx_futures_kline_frequency,
 )
 from tradingview_zy.file_db import FileCacheDB
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from tradingview_zy.exchange.tdx_reliability import (
     ProviderUnavailableError,
     call_with_bounded_retry,
@@ -357,14 +358,7 @@ class ExchangeTDXFutures(Exchange):
                         volume=_quote["zongliang"],
                         open=_quote["open"],
                         rate=(
-                            round(
-                                (_quote["price"] - _quote["pre_close"])
-                                / _quote["price"]
-                                * 100,
-                                2,
-                            )
-                            if _quote["price"] > 0
-                            else 0
+                            calculate_change_rate(_quote["price"], _quote["pre_close"])
                         ),
                     )
         return ticks
@@ -406,14 +400,7 @@ class ExchangeTDXFutures(Exchange):
                         volume=_quote["ZongLiang"],
                         open=_quote["JinKai"],
                         rate=(
-                            round(
-                                (_quote["MaiChu"] - _quote["ZuoJie"])
-                                / _quote["MaiChu"]
-                                * 100,
-                                2,
-                            )
-                            if _quote["MaiChu"] > 0
-                            else 0
+                            calculate_change_rate(_quote["MaiChu"], _quote["ZuoJie"])
                         ),
                     )
         return ticks

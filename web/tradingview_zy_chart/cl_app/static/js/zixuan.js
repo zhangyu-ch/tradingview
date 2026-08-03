@@ -51,7 +51,7 @@ var ZiXuan = (function () {
       layui.use(["laytpl"], function () {
         var laytpl = layui.laytpl;
         var rate_show_tpl = laytpl(
-          "<div style='color:{{= d.color }}' class='code_rate' data-code='{{= d.code }}'><div style='color:{{= d.color }}' class='layui-font-14'>{{= d.rate }}%</div><div class='layui-font-12'>{{= d.price }}</div><div>"
+          "<div style='color:{{= d.color }}' class='code_rate' data-code='{{= d.code }}'><div style='color:{{= d.color }}' class='layui-font-14'>{{= d.rateText }}</div><div class='layui-font-12'>{{= d.price }}</div><div>"
         );
         $.ajax({
           type: "POST",
@@ -61,10 +61,16 @@ var ZiXuan = (function () {
           success: function (ticks) {
             for (let i = 0; i < ticks["ticks"].length; i++) {
               let tick = ticks["ticks"][i];
-              let color = tick["rate"] > 0 ? "#ff5722" : "#16baaa";
-              if (tick["rate"] === 0) {
-                color = "";
+              let rateAvailable =
+                typeof tick["rate"] === "number" &&
+                Number.isFinite(tick["rate"]);
+              let color = "";
+              if (rateAvailable && tick["rate"] > 0) {
+                color = "#ff5722";
+              } else if (rateAvailable && tick["rate"] < 0) {
+                color = "#16baaa";
               }
+              let rateText = rateAvailable ? tick["rate"] + "%" : "-";
               let obj_span_rate = $(
                 '.code_rate[data-code="' + tick["code"] + '"]'
               );
@@ -72,7 +78,7 @@ var ZiXuan = (function () {
                 rate_show_tpl.render({
                   code: tick["code"],
                   price: tick["price"],
-                  rate: tick["rate"],
+                  rateText: rateText,
                   color: color,
                 })
               );
@@ -95,7 +101,7 @@ var ZiXuan = (function () {
           "<div style='color:{{= d.color }}' class='layui-font-14'>{{= d.name }}</div><div class='layui-font-12 layui-font-gray'>{{= d.code }}</div>"
         );
         var rate_show_tpl = laytpl(
-          "<div class='code_rate' data-code='{{= d.code }}'><div class='layui-font-14'>{{= d.rate }}%</div><div class='layui-font-12'>{{= d.price }}</div><div>"
+          "<div class='code_rate' data-code='{{= d.code }}'><div class='layui-font-14'>{{= d.rateText }}</div><div class='layui-font-12'>{{= d.price }}</div><div>"
         );
         // 创建自选列表渲染实例
         table.render({
@@ -131,7 +137,7 @@ var ZiXuan = (function () {
                   return rate_show_tpl.render({
                     code: d.code,
                     price: "-",
-                    rate: "-",
+                    rateText: "-",
                   });
                 },
               },

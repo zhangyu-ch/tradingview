@@ -12,12 +12,14 @@ from tradingview_zy import fun
 from tradingview_zy.base import Market
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.exchange.tdx_reliability import (
     ProviderUnavailableError,
     call_with_bounded_retry,
 )
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -310,23 +312,14 @@ class ExchangeTDXFX(Exchange):
                         volume=_quote["zongliang"],
                         open=_quote["open"],
                         rate=(
-                            round(
-                                (_quote["price"] - _quote["pre_close"])
-                                / _quote["price"]
-                                * 100,
-                                2,
-                            )
-                            if _quote["price"] > 0
-                            else 0
+                            calculate_change_rate(_quote["price"], _quote["pre_close"])
                         ),
                     )
         return ticks
 
     def now_trading(self):
-        """
-        返回当前是否是交易时间
-        """
-        return True
+        """Return a strict market-open bool from the shared calendar."""
+        return is_market_open("fx")
 
     def balance(self):
         raise Exception("交易所不支持")

@@ -219,3 +219,12 @@
 - checkpoint 每次状态转换都写临时文件、flush+fsync 后原子 replace，并尽力 fsync 父目录；上次处于 running 的 item 在恢复时转回 pending 并记录中断原因。
 - 外部同步 SDK 无法由 Python 强杀，因此 wall-clock timeout 与固定 daemon 槽位必须同时存在：前者保护批次响应时间，后者限制超时残留调用数量。
 - 增量页终止同时依靠 terminal row 数、最大页数和进度 token 去重；目标数据库写入只有严格 `True` 才记为完成，避免把 `None`/`False` 伪装成成功。
+
+## ME-12 TDX 重试、Tick 与交易日历复核
+- A 股目录的连接错误路径原来递归进入 `all_stocks()`；它现在与 ExHq 构造器共用有限重试门，最多 3 次且受 12 秒总预算约束，节点恢复也计入同一生命周期。
+- 涨跌幅的领域分母是前收价而不是当前价。六个 TDX adapter 的所有 Tick 构造统一调用纯函数；0、缺失、NaN、Inf 或非数值前收价不再伪装为 0%，而是沿 `Tick -> /ticks -> zixuan.js` 保留为 unavailable 并显示 `-`。
+- 现金市场交易状态改用 timezone-aware 的版本化日历。2026 快照依据 SSE 休市通知和交易时段、HKEX 证券时段与香港政府假日、NYSE 假日/核心时段/提前收市；美国时间使用 `America/New_York`，DST 由 zoneinfo 处理。
+- 现金市场超出明确覆盖年份时 fail-closed，避免未知未来假日被静默当作开市；该日历必须按年度公告更新。FX 只提供通用纽约时间 24x5 周界，venue/品种特例以及期货夜盘差异继续由 ME-30 收敛。
+- 首次多行 AST 改写只替换完整行，遗留旧外层括号并被 compileall 拦截；所有改动已恢复后改为替换 AST value 的精确字符区间，最终九个历史文件 bare-LF 均为 0。
+- 同进程广泛回归还证明专项测试必须兼容 `@fun.singleton` 的包装函数语义；测试现在优先解包 `__wrapped__`，不再依赖模块导入顺序。
+- 仓库全量收集的 footprint 私有时间函数导入漂移可追溯到最初导入基线，并非 ME-12 引入；同样，缺少本地 config.py 与可选依赖属于当前归档/执行环境限制，已从本条通过结论中明确分离。

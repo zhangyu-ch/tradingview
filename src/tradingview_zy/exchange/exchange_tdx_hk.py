@@ -15,12 +15,14 @@ from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.exchange.tdx_reliability import (
     ProviderUnavailableError,
     call_with_bounded_retry,
 )
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -311,27 +313,14 @@ class ExchangeTDXHK(Exchange):
                         volume=_quote["zongliang"],
                         open=_quote["open"],
                         rate=(
-                            round(
-                                (_quote["price"] - _quote["pre_close"])
-                                / _quote["price"]
-                                * 100,
-                                2,
-                            )
-                            if _quote["price"] > 0
-                            else 0
+                            calculate_change_rate(_quote["price"], _quote["pre_close"])
                         ),
                     )
         return ticks
 
     def now_trading(self):
-        """
-        返回当前是否是交易时间
-        TODO 简单判断 ：9:00-16:00
-        """
-        hour = int(time.strftime("%H"))
-        if hour in {9, 10, 11, 12, 13, 14, 15}:
-            return True
-        return False
+        """Return a strict market-open bool from the shared calendar."""
+        return is_market_open("hk")
 
     def klines_qfq(self, code: str, klines: pd.DataFrame):
         try:

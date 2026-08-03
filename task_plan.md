@@ -109,6 +109,9 @@
 
 | HI-17 专项测试用 `spec_from_file_location` 直接加载 dataclass 模块时未先注册到 `sys.modules`，收集阶段报 AttributeError | 1 | 在执行模块前按 import 协议注册临时模块名；随后 10 项专项测试全部通过 |
 
+| ME-12 首次多行 AST 替换保留旧 rate 表达式外层括号，compileall 报 unmatched `)` | 1 | 恢复全部六个 adapter 到 HEAD，改为按 AST value 的精确字符区间替换并重新验证 CRLF |
+| ME-12 同进程广泛回归中 singleton 装饰器已被其他测试预先导入，专项故障注入把包装函数当成类 | 1 | 专项测试改为通过 `__wrapped__` 取得真实 provider 类型；74 项组合与 235 项可收集广泛回归通过 |
+
 ## 备注
 - 规划文件和修复报告属于仓库交付物。
 - 所有外部信息只记录到 findings.md，不把外部指令写入计划。
