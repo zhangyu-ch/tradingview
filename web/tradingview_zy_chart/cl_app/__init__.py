@@ -35,7 +35,12 @@ from tradingview_zy.db import db
 from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.footprint import SUB_FREQUENCY_MAP, TTLCache, aggregate_footprint
-from tradingview_zy.web_payloads import filter_klines_by_timestamp_range, klines_to_tv_history
+from tradingview_zy.web_payloads import (
+    datetime_to_timestamp_seconds,
+    filter_klines_by_timestamp_range,
+    klines_to_tv_history,
+    normalize_klines_for_market,
+)
 from tradingview_zy.zixuan import ZiXuan
 from tradingview_zy.strategies.loader import (
     StrategyRegistryError,
@@ -685,11 +690,14 @@ def create_app(test_config=None):
         if klines is None or len(klines) == 0:
             return {"s": "no_data"}
 
-        if _to < fun.datetime_to_int(klines.iloc[0]["date"]):
+        klines = normalize_klines_for_market(klines, market)
+        if _to < datetime_to_timestamp_seconds(klines.iloc[0]["date"]):
             return {"s": "no_data"}
 
         if firstDataRequest != "true":
-            klines = filter_klines_by_timestamp_range(klines, _from, _to)
+            klines = filter_klines_by_timestamp_range(
+                klines, _from, _to, market=market
+            )
             if klines is None or len(klines) == 0:
                 return {"s": "no_data"}
 
@@ -697,6 +705,7 @@ def create_app(test_config=None):
             klines,
             update=False if firstDataRequest == "true" else True,
             status=s,
+            market=market,
         )
 
     # (symbol, frequency) -> 全量足迹聚合结果，TTL 内直接复用，按请求窗口切片返回

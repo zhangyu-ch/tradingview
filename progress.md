@@ -73,3 +73,11 @@
 - 专项测试：`tests/test_new03_dependency_contract.py`，2 passed；依赖契约脚本通过。
 - 环境限制：离线容器没有 Python 3.11，`uv lock --check --offline` 无法启动目标解释器。
 - 提交：`fix(NEW-03): unify dependency sources and compatibility bounds`。
+
+### 问题 04：NEW-04
+- **状态：** complete
+- **完成时间：** 2026-08-03T11:34:00+00:00
+- 验证结论：问题存在；naive K 线在市场本地化前被转换为 epoch。
+- 修复：新增市场时区规范化并确保 history 的所有时间运算都在规范化后执行。
+- 专项测试：`tests/test_web_payloads.py`，6 passed。
+- 提交：`fix(NEW-04): normalize market time before history filtering`。

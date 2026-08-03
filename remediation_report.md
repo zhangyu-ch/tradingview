@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 2
-- **待处理：** 79
+- **已完成：** 3
+- **待处理：** 78
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -14,7 +14,7 @@
 |1|`CR-02`|严重|Web Security|🟡 部分修复|已完成|通过（3 项专项测试通过）|`fix(CR-02)`|
 |2|`NEW-02`|高|CI / Supply Chain|🆕 新问题（未修复）|已完成（本地已不存在，已加防回归）|通过（本地风险不存在，3 项防回归测试通过）|`fix(NEW-02)`|
 |3|`NEW-03`|高|Dependencies / Packaging|🆕 新问题（未修复）|已完成|通过（2 项专项测试与静态依赖契约检查通过）|`fix(NEW-03)`|
-|4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|待处理|—|—|
+|4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|已完成|通过（6 项 web payload 测试通过）|`fix(NEW-04)`|
 |5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|待处理|—|—|
 |6|`NX-20`|高|TDX Reliability|❌ 未修复|待处理|—|—|
 |7|`RV-08`|高|Web Security / Secrets|❌ 未修复|待处理|—|—|
@@ -159,16 +159,21 @@
 ### 04. NEW-04 · /tv/history 在市场时区本地化前过滤时间窗口，naive K 线会按服务器时区错筛
 
 - **原始状态 / 严重度 / 领域：** 🆕 新问题（未修复） / 高 / Web / Market Data
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `/tv/history` 在把行情时间解释为市场本地时间之前，就调用 `Timestamp.timestamp()` 做首行与请求窗口比较。naive A 股 09:30 因而会按 Web 主机时区解释，在 UTC 主机上与 Asia/Shanghai 的正确 epoch 相差 8 小时。
+- **b. 我是怎么修复的？** 新增统一的市场时区映射和 `normalize_klines_for_market()`；该函数复制输入并把 naive 时间按交易市场本地化、aware 时间转换到市场时区；路由在任何首行比较、范围过滤和 TradingView payload 转换前先规范化；epoch 转换现在拒绝 naive 时间，未知市场 fail closed。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python3 -m pytest -q tests/test_web_payloads.py`，6 项测试通过。
+  - 专项测试用 A 股 naive `2026-05-03 09:30` 与 Asia/Shanghai epoch 构造精确单点窗口，确认可正确选中且调用方 DataFrame 不被修改。
+  - 专项测试确认未知市场不能回退到服务器时区；源码检查确认 `/tv/history` 在首行和范围判断前调用规范化函数。
+  - 运行 `python3 -m compileall` 与 `git diff --check`。
+- **e. 验证是否通过？** 通过（6 项 web payload 测试通过）
+- **提交：** fix(NEW-04): normalize market time before history filtering
+- **修改文件：** `src/tradingview_zy/web_payloads.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_web_payloads.py`, `audit/remediation_state.json`, `remediation_report.md`, `progress.md`
+- **验证限制：**
+  - 当前容器缺 Flask/Werkzeug，未运行真实浏览器请求；市场本地化、过滤、payload 和路由调用顺序均已通过纯函数动态测试与源码契约核对。
 - **原报告最新结论：** 路由先调用 filter_klines_by_timestamp_range，再由 klines_to_tv_history/_prepare_strict_history_frame 把 naive date 本地化到市场时区。Timestamp.timestamp() 对 naive 值使用主机本地时区；在 UTC 服务器上，A 股 09:30 会比 Asia/Shanghai 正确瞬间偏移 8 小时，可能返回 no_data 或错选窗口。
 - **原报告建议：** 公开 prepare/normalize 函数并在任何 range/first-row 时间判断前调用；增加 UTC 主机 + A 股 naive 时间的路由级回归测试。
 
