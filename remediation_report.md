@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 27
-- **待处理：** 54
+- **已完成：** 28
+- **待处理：** 53
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -38,7 +38,7 @@
 |25|`MX-17`|中|TDX / Performance|❌ 未修复|已完成|通过（6 项专项测试及相邻 NX-20 测试通过；冷启动/重置扫描具有并发上限、全局 deadline 与有限缓存 TTL）|`fix(MX-17)`|
 |26|`NX-08`|中|Backtesting Model|❌ 未修复|已完成|通过（3 项专项测试通过；成功、fallback、重复调用和异常路径均不再修改调用方列表）|`fix(NX-08)`|
 |27|`NX-03`|中|Configuration / Messaging|❌ 未修复|已完成|通过（3 项专项测试通过；所有配置来源均返回独立映射，不再污染全局默认字典）|`fix(NX-03)`|
-|28|`NX-22`|中|Database / Diagnostics|❌ 未修复|待处理|—|—|
+|28|`NX-22`|中|Database / Diagnostics|❌ 未修复|已完成|通过（6 项专项、相邻及报告测试通过；数据库模块不再覆盖进程 warning 策略）|`fix(NX-22)`|
 |29|`NX-21`|中|Database Configuration|❌ 未修复|待处理|—|—|
 |30|`NX-23`|中|ExchangeDB|❌ 未修复|待处理|—|—|
 |31|`NX-16`|中|Web Security / Availability|❌ 未修复|待处理|—|—|
@@ -682,16 +682,22 @@
 ### 28. NX-22 · db.py import 时全局关闭所有 warnings
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Database / Diagnostics
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** src/tradingview_zy/db.py 在模块顶层执行 `warnings.filterwarnings("ignore")`。warnings 过滤器是进程全局状态，因此只要导入数据库模块，SQLAlchemy、pandas、弃用警告以及其他业务模块的 UserWarning 都可能被静默吞掉。
+- **b. 我是怎么修复的？** 删除 db.py 中未限定类别、模块或作用域的 warnings import 和全局 ignore 调用。数据库模块本身没有需要压制的已知警告；其他模块已有的 `catch_warnings` 局部精确过滤保持不变。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前 AST 检查确认 db.py 顶层存在 `warnings.filterwarnings("ignore")`。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_nx22_db_warning_scope.py tests/test_mx06_db_module_safe.py tests/test_remediation_report_counts.py`，6 项专项、相邻和报告测试全部通过。
+  - 在隔离子进程中先设置 `UserWarning` 为 error，再真实执行 tradingview_zy.db 的 SQLAlchemy/SQLite 导入初始化；导入后 sentinel UserWarning 仍被抛出。容器缺少可选 tzlocal，因此测试只为该导入提供返回 UTC 的最小兼容 stub，并把 HOME 指向临时目录。
+  - AST 断言 db.py 不再导入 warnings 或调用顶层 filterwarnings；执行 compileall 和 `git diff --check`。
+- **e. 验证是否通过？** 通过（6 项专项、相邻及报告测试通过；数据库模块不再覆盖进程 warning 策略）
+- **提交：** fix(NX-22): preserve process warning policy on DB import
+- **修改文件：** `src/tradingview_zy/db.py`, `tests/test_nx22_db_warning_scope.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 容器缺少项目锁文件声明的 tzlocal，动态导入测试使用只返回 UTC 的最小兼容 stub；数据库模块、SQLAlchemy 和 SQLite 初始化均为真实代码。
+  - 未来若发现特定第三方无害警告，应只在对应调用点按 category/module/message 局部过滤。
 - **原报告最新结论：** src/tradingview_zy/db.py 模块级仍执行 warnings.filterwarnings("ignore")，会全局吞掉与数据库无关的警告。
 - **原报告建议：** 删除全局 ignore；仅在已知第三方调用点使用精确 category/module/message 过滤。
 

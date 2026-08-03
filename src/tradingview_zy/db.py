@@ -1,7 +1,6 @@
 import datetime
 import json
 import time
-import warnings
 from typing import List, Union
 
 import numpy as np
@@ -24,8 +23,6 @@ from sqlalchemy.pool import QueuePool
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
-
-warnings.filterwarnings("ignore")
 
 # https://docs.sqlalchemy.org/en/20/core/types.html
 

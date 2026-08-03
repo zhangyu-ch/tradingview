@@ -1593,16 +1593,32 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "src/tradingview_zy/db.py 在模块顶层执行 `warnings.filterwarnings(\"ignore\")`。warnings 过滤器是进程全局状态，因此只要导入数据库模块，SQLAlchemy、pandas、弃用警告以及其他业务模块的 UserWarning 都可能被静默吞掉。",
+      "fix_summary": "删除 db.py 中未限定类别、模块或作用域的 warnings import 和全局 ignore 调用。数据库模块本身没有需要压制的已知警告；其他模块已有的 `catch_warnings` 局部精确过滤保持不变。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前 AST 检查确认 db.py 顶层存在 `warnings.filterwarnings(\"ignore\")`。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_nx22_db_warning_scope.py tests/test_mx06_db_module_safe.py tests/test_remediation_report_counts.py`，6 项专项、相邻和报告测试全部通过。",
+        "在隔离子进程中先设置 `UserWarning` 为 error，再真实执行 tradingview_zy.db 的 SQLAlchemy/SQLite 导入初始化；导入后 sentinel UserWarning 仍被抛出。容器缺少可选 tzlocal，因此测试只为该导入提供返回 UTC 的最小兼容 stub，并把 HOME 指向临时目录。",
+        "AST 断言 db.py 不再导入 warnings 或调用顶层 filterwarnings；执行 compileall 和 `git diff --check`。"
+      ],
+      "verification_result": "通过（6 项专项、相邻及报告测试通过；数据库模块不再覆盖进程 warning 策略）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/db.py",
+        "tests/test_nx22_db_warning_scope.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "容器缺少项目锁文件声明的 tzlocal，动态导入测试使用只返回 UTC 的最小兼容 stub；数据库模块、SQLAlchemy 和 SQLite 初始化均为真实代码。",
+        "未来若发现特定第三方无害警告，应只在对应调用点按 category/module/message 局部过滤。"
+      ],
+      "commit_subject": "fix(NX-22): preserve process warning policy on DB import"
     }
   },
   {

@@ -274,3 +274,12 @@
 - 修复：先选择来源映射，再返回 `dict(source)` 副本并只修改副本；补充明确类型契约。
 - 专项测试：`tests/test_nx03_feishu_config_copy.py`，3 passed；覆盖市场/default、返回值再修改、跨市场调用和 DB override。
 - 提交：`fix(NX-03): avoid mutating global Feishu config`。
+
+### 问题 28：NX-22
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：db.py import 时执行进程级 `warnings.filterwarnings("ignore")`，问题存在。
+- 修复：删除无差别 warnings import/过滤；保留其他模块已有的局部、精确 warning 上下文。
+- 专项、相邻与报告测试：6 passed；隔离子进程真实执行 DB/SQLAlchemy/SQLite 导入后，调用方 UserWarning=error 策略仍生效（仅为容器缺失的 tzlocal 提供 UTC stub）。
+- 首轮动态导入被容器缺失 `tzlocal` 阻断；测试改为只桩住纯时区查询，实际 DB 模块、SQLAlchemy 与 SQLite 初始化仍真实执行。
+- 提交：`fix(NX-22): preserve process warning policy on DB import`。

@@ -153,3 +153,8 @@
 - `config_get_feishu_keys` 直接取得 `config.FEISHU_KEYS[market/default]` 的原字典，再写入 `user_id`；一次读取就会修改全局配置对象。
 - 返回浅副本足以隔离当前扁平凭据结构；市场专用和 default 分支都先 `dict(source)`，数据库覆盖路径本来就构造新映射。
 - 测试还修改返回值并再次读取，确认调用方后续变更和跨市场调用都不会回写或泄漏到全局配置。
+
+## NX-22 数据库模块 warning 作用域复核
+- `db.py` 在模块顶层调用 `warnings.filterwarnings("ignore")`，过滤器作用于整个 Python 进程，而不仅是数据库代码；后续 pandas、SQLAlchemy、弃用和业务警告都会被无差别吞掉。
+- 该文件没有任何局部 warning 处理需求，删除 import 与全局调用即可恢复调用方策略；TDX 中针对单个 FutureWarning 的 `catch_warnings` 局部过滤不受影响。
+- 子进程测试在导入前把 UserWarning 设为 error，并把 HOME 指向临时目录；容器缺少可选 tzlocal，测试仅提供返回 UTC 的兼容 stub，实际 DB/SQLAlchemy/SQLite 导入后 sentinel warning 仍抛出。
