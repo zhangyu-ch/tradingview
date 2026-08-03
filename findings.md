@@ -148,3 +148,8 @@
 - 最小复现确认 `get_close_profit(["uid-a"])` 返回后调用方列表变为 `["uid-a", "clear"]`；根因是私有查询方法直接 append。
 - 查询只需要成员判断，不需要修改调用方顺序；修复在局部 set 副本上补 `clear`，重复调用与异常路径均不泄漏状态。
 - 相邻综合回测测试在收集阶段因容器缺失 `empyrical` 被阻断；专项 POSITION 测试不依赖该库并覆盖正常、fallback、异常三条路径。
+
+## NX-03 飞书配置共享状态复核
+- `config_get_feishu_keys` 直接取得 `config.FEISHU_KEYS[market/default]` 的原字典，再写入 `user_id`；一次读取就会修改全局配置对象。
+- 返回浅副本足以隔离当前扁平凭据结构；市场专用和 default 分支都先 `dict(source)`，数据库覆盖路径本来就构造新映射。
+- 测试还修改返回值并再次读取，确认调用方后续变更和跨市场调用都不会回写或泄漏到全局配置。

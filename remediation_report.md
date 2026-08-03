@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 26
-- **待处理：** 55
+- **已完成：** 27
+- **待处理：** 54
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -37,7 +37,7 @@
 |24|`MX-05`|中|Frontend|❌ 未修复|已完成|通过（3 项专项测试通过；定时回调、重启清理和停止语义均通过 Node 动态验证）|`fix(MX-05)`|
 |25|`MX-17`|中|TDX / Performance|❌ 未修复|已完成|通过（6 项专项测试及相邻 NX-20 测试通过；冷启动/重置扫描具有并发上限、全局 deadline 与有限缓存 TTL）|`fix(MX-17)`|
 |26|`NX-08`|中|Backtesting Model|❌ 未修复|已完成|通过（3 项专项测试通过；成功、fallback、重复调用和异常路径均不再修改调用方列表）|`fix(NX-08)`|
-|27|`NX-03`|中|Configuration / Messaging|❌ 未修复|待处理|—|—|
+|27|`NX-03`|中|Configuration / Messaging|❌ 未修复|已完成|通过（3 项专项测试通过；所有配置来源均返回独立映射，不再污染全局默认字典）|`fix(NX-03)`|
 |28|`NX-22`|中|Database / Diagnostics|❌ 未修复|待处理|—|—|
 |29|`NX-21`|中|Database Configuration|❌ 未修复|待处理|—|—|
 |30|`NX-23`|中|ExchangeDB|❌ 未修复|待处理|—|—|
@@ -661,16 +661,21 @@
 ### 27. NX-03 · 飞书配置读取会原地修改全局默认字典
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Configuration / Messaging
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** config_get_feishu_keys() 直接把 `config.FEISHU_KEYS[market]` 或 default 子字典赋给局部变量，再执行 `keys["user_id"] = ...`。局部变量和全局配置指向同一对象，因此一次读取就会污染全局默认值，返回值被调用方修改时也会继续回写。
+- **b. 我是怎么修复的？** 先通过 `FEISHU_KEYS.get()` 选择来源映射，再用 `dict(source)` 创建独立副本；user_id 只写入副本并返回。数据库覆盖分支继续构造新的规范化字典，同时为函数补充 `str -> dict[str, str]` 类型契约。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前 AST 检查确认函数对从 FEISHU_KEYS 取得的映射执行下标赋值。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_nx03_feishu_config_copy.py`，3 项专项测试全部通过。
+  - 分别验证市场专用配置、未知市场 default fallback 和数据库覆盖；修改返回值并重复/跨市场调用后，全局配置与缓存输入均保持原样。
+  - 执行实现与测试 compileall、相邻消息通道静态测试及 `git diff --check`。
+- **e. 验证是否通过？** 通过（3 项专项测试通过；所有配置来源均返回独立映射，不再污染全局默认字典）
+- **提交：** fix(NX-03): avoid mutating global Feishu config
+- **修改文件：** `src/tradingview_zy/utils.py`, `tests/test_nx03_feishu_config_copy.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 当前 FEISHU_KEYS 子项是扁平字符串映射，因此浅拷贝足够；若未来加入嵌套可变配置，应改用不可变配置模型或显式深拷贝。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/utils.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 返回 `dict(source)` 副本，使用不可变配置对象。
 

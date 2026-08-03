@@ -1543,16 +1543,31 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "config_get_feishu_keys() 直接把 `config.FEISHU_KEYS[market]` 或 default 子字典赋给局部变量，再执行 `keys[\"user_id\"] = ...`。局部变量和全局配置指向同一对象，因此一次读取就会污染全局默认值，返回值被调用方修改时也会继续回写。",
+      "fix_summary": "先通过 `FEISHU_KEYS.get()` 选择来源映射，再用 `dict(source)` 创建独立副本；user_id 只写入副本并返回。数据库覆盖分支继续构造新的规范化字典，同时为函数补充 `str -> dict[str, str]` 类型契约。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前 AST 检查确认函数对从 FEISHU_KEYS 取得的映射执行下标赋值。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_nx03_feishu_config_copy.py`，3 项专项测试全部通过。",
+        "分别验证市场专用配置、未知市场 default fallback 和数据库覆盖；修改返回值并重复/跨市场调用后，全局配置与缓存输入均保持原样。",
+        "执行实现与测试 compileall、相邻消息通道静态测试及 `git diff --check`。"
+      ],
+      "verification_result": "通过（3 项专项测试通过；所有配置来源均返回独立映射，不再污染全局默认字典）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/utils.py",
+        "tests/test_nx03_feishu_config_copy.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "当前 FEISHU_KEYS 子项是扁平字符串映射，因此浅拷贝足够；若未来加入嵌套可变配置，应改用不可变配置模型或显式深拷贝。"
+      ],
+      "commit_subject": "fix(NX-03): avoid mutating global Feishu config"
     }
   },
   {

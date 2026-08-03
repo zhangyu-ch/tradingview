@@ -266,3 +266,11 @@
 - 专项测试：`tests/test_nx08_position_close_profit.py` 3 passed；覆盖指定 uid、clear fallback、无记录异常及重复调用。
 - 相邻套件限制：`test_backtesting_base_generic.py` 因缺失 `empyrical` 无法收集；compileall 与 diff 检查通过。
 - 提交：`fix(NX-08): keep close-profit queries side-effect free`。
+
+### 问题 27：NX-03
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：飞书配置读取直接引用全局市场/default 字典并原地写入 user_id，问题存在。
+- 修复：先选择来源映射，再返回 `dict(source)` 副本并只修改副本；补充明确类型契约。
+- 专项测试：`tests/test_nx03_feishu_config_copy.py`，3 passed；覆盖市场/default、返回值再修改、跨市场调用和 DB override。
+- 提交：`fix(NX-03): avoid mutating global Feishu config`。

@@ -22,7 +22,7 @@ def config_get_proxy():
     }
 
 
-def config_get_feishu_keys(market):
+def config_get_feishu_keys(market: str) -> dict[str, str]:
     db_fs_key = db.cache_get("fs_keys")
     if (
         db_fs_key is not None
@@ -35,9 +35,9 @@ def config_get_feishu_keys(market):
             "app_secret": db_fs_key["fs_app_secret"],
             "user_id": db_fs_key["fs_user_id"],
         }
-    keys = config.FEISHU_KEYS["default"]
-    if market in config.FEISHU_KEYS.keys():
-        keys = config.FEISHU_KEYS[market]
+
+    source = config.FEISHU_KEYS.get(market, config.FEISHU_KEYS["default"])
+    keys = dict(source)
     keys["user_id"] = config.FEISHU_KEYS["user_id"]
     return keys
 
