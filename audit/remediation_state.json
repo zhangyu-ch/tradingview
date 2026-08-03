@@ -1207,16 +1207,32 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "db.py 文件末尾保留可执行 demo main block，其中唯一未注释的 db.marks_add_by_price() 会在运维、IDE 或调试命令直接运行模块时向当前配置数据库写入固定测试标记。",
+      "fix_summary": "删除整个可执行 demo main block及其历史注释示例；保留生产 DB 类和模块级 db 单例。数据库 smoke/demo 操作只能放在使用临时数据库的 pytest 中，不再从生产模块直接执行。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_mx06_db_module_safe.py`，3 项测试全部通过。",
+        "AST 确认 db.py 顶层不再存在 __main__ 条件块。",
+        "静态确认无测试标记文本或 db.marks_add_by_price 调用，同时生产 `db: DB = DB()` 保留。",
+        "执行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（3 项专项测试通过；直接执行文件不再触发测试业务写入）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/db.py",
+        "tests/test_mx06_db_module_safe.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "db.py import 时仍创建 DB 实例/schema，这是与本条不同的模块导入副作用，后续架构/数据库条目继续处理。"
+      ],
+      "commit_subject": "fix(MX-06): remove executable database demo writes"
     }
   },
   {

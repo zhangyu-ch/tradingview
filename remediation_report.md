@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 11
-- **待处理：** 70
+- **已完成：** 12
+- **待处理：** 69
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -31,7 +31,7 @@
 |18|`ME-16`|中|Interactive Brokers|❌ 未修复|已完成|通过（4 项专项测试通过；所有 IB 客户端 RPC 均使用有限 deadline）|`fix(ME-16)`|
 |19|`ME-05`|中|Web Startup|❌ 未修复|已完成|通过（3 项专项测试通过；应用启动元数据不再实例化任何外部适配器）|`fix(ME-05)`|
 |20|`MX-01`|中|Configuration / Messaging|❌ 未修复|已完成（通过移除废弃能力）|通过（3 项专项测试通过；破裂钉钉配置与不可达 HK 分支已从运行树移除）|`fix(MX-01)`|
-|21|`MX-06`|中|Database / Operations|❌ 未修复|待处理|—|—|
+|21|`MX-06`|中|Database / Operations|❌ 未修复|已完成|通过（3 项专项测试通过；直接执行文件不再触发测试业务写入）|`fix(MX-06)`|
 |22|`MX-02`|中|Exchange Factory|❌ 未修复|待处理|—|—|
 |23|`MX-04`|中|ExchangeDB / Scheduling|❌ 未修复|待处理|—|—|
 |24|`MX-05`|中|Frontend|❌ 未修复|待处理|—|—|
@@ -532,16 +532,21 @@
 ### 21. MX-06 · 直接执行 db.py 会向配置数据库写测试标记
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Database / Operations
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** db.py 文件末尾保留可执行 demo main block，其中唯一未注释的 db.marks_add_by_price() 会在运维、IDE 或调试命令直接运行模块时向当前配置数据库写入固定测试标记。
+- **b. 我是怎么修复的？** 删除整个可执行 demo main block及其历史注释示例；保留生产 DB 类和模块级 db 单例。数据库 smoke/demo 操作只能放在使用临时数据库的 pytest 中，不再从生产模块直接执行。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_mx06_db_module_safe.py`，3 项测试全部通过。
+  - AST 确认 db.py 顶层不再存在 __main__ 条件块。
+  - 静态确认无测试标记文本或 db.marks_add_by_price 调用，同时生产 `db: DB = DB()` 保留。
+  - 执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（3 项专项测试通过；直接执行文件不再触发测试业务写入）
+- **提交：** fix(MX-06): remove executable database demo writes
+- **修改文件：** `src/tradingview_zy/db.py`, `tests/test_mx06_db_module_safe.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - db.py import 时仍创建 DB 实例/schema，这是与本条不同的模块导入副作用，后续架构/数据库条目继续处理。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/db.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 删除全部可执行测试写入；数据库 smoke test 移到临时 SQLite pytest fixture。模块导入也应避免自动 create_all，改由显式应用初始化或迁移命令。
 

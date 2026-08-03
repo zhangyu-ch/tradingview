@@ -212,3 +212,16 @@
 - 修复：删除破裂钉钉配置/发送接口和死注释，保留飞书并补通道准入文档。
 - 专项测试：`tests/test_mx01_dingding_removed.py`，3 passed。
 - 提交：`fix(MX-01): remove broken DingTalk integration`。
+
+### 归档检查点 02（问题 011–020）
+- **状态：** verified
+- 文件：`/mnt/data/tradingview_remediation_issues_011-020.zip`
+- SHA-256：`0fabf6142b1a4878249e34c8f9795751662abd48f4edde3c356c560336e3a4f8`
+- 验证：重新解压后工作树干净；HEAD=`3ba999384981bf0f2ebbd67a9622d344ca9df775`；问题 011–020 标签齐全；`git fsck --full` 通过。
+
+### 问题 21：MX-06
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 修复：删除 db.py 可执行 demo/main 测试写入，保留生产 DB 单例。
+- 专项测试：`tests/test_mx06_db_module_safe.py`，3 passed。
+- 提交：`fix(MX-06): remove executable database demo writes`。
