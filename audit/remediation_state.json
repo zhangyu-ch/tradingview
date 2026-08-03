@@ -1,0 +1,3222 @@
+[
+  {
+    "index": 1,
+    "issue_id": "CR-02",
+    "status": "🟡 部分修复",
+    "severity": "严重",
+    "domain": "Web Security",
+    "title": "默认部署无有效认证，且会话签名密钥固定",
+    "source_title": "默认部署无有效认证，且会话签名密钥固定",
+    "source_anchor": "CR-02",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "默认回环监听、远程免密启动拒绝、随机持久化会话密钥、密码哈希、登录限速、安全 Cookie 和登出仍在；但设置页继续把已保存的飞书 App Secret 放入普通文本框 value，并打印整个提交字段。",
+    "basis": "认证与会话根因已有实质修复，但原问题还包含 Secret 回显/控制台泄露，当前源码仍可直接定位，因此不能关闭。",
+    "next_step": "设置页不得返回旧 Secret；删除 console.log(data.field)；敏感设置更新应使用“留空不改”语义，并考虑重认证/更严格权限。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/web_security.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/web_security.py",
+        "note": "认证、会话密钥和登录限速"
+      },
+      {
+        "label": "tests/test_web_security.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_web_security.py",
+        "note": "远程免密拒绝、Cookie、密钥和限速测试"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/templates/setting.html",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/templates/setting.html",
+        "note": "仍存在 Secret 明文 value 与控制台打印"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 2,
+    "issue_id": "NEW-02",
+    "status": "🆕 新问题（未修复）",
+    "severity": "高",
+    "domain": "CI / Supply Chain",
+    "title": "临时修复传输分片与可写 force-push 工作流被合并进 master",
+    "source_title": "临时修复传输分片与可写 force-push 工作流被合并进 master",
+    "source_anchor": "NEW-02",
+    "v7_status": "🆕 新问题（未修复）",
+    "severity_confidence": "高 / 确定",
+    "latest_conclusion": "master 仍包含 .github/remediation/current-remediation.part.*、临时 PR body 文件和 3 个 contents:write 工作流；这些工作流能重组补丁、git reset --soft，并向 agent/current-comprehensive-remediation 执行 force-with-lease。临时元数据文件自身写明“must not be merged”。",
+    "basis": "这些文件不属于产品或长期 CI，却已进入默认分支；未来同名分支 push 或误触发可能用写令牌重放旧补丁/重写分支历史，扩大供应链与维护面。",
+    "next_step": "删除 3 个临时工作流、全部 remediation 分片/marker/test 文件和临时 PR 元数据；增加仓库卫生检查，禁止此类 transport artifacts 合并。",
+    "minimum_reproduction": "静态扫描命中 contents: write、git reset --soft 和 git push --force-with-lease。",
+    "evidence": [
+      {
+        "label": ".github/PR_BODY_CURRENT_REMEDIATION.md",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/.github/PR_BODY_CURRENT_REMEDIATION.md",
+        "note": "明确标注临时且不应合并"
+      },
+      {
+        "label": ".github/workflows/apply-current-comprehensive-remediation.yml",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/.github/workflows/apply-current-comprehensive-remediation.yml",
+        "note": "写权限、补丁重组和 force-with-lease"
+      },
+      {
+        "label": ".github/workflows/finalize-current-comprehensive-remediation.yml",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/.github/workflows/finalize-current-comprehensive-remediation.yml",
+        "note": "soft reset 与强制推送"
+      },
+      {
+        "label": ".github/remediation",
+        "url": "https://github.com/zhangyu-ch/tradingview/tree/3488462529c6ec052192eb41d1a6b74c5718c58f/.github/remediation",
+        "note": "补丁分片及 marker/test 遗留"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 3,
+    "issue_id": "NEW-03",
+    "status": "🆕 新问题（未修复）",
+    "severity": "高",
+    "domain": "Dependencies / Packaging",
+    "title": "requirements.txt 与 pyproject/uv.lock 漂移，可重新解析出已知不兼容依赖",
+    "source_title": "requirements.txt 与 pyproject/uv.lock 漂移，可重新解析出已知不兼容依赖",
+    "source_anchor": "NEW-03",
+    "v7_status": "🆕 新问题（未修复）",
+    "severity_confidence": "高 / 确定",
+    "latest_conclusion": "pyproject 已删除 chardet 并固定 websockets>=13.1,<14；requirements.txt 仍直接列出无上界 chardet 和 lark-oapi，且没有 websockets 兼容约束。使用 requirements 安装可再次解析到 chardet 7.x / websockets 16.x，重现本次 CI 中已出现过的 Requests/Lark 导入告警或失败。",
+    "basis": "仓库存在两个互相矛盾的安装入口，而 CI 只验证 uv.lock；“一种安装方式通过”不能证明另一种仍被文档/用户使用的方式安全。",
+    "next_step": "将 pyproject+uv.lock 设为唯一依赖源；若必须发布 requirements，则从 lock 自动生成并在 CI 校验无漂移。",
+    "minimum_reproduction": "文本对比即可确定约束不一致；此前 CI 日志已分别出现 chardet 7.x 和 websockets 16.x 导入问题。",
+    "evidence": [
+      {
+        "label": "requirements.txt",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/requirements.txt",
+        "note": "仍含无上界 chardet/lark-oapi，缺少 websockets pin"
+      },
+      {
+        "label": "pyproject.toml",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/pyproject.toml",
+        "note": "已删除 chardet并固定 websockets 13.x"
+      },
+      {
+        "label": "uv.lock",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/uv.lock",
+        "note": "CI 实际验证的锁定环境"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 4,
+    "issue_id": "NEW-04",
+    "status": "🆕 新问题（未修复）",
+    "severity": "高",
+    "domain": "Web / Market Data",
+    "title": "/tv/history 在市场时区本地化前过滤时间窗口，naive K 线会按服务器时区错筛",
+    "source_title": "/tv/history 在市场时区本地化前过滤时间窗口，naive K 线会按服务器时区错筛",
+    "source_anchor": "NEW-04",
+    "v7_status": "🆕 新问题（未修复）",
+    "severity_confidence": "高 / 确定",
+    "latest_conclusion": "路由先调用 filter_klines_by_timestamp_range，再由 klines_to_tv_history/_prepare_strict_history_frame 把 naive date 本地化到市场时区。Timestamp.timestamp() 对 naive 值使用主机本地时区；在 UTC 服务器上，A 股 09:30 会比 Asia/Shanghai 正确瞬间偏移 8 小时，可能返回 no_data 或错选窗口。",
+    "basis": "PR #15 新增严格市场时区规范化，但调用顺序没有把规范化置于所有时间运算之前，形成同一路径内两套时间语义。",
+    "next_step": "公开 prepare/normalize 函数并在任何 range/first-row 时间判断前调用；增加 UTC 主机 + A 股 naive 时间的路由级回归测试。",
+    "minimum_reproduction": "本地最小复现：naive 2026-05-03 09:30 与 Asia/Shanghai 本地化后的 Unix 秒相差 28800 秒。",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "第 686–697 行先过滤、后调用严格转换"
+      },
+      {
+        "label": "src/tradingview_zy/web_payloads.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/web_payloads.py",
+        "note": "第 17–40 行才进行市场时区本地化；第 85–95 行过滤直接 timestamp"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 5,
+    "issue_id": "NEW-05",
+    "status": "🆕 新问题（未修复）",
+    "severity": "高",
+    "domain": "Backtesting / Accounting",
+    "title": "FIFO lot 在结算校验完成前原地消费，异常会留下“lot 已减、聚合仓位未减”的半提交状态",
+    "source_title": "FIFO lot 在结算校验完成前原地消费，异常会留下“lot 已减、聚合仓位未减”的半提交状态",
+    "source_anchor": "NEW-05",
+    "v7_status": "🆕 新问题（未修复）",
+    "severity_confidence": "高 / 确定",
+    "latest_conclusion": "平仓路径先 consume_fifo_lots(pos.lots, ...) 原地减少/删除 lot，再调用 close_settlement 校验 close price、direction、期货 symbol_size 等。若后者抛错，后续聚合 amount/now_pos_rate/cash 尚未提交，但 pos.lots 已被修改，状态模型分叉。",
+    "basis": "新会计实现把“计算”和“提交”混在可失败操作之前，缺少事务式 all-or-nothing 边界。",
+    "next_step": "让 lot 消费成为纯函数/对深拷贝工作；所有结算参数验证通过后一次性替换 lots、amount、rate、cash、records。增加无效 symbol_size/fee/price 的故障注入回归测试。",
+    "minimum_reproduction": "最小复现：10 单位 lot 先消费 5，随后 futures_symbol_size=0 抛错；异常后 lot 仍只剩 5、hold_balance 只剩 500。",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/backtesting/accounting.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/accounting.py",
+        "note": "consume_fifo_lots 第 189–248 行原地修改；close_settlement 第 251–270 行仍可失败"
+      },
+      {
+        "label": "src/tradingview_zy/backtesting/backtest_trader.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/backtest_trader.py",
+        "note": "平仓路径先消费 lots 再做结算校验"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 6,
+    "issue_id": "NX-20",
+    "status": "❌ 未修复",
+    "severity": "高",
+    "domain": "TDX Reliability",
+    "title": "多个 TDX-ExHq 构造器用无上限 while True 重连",
+    "source_title": "多个 TDX-ExHq 构造器用无上限 while True 重连",
+    "source_anchor": "NX-20",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "多个 TDX-ExHq 构造器仍使用无上限 while True 重连；V6 顶层“已修复”没有源码依据。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "有限次数+指数退避+总 deadline；失败抛 ProviderUnavailableError；构造器不得永久阻塞。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_futures.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_futures.py",
+        "note": "无上限构造重试"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "note": "无上限构造重试"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 7,
+    "issue_id": "RV-08",
+    "status": "❌ 未修复",
+    "severity": "高",
+    "domain": "Web Security / Secrets",
+    "title": "系统设置页把已保存的飞书 App Secret 明文回显，并在控制台打印提交字段",
+    "source_title": "系统设置页把已保存的飞书 App Secret 明文回显，并在控制台打印提交字段",
+    "source_anchor": "RV-08",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "setting.html 当前仍以 type=text 和 value=\"{{ fs_app_secret }}\" 回显旧 Secret，并在提交回调中 console.log(data.field)。",
+    "basis": "V6 顶层“已修复”与其展开记录及当前源代码直接冲突；该文件未被 PR #15 修改，因此这是 V6 误标纠正，不是新回归。",
+    "next_step": "不返回旧 Secret；使用 password 输入与留空不改语义；删除日志；增加响应/DOM/控制台无 Secret 测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/templates/setting.html",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/templates/setting.html",
+        "note": "Secret value 和 console.log 仍存在"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 8,
+    "issue_id": "HI-13",
+    "status": "❌ 未修复",
+    "severity": "高",
+    "domain": "Binance",
+    "title": "Binance 合约/现货增量分页可能重复边界或停滞，单行缓存会越界",
+    "source_title": "Binance 合约/现货增量分页可能重复边界或停滞，单行缓存会越界",
+    "source_anchor": "HI-13",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "Binance 合约/现货增量逻辑仍读取 db_klines.iloc[-2]，单行缓存会越界；分页起点仍可能停在上页最后时间戳，造成重复边界或停滞。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "单行/空缓存显式分支；下一页起点推进一个最小周期；去重并检测无进展。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_binance.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_binance.py",
+        "note": "合约增量分页"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_binance_spot.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_binance_spot.py",
+        "note": "现货增量分页"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 9,
+    "issue_id": "HI-14",
+    "status": "❌ 未修复",
+    "severity": "高",
+    "domain": "TQ SDK",
+    "title": "ExchangeTq 构造即启动非 daemon 线程，队列/缓存无同步与确定性关闭",
+    "source_title": "ExchangeTq 构造即启动非 daemon 线程，队列/缓存无同步与确定性关闭",
+    "source_anchor": "HI-14",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "ExchangeTq 构造仍启动非 daemon 线程；共享队列/字典缺少同步，close() 只置标记并 sleep，没有 join/确定性释放。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "显式 start/close 生命周期、daemon 策略、锁/线程安全队列、join timeout 和资源释放测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tq.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tq.py",
+        "note": "线程启动、共享状态和关闭路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 10,
+    "issue_id": "CR-05",
+    "status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity": "高",
+    "domain": "CTP",
+    "title": "CTP 行情与交易代码存在多处确定性失效，但当前未接入标准工厂或内置启动脚本",
+    "source_title": "CTP 行情与交易代码存在多处确定性失效，但当前未接入标准工厂或内置启动脚本",
+    "source_anchor": "CR-05",
+    "v7_status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity_confidence": "",
+    "latest_conclusion": "CTP 行情/交易实现仍未达到可用状态，标准工厂继续 fail-closed，不会把未完成实现作为正常 provider 加载。底层文件仍保留。",
+    "basis": "V6 将标准入口阻断标成“通过移除已修复”，但实现没有真正删除或修复；V7 按功能根因仍在、风险入口被阻断，调整为“未完全修复（已阻断或缓解）”。",
+    "next_step": "继续保持 fail-closed。恢复 CTP 前必须补齐抽象方法、Tick 契约、交易状态机、回报/重连/资源释放，并在仿真前置环境验证。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/__init__.py",
+        "note": "标准工厂对不可用 CTP fail-closed"
+      },
+      {
+        "label": "tests/test_ctp_unavailable.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_ctp_unavailable.py",
+        "note": "不导入、缓存不污染测试"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_ctp.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_ctp.py",
+        "note": "底层未完成实现仍在"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 11,
+    "issue_id": "CR-04",
+    "status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity": "高",
+    "domain": "QMT Trader",
+    "title": "QMT 交易适配器真实买入确定性引用未定义 price；当前无内置活跃启动入口",
+    "source_title": "QMT 交易适配器真实买入确定性引用未定义 price；当前无内置活跃启动入口",
+    "source_anchor": "CR-04",
+    "v7_status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity_confidence": "",
+    "latest_conclusion": "QMT 交易类的底层错误实现仍在仓库并可被直接导入；标准应用当前没有内置活跃启动入口，且统一能力模型没有把它作为可用交易执行能力暴露。",
+    "basis": "V6 把“无标准入口”直接等同于“已修复（移除）”过度关闭了问题。代码并未删除，也没有修好真实下单路径，因此只能判为已阻断/缓解。",
+    "next_step": "不得绕过标准工厂启用该类。若恢复支持，需修正报价/数量、订单状态、真实失败不得模拟成功，并完成 QMT 沙箱集成测试；否则应真正移出运行包。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/trader/trader_qmt_stock.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/trader/trader_qmt_stock.py",
+        "note": "底层 QMT trader 仍存在"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "当前能力注册未把该 trader 声明为可用交易执行入口"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 12,
+    "issue_id": "HI-06",
+    "status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity": "高",
+    "domain": "Web Security",
+    "title": "状态变更接口无 CSRF 防护，删除任务还使用 GET",
+    "source_title": "状态变更接口无 CSRF 防护，删除任务还使用 GET",
+    "source_anchor": "HI-06",
+    "v7_status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity_confidence": "",
+    "latest_conclusion": "登录与 Cookie 已加强，但状态变更接口仍没有 CSRF token/Origin 校验，删除提醒任务继续使用 GET。",
+    "basis": "当前只能证明危险路径 fail-closed/不可达，不能证明底层实现正确，因此不能标记已修复。",
+    "next_step": "引入 CSRF 中间件；所有写操作改 POST/DELETE；SameSite 只作纵深防御，不替代 token。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "alert_del 等写路由"
+      },
+      {
+        "label": "src/tradingview_zy/web_security.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/web_security.py",
+        "note": "仅认证/会话防护"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 13,
+    "issue_id": "CR-03",
+    "status": "🟡 部分修复",
+    "severity": "高",
+    "domain": "Live Trading",
+    "title": "实盘订单缺少成交状态机，内部账本可与券商/交易所永久分叉",
+    "source_title": "实盘订单缺少成交状态机，内部账本可与券商/交易所永久分叉",
+    "source_anchor": "CR-03",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "旧 trader 启动提示脚本已删除，但 QMT/TQ/Binance 等交易类的订单提交、成交确认和重启对账没有改变；状态机缺口仍在。",
+    "basis": "V6 已记录部分缓解；最新 master 未出现足以关闭全部根因的新增证据，状态保持部分修复。",
+    "next_step": "真实资金启用前必须建立统一 Order/Fill 状态机、幂等 client_order_id、持久化成交明细和重启对账；未确认成交必须 fail closed。现有启动器保持禁用，直到每个适配器通过沙箱验收。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/trader/trader_qmt_stock.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/trader/trader_qmt_stock.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/trader/trader_futures.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/trader/trader_futures.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tq.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tq.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_binance.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_binance.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 14,
+    "issue_id": "ME-24",
+    "status": "🔴 回归（重新出现）",
+    "severity": "中",
+    "domain": "Environment",
+    "title": "环境检查与 pyproject 的 Python 约束冲突，并在失败后仍打印“环境OK”",
+    "source_title": "环境检查与 pyproject 的 Python 约束冲突，并在失败后仍打印“环境OK”",
+    "source_anchor": "ME-24",
+    "v7_status": "🔴 回归（重新出现）",
+    "severity_confidence": "",
+    "latest_conclusion": "PR #15 将包元数据收紧为 Python >=3.11,<3.12，以匹配 cp311-only TA-Lib wheel；但 check_env.py 仍以“>=3.11”为判定，_python_version_supported((3,12,0)) 实测返回 True，并输出“3.11 或更高版本”。",
+    "basis": "V6 快照中 pyproject 与检查器都接受 >=3.11；后续仅修改包元数据而未同步检查器，形成真实回归。",
+    "next_step": "把环境检查改为同一 SpecifierSet/单一元数据来源，明确拒绝 3.12+；增加 pyproject 与 check_env 契约一致性测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "check_env.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/check_env.py",
+        "note": "仍使用 MIN_PYTHON=(3,11) 的单下界检查"
+      },
+      {
+        "label": "pyproject.toml",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/pyproject.toml",
+        "note": "当前 requires-python 为 >=3.11,<3.12"
+      },
+      {
+        "label": "tests/test_batch01_small_fixes.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_batch01_small_fixes.py",
+        "note": "现有环境检查测试未覆盖上界"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 15,
+    "issue_id": "NEW-06",
+    "status": "🆕 新问题（未修复）",
+    "severity": "中",
+    "domain": "Architecture / Exchange Contract",
+    "title": "MarketRegistry 过报 DB provider 的 security_master/plates 能力",
+    "source_title": "MarketRegistry 过报 DB provider 的 security_master/plates 能力",
+    "source_anchor": "NEW-06",
+    "v7_status": "🆕 新问题（未修复）",
+    "severity_confidence": "中 / 确定",
+    "latest_conclusion": "DB_CAPABILITIES 被定义为 MARKET_DATA + TICKS + SECURITY_MASTER + PLATES，并用于所有市场的 db provider；但 ExchangeDB.all_stocks() 固定返回空列表，stock_owner_plate() 和 plate_stocks() 为 pass。调用方通过 require_capability 后仍会得到空/None，而不是“能力不支持”。",
+    "basis": "能力声明的目的就是在调用前可靠判断；声明与实现不一致会把 fail-closed 重新变成静默空结果。该问题也放大了历史 NX-23。",
+    "next_step": "DB provider 只声明真实实现的 MARKET_DATA/TICKS；或实现安全主数据/板块查询。为每个 Capability 增加行为级契约测试，不能只检查集合存在。",
+    "minimum_reproduction": "静态契约复核：registry 声明 SECURITY_MASTER/PLATES，目标方法分别返回 []/None。",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "DB_CAPABILITIES=MD_PLATES 并应用于所有 db provider"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_db.py",
+        "note": "all_stocks 空列表、板块方法 pass"
+      },
+      {
+        "label": "tests/test_v6_market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_v6_market_registry.py",
+        "note": "当前测试只验证声明/路由，未验证方法行为"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 16,
+    "issue_id": "HI-01",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Futures Trader",
+    "title": "TraderFutures 使用不存在的构造参数，实例化立即失败",
+    "source_title": "TraderFutures 使用不存在的构造参数，实例化立即失败",
+    "source_anchor": "HI-01",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "TraderFutures 虽已传入 market，但仍调用 ExchangeTq(use_account=True)，而构造器参数是 use_simulate_account；直接实例化仍会 TypeError。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "统一构造参数与 order_type；若不支持该 trader，应从运行包删除并加不可达测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/trader/trader_futures.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/trader/trader_futures.py",
+        "note": "错误 ExchangeTq 构造参数"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tq.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tq.py",
+        "note": "实际构造签名"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 17,
+    "issue_id": "ME-06",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "File Upload",
+    "title": "自选导入和导出共用固定 zx.txt，缺少并发隔离与上传限制",
+    "source_title": "自选导入和导出共用固定 zx.txt，缺少并发隔离与上传限制",
+    "source_anchor": "ME-06",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "自选导出和导入仍共用 data/zx.txt；上传直接 file.save()，没有请求体/文件大小、并发隔离和流式限制。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "每请求临时文件或内存流；MAX_CONTENT_LENGTH；扩展名/编码/行数验证；finally 清理。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "固定 zx.txt 的导入/导出路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 18,
+    "issue_id": "ME-16",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Interactive Brokers",
+    "title": "IB Redis 请求使用 BRPOP timeout=0，可无限阻塞调用线程",
+    "source_title": "IB Redis 请求使用 BRPOP timeout=0，可无限阻塞调用线程",
+    "source_anchor": "ME-16",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "ExchangeIB.ticks() 仍 BRPOP timeout=0，order 路径也存在 0 超时；调用线程可永久阻塞。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "统一有限 deadline、取消/清理响应键、明确 TimeoutError，并覆盖 Redis 无响应测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_ib.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_ib.py",
+        "note": "无限 BRPOP 路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 19,
+    "issue_id": "ME-05",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Web Startup",
+    "title": "create_app 启动时 eager 实例化全部配置市场，单个可选适配器可拖垮整个服务",
+    "source_title": "create_app 启动时 eager 实例化全部配置市场，单个可选适配器可拖垮整个服务",
+    "source_anchor": "ME-05",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "create_app() 启动阶段仍对全部市场调用 get_exchange().support_frequencys()/default_code()，单个可选 provider 失败仍可阻断整个 Web 服务。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "注册表提供静态元数据；provider 按请求惰性实例化；可选市场失败降级为该市场不可用。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "第 173–194 行 eager 构造全部市场"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "可用于替代构造的静态元数据"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 20,
+    "issue_id": "MX-01",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Configuration / Messaging",
+    "title": "钉钉配置契约破裂且 HK 分支永不可达",
+    "source_title": "钉钉配置契约破裂且 HK 分支永不可达",
+    "source_anchor": "MX-01",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "最新配置模板仍没有 DINGDING_KEY_*，utils.py 也未修改；配置契约和 HK 分支问题仍在。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "若已废弃钉钉，应删除接口和死配置分支；若继续支持，则把配置加入模板、改正 HK 判断、使用结构化配置对象并加入单元测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/utils.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/utils.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/config.py.demo",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/config.py.demo",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 21,
+    "issue_id": "MX-06",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Database / Operations",
+    "title": "直接执行 db.py 会向配置数据库写测试标记",
+    "source_title": "直接执行 db.py 会向配置数据库写测试标记",
+    "source_anchor": "MX-06",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/db.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "删除全部可执行测试写入；数据库 smoke test 移到临时 SQLite pytest fixture。模块导入也应避免自动 create_all，改由显式应用初始化或迁移命令。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 22,
+    "issue_id": "MX-02",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Exchange Factory",
+    "title": "ZB 被配置文档声明支持，但工厂无法选择",
+    "source_title": "ZB 被配置文档声明支持，但工厂无法选择",
+    "source_anchor": "MX-02",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "config.py.demo 仍声明数字货币支持 binance / zb / db；MarketRegistry/工厂只有 binance 与 db，zb 配置仍不可选择。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "从配置与文档删除 zb，或重新实现并注册；支持矩阵必须由注册表自动生成。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/config.py.demo",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/config.py.demo",
+        "note": "仍宣称支持 zb"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "Currency provider 不含 zb"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 23,
+    "issue_id": "MX-04",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "ExchangeDB / Scheduling",
+    "title": "ExchangeDB.now_trading 返回 None，Python 与前端调用方对三态结果解释不一致",
+    "source_title": "ExchangeDB.now_trading 返回 None，Python 与前端调用方对三态结果解释不一致",
+    "source_anchor": "MX-04",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "ExchangeDB.now_trading() 仍为 pass，返回 None；Python 与前端对 None/null 的解释仍不统一。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "返回严格 bool 或显式 UnsupportedCapabilityError；调用方不得把 None 当作交易中。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_db.py",
+        "note": "now_trading pass"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 24,
+    "issue_id": "MX-05",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Frontend",
+    "title": "自选涨跌幅轮询把函数返回值交给 setInterval",
+    "source_title": "自选涨跌幅轮询把函数返回值交给 setInterval",
+    "source_anchor": "MX-05",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "index.html 仍把 ZiXuan.stocks_update_rate() 的返回值传给 setInterval，函数立即执行而定时器没有回调。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "传函数引用/箭头函数，并用前端定时器测试验证周期调用。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/templates/index.html",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/templates/index.html",
+        "note": "错误 setInterval 调用"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 25,
+    "issue_id": "MX-17",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "TDX / Performance",
+    "title": "TDX 节点选优在缓存缺失或重置时串行探测全部候选，缺少总体 deadline",
+    "source_title": "TDX 节点选优在缓存缺失或重置时串行探测全部候选，缺少总体 deadline",
+    "source_anchor": "MX-17",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "TDX 选优和各 TDX 构造器没有修改；Web 文件的安全变更不影响串行探测和总体 deadline。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "并发有界探测；设置全局 deadline、最小成功数和 TTL 健康缓存；后台刷新而非阻塞请求。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/tools/tdx_best_ip.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/tools/tdx_best_ip.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_futures.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_futures.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 26,
+    "issue_id": "NX-08",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Backtesting Model",
+    "title": "POSITION.get_close_profit 会修改调用方传入列表",
+    "source_title": "POSITION.get_close_profit 会修改调用方传入列表",
+    "source_anchor": "NX-08",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/backtesting/base.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "复制输入或使用不可变 tuple/set。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/backtesting/base.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/base.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 27,
+    "issue_id": "NX-03",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Configuration / Messaging",
+    "title": "飞书配置读取会原地修改全局默认字典",
+    "source_title": "飞书配置读取会原地修改全局默认字典",
+    "source_anchor": "NX-03",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/utils.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "返回 `dict(source)` 副本，使用不可变配置对象。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/utils.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/utils.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 28,
+    "issue_id": "NX-22",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Database / Diagnostics",
+    "title": "db.py import 时全局关闭所有 warnings",
+    "source_title": "db.py import 时全局关闭所有 warnings",
+    "source_anchor": "NX-22",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "src/tradingview_zy/db.py 模块级仍执行 warnings.filterwarnings(\"ignore\")，会全局吞掉与数据库无关的警告。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "删除全局 ignore；仅在已知第三方调用点使用精确 category/module/message 过滤。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "第 38 行全局 warnings ignore"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 29,
+    "issue_id": "NX-21",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Database Configuration",
+    "title": "MySQL DSN 直接字符串插值，特殊字符密码会破坏 URL",
+    "source_title": "MySQL DSN 直接字符串插值，特殊字符密码会破坏 URL",
+    "source_anchor": "NX-21",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/db.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "使用 `sqlalchemy.engine.URL.create()` 和 secret 类型。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 30,
+    "issue_id": "NX-23",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "ExchangeDB",
+    "title": "ExchangeDB.all_stocks() 永远为空，与“db 可作为 Web 数据源”冲突",
+    "source_title": "ExchangeDB.all_stocks() 永远为空，与“db 可作为 Web 数据源”冲突",
+    "source_anchor": "NX-23",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "ExchangeDB.all_stocks() 仍固定返回 []，与 db 可作为 Web provider 及新增 SECURITY_MASTER 能力声明冲突。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "实现证券主数据表/查询，或撤销 security_master 能力并让依赖该能力的页面明确不可用。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_db.py",
+        "note": "all_stocks 固定空"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "DB provider 过报 security_master"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 31,
+    "issue_id": "NX-16",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Web Security / Availability",
+    "title": "/ticks 可提交无上限代码数组并同步扇出到数据源",
+    "source_title": "/ticks 可提交无上限代码数组并同步扇出到数据源",
+    "source_anchor": "NX-16",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "Web 安全改动没有为 /ticks 增加代码数量、去重、长度或 provider 批量上限。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "限制 symbol 数、去重、请求超时和速率；批量上限按 provider 能力。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 32,
+    "issue_id": "NX-14",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Web Storage",
+    "title": "读取不存在的 chart/template 会直接解引用 None",
+    "source_title": "读取不存在的 chart/template 会直接解引用 None",
+    "source_anchor": "NX-14",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "图表/模板读取路由没有补 None/404 处理，相关 ORM 查询未变。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "None 返回 404/规范 UDF 错误；校验 ID 类型。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 33,
+    "issue_id": "NX-15",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Web Storage",
+    "title": "绘图保存异常被吞掉并始终返回 status ok",
+    "source_title": "绘图保存异常被吞掉并始终返回 status ok",
+    "source_anchor": "NX-15",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "绘图保存的宽泛异常捕获和无条件成功返回未被本轮修改。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "返回 4xx/5xx 与 request_id；仅幂等成功返回 ok。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 34,
+    "issue_id": "RV-05",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Backtesting / Process",
+    "title": "多进程回测允许省略 save_file，但 run_by_code 无条件对 None 调 split()",
+    "source_title": "多进程回测允许省略 save_file，但 run_by_code 无条件对 None 调 split()",
+    "source_anchor": "RV-05",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "年化修复没有触及多进程 save_file 契约；可选配置与 worker 无条件 split() 的冲突仍在。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "主进程提前要求 save_file，或自动创建安全临时目录；不要在 worker 内才发现。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/backtesting/backtest.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/backtest.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 35,
+    "issue_id": "RV-04",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Backtesting Metrics",
+    "title": "盈亏为 0 的平仓被计入失败交易",
+    "source_title": "盈亏为 0 的平仓被计入失败交易",
+    "source_anchor": "RV-04",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "_record_closed_position() 仍仅以 profit > 0 判胜，其余（包括 0）全部计入 loss。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "定义 breakeven 计数或至少 0 不计 loss；补零收益和手续费后零收益测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/backtesting/backtest_trader.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/backtest_trader.py",
+        "note": "零收益落入 loss 分支"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 36,
+    "issue_id": "RV-01",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Database / Watchlist",
+    "title": "添加“置顶”自选股时批量位移遗漏 market，跨市场同名组会被一起改序",
+    "source_title": "添加“置顶”自选股时批量位移遗漏 market，跨市场同名组会被一起改序",
+    "source_anchor": "RV-01",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/db.py、src/tradingview_zy/db.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "给 UPDATE 加 market 过滤；移动+插入放同一事务；增加 (market,zx_group,stock_code) 唯一约束并规范化 position。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 37,
+    "issue_id": "RV-07",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Web API Robustness",
+    "title": "UDF/search/marks 路由缺少统一参数校验，畸形请求返回 500",
+    "source_title": "UDF/search/marks 路由缺少统一参数校验，畸形请求返回 500",
+    "source_anchor": "RV-07",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "本轮 Web 改动没有为 UDF/search/marks 路由增加统一参数 schema 和 4xx 错误处理。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "共享 parser/schema，验证 symbol、市场、周期、limit 和时间；UDF 返回 s:error/errmsg，普通 API 返回400/422。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 38,
+    "issue_id": "ME-11",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Baostock",
+    "title": "Baostock 股票列表固定在 2022-04-18，分钟时间按序号重建",
+    "source_title": "Baostock 股票列表固定在 2022-04-18，分钟时间按序号重建",
+    "source_anchor": "ME-11",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_baostock.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "股票列表按当前交易日/可用最新日刷新并缓存版本；使用数据源原始时间；重试采用有界迭代与退避。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_baostock.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_baostock.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 39,
+    "issue_id": "HI-17",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Scripts",
+    "title": "行情同步脚本以顶层程序方式执行，缺少可恢复 checkpoint、统一 deadline 和可审计批次状态",
+    "source_title": "行情同步脚本以顶层程序方式执行，缺少可恢复 checkpoint、统一 deadline 和可审计批次状态",
+    "source_anchor": "HI-17",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（script/crontab/reboot_sync_a_klines.py、script/crontab/reboot_sync_us_klines.py、script/crontab/reboot_sync_currency_klines.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "重构为显式 CLI/main；universe 外部化；每个 symbol/frequency 写 checkpoint 和失败原因；所有外部调用有 deadline/取消；以幂等 upsert 和批次状态支持断点续跑。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "script/crontab/reboot_sync_a_klines.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/script/crontab/reboot_sync_a_klines.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "script/crontab/reboot_sync_us_klines.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/script/crontab/reboot_sync_us_klines.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "script/crontab/reboot_sync_currency_klines.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/script/crontab/reboot_sync_currency_klines.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 40,
+    "issue_id": "ME-12",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "TDX Adapters",
+    "title": "TDX 适配器存在递归重连、涨跌幅分母错误和硬编码交易时段",
+    "source_title": "TDX 适配器存在递归重连、涨跌幅分母错误和硬编码交易时段",
+    "source_anchor": "ME-12",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_tdx.py、src/tradingview_zy/exchange/exchange_tdx_hk.py、src/tradingview_zy/exchange/exchange_tdx_us.py、src/tradingview_zy/exchange/exchange_tdx_fx.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "使用有界重试循环；统一 Tick 计算函数；引入交易所日历服务；对 0/缺失前收价明确返回 unavailable。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_fx.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_fx.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 41,
+    "issue_id": "ME-23",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Backtesting Config",
+    "title": "期货手续费/保证金参数硬编码且没有生效日期与数据版本",
+    "source_title": "期货手续费/保证金参数硬编码且没有生效日期与数据版本",
+    "source_anchor": "ME-23",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/backtesting/futures_contracts.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "参数外部化为带 effective_from/to、source、version 的数据集；回测产物嵌入 hash/快照；缺少目标日期配置时失败。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/backtesting/futures_contracts.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/futures_contracts.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 42,
+    "issue_id": "HI-16",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "File Cache",
+    "title": "文件缓存非原子写入、读错即删，且使用可执行反序列化格式",
+    "source_title": "文件缓存非原子写入、读错即删，且使用可执行反序列化格式",
+    "source_anchor": "HI-16",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "file_db 仍使用非原子写入和可执行反序列化格式，读取异常时删除缓存；相关路径未被后续修复触及。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "临时文件+fsync+原子 replace；优先安全序列化；校验失败隔离坏文件而不是无条件删除。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/file_db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/file_db.py",
+        "note": "缓存读写和反序列化"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 43,
+    "issue_id": "ME-17",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "QMT Market Data",
+    "title": "ExchangeQMT 使用可变默认参数、忽略 end_date 并缺少空数据校验",
+    "source_title": "ExchangeQMT 使用可变默认参数、忽略 end_date 并缺少空数据校验",
+    "source_anchor": "ME-17",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_qmt.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "默认参数改 None；严格裁剪 start/end；分离下载与读取；schema 校验和明确错误类型。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_qmt.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_qmt.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 44,
+    "issue_id": "ME-26",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Scheduler Lifecycle",
+    "title": "调度器在 Flask app factory 内立即 start，可能在多 worker/reloader 中重复运行",
+    "source_title": "调度器在 Flask app factory 内立即 start，可能在多 worker/reloader 中重复运行",
+    "source_anchor": "ME-26",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "最新 create_app() 仍在函数内创建并 scheduler.start()，进程内 job 状态设计没有变化。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "调度器独立进程或 leader election；Web 仅管理持久化 job store；app factory 不启动后台线程。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 45,
+    "issue_id": "ME-19",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Selection Tasks",
+    "title": "选股结果替换不是事务，写入中途失败会留下半成品；opt_type 参数未生效",
+    "source_title": "选股结果替换不是事务，写入中途失败会留下半成品；opt_type 参数未生效",
+    "source_anchor": "ME-19",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "xuangu_tasks.py 只改策略加载；清空目标组后逐条写入、opt_type 未消费和任务状态键问题仍在。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "写入 staging 并在单事务成功后替换；真正使用 opt_type 或删除；running_tasks 使用 (market,task_name)。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/xuangu_tasks.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/xuangu_tasks.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 46,
+    "issue_id": "ME-18",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Strategy Runners",
+    "title": "选股/监控缺少失败标的隔离和输入数据协议校验",
+    "source_title": "选股/监控缺少失败标的隔离和输入数据协议校验",
+    "source_anchor": "ME-18",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "设计文档被删除不等于功能修复；SelectionRunner/MonitoringRunner 的失败隔离与输入 schema 未修改。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "BatchRunResult 明确 hits、misses、failures；每个 symbol 独立错误；策略调用前做一次轻量 KlineFrame 校验。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/strategies/base.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/strategies/base.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/selection.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/selection.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/monitoring.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/monitoring.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 47,
+    "issue_id": "ME-14",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "TDX US",
+    "title": "TDX 美股时区通过 replace(tzinfo=pytz_zone) 附着，可能产生 LMT 偏移",
+    "source_title": "TDX 美股时区通过 replace(tzinfo=pytz_zone) 附着，可能产生 LMT 偏移",
+    "source_anchor": "ME-14",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_tdx_us.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "使用 zoneinfo 或 pytz.localize，再 astimezone；为源字段建立映射文档和数据质量断言。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 48,
+    "issue_id": "ME-30",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Trading Calendar",
+    "title": "多个市场 now_trading 使用粗粒度硬编码，未处理节假日、午休、夜盘品种差异和 DST",
+    "source_title": "多个市场 now_trading 使用粗粒度硬编码，未处理节假日、午休、夜盘品种差异和 DST",
+    "source_anchor": "ME-30",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_tdx_hk.py、src/tradingview_zy/exchange/exchange_tdx_us.py、src/tradingview_zy/exchange/exchange_tdx_fx.py、src/tradingview_zy/exchange/exchange_ctp.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "引入版本化 exchange calendar；按 instrument/session 查询；无法确认时返回 Unknown，而非 True。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_fx.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_fx.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_ctp.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_ctp.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 49,
+    "issue_id": "ME-22",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Utilities",
+    "title": "消息 HTTP、时间和 singleton 工具缺少可靠错误、时区和并发语义",
+    "source_title": "消息 HTTP、时间和 singleton 工具缺少可靠错误、时区和并发语义",
+    "source_anchor": "ME-22",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/utils.py、src/tradingview_zy/fun.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "统一 HTTP client，设置连接/读取 deadline、状态检查、重试和幂等；所有时间边界要求 aware datetime；单例改为依赖注入或线程安全初始化。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/utils.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/utils.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/fun.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/fun.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 50,
+    "issue_id": "ME-02",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Web UDF",
+    "title": "/tv/history 请求计数器无上限且无线程同步；首次请求返回完整历史是现有测试规定的行为",
+    "source_title": "/tv/history 请求计数器无上限且无线程同步；首次请求返回完整历史是现有测试规定的行为",
+    "source_anchor": "ME-02",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "/tv/history 仍维护进程内 __history_req_counter 普通字典；键没有过期回收/容量上限，也没有并发同步。",
+    "basis": "V6 顶层“已修复”与当前源码不符。PR #15 仅在 history payload 增加契约校验，没有修改计数器生命周期。",
+    "next_step": "使用有界 TTL/LRU 或外部限流器；加入锁/原子操作；按会话/IP/标的设计稳定限流键，并覆盖并发测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "无界 history 计数器及读改写流程"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 51,
+    "issue_id": "NX-10",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Database Schema",
+    "title": "策略 JSON 复用旧 String(200) 列，较长配置在 MySQL 上可能失败或截断",
+    "source_title": "策略 JSON 复用旧 String(200) 列，较长配置在 MySQL 上可能失败或截断",
+    "source_anchor": "NX-10",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "监控保存改用 strategy_id，但配置 JSON 仍写入旧 String(200) 映射列，数据库 schema 未迁移。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "新增 Text/JSON 列和独立 memo，做迁移；请求层限制合理大小并做保存后往返校验。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 52,
+    "issue_id": "RV-06",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Web Storage / Availability",
+    "title": "图表布局、模板和绘图存储接口没有请求体/字段大小与配额限制",
+    "source_title": "图表布局、模板和绘图存储接口没有请求体/字段大小与配额限制",
+    "source_anchor": "RV-06",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "安全改动未增加 charts/templates/drawings 的请求体、字段长度或用户配额限制。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "设置全局和字段上限、每主体配额、去重/更新；超限返回 413/422。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 53,
+    "issue_id": "ME-15",
+    "status": "❌ 未修复",
+    "severity": "中",
+    "domain": "Futu",
+    "title": "Futu 全局上下文缺少生命周期、并发和失败隔离",
+    "source_title": "Futu 全局上下文缺少生命周期、并发和失败隔离",
+    "source_anchor": "ME-15",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_futu.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "Context manager + connection pool/lock；健康状态和重连状态机；显式 imports；进程退出钩子。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_futu.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_futu.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 54,
+    "issue_id": "NX-01",
+    "status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity": "中",
+    "domain": "CTP",
+    "title": "CTP 空前置地址不会触发默认地址兜底；当前属于修复抽象类后的后续阻断",
+    "source_title": "CTP 空前置地址不会触发默认地址兜底；当前属于修复抽象类后的后续阻断",
+    "source_anchor": "NX-01",
+    "v7_status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity_confidence": "",
+    "latest_conclusion": "CTP 的空字符串前置地址兜底逻辑没有修改，底层问题仍在。最新工厂会在导入 CTP 前直接拒绝 EXCHANGE_FUTURES=\"ctp\"，标准路径不会触发该后续错误；这是风险封堵，不是功能修复。",
+    "basis": "当前只能证明危险路径 fail-closed/不可达，不能证明底层实现正确，因此不能标记已修复。",
+    "next_step": "修复 CR-05 时仍必须把地址读取改为 getattr(..., \"\") or DEFAULT 或明确要求必填，并做地址 schema 校验。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/__init__.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_ctp.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_ctp.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/config.py.demo",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/config.py.demo",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 55,
+    "issue_id": "NX-25",
+    "status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity": "中",
+    "domain": "Legacy Exchange Security",
+    "title": "孤立 ExchangeZB 显式关闭 TLS 证书校验",
+    "source_title": "孤立 ExchangeZB 显式关闭 TLS 证书校验",
+    "source_anchor": "NX-25",
+    "v7_status": "🛡️ 未完全修复（已阻断或缓解）",
+    "severity_confidence": "",
+    "latest_conclusion": "标准工厂不注册 ZB，降低默认可达性；但 ExchangeZB 仍在运行源码树并显式 params[\"verify\"]=False，可被直接导入使用。",
+    "basis": "当前只能证明危险路径 fail-closed/不可达，不能证明底层实现正确，因此不能标记已修复。",
+    "next_step": "删除/归档该适配器，或恢复 TLS 验证、证书配置与测试；保持标准入口不支持。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_zb.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_zb.py",
+        "note": "显式关闭 TLS 验证"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "标准工厂未注册 ZB"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 56,
+    "issue_id": "ME-29",
+    "status": "🟡 部分修复",
+    "severity": "中",
+    "domain": "Quality Gates",
+    "title": "当前提交无可见 CI 状态，测试集中在少数协议单元，核心风险无门禁",
+    "source_title": "当前提交无可见 CI 状态，测试集中在少数协议单元，核心风险无门禁",
+    "source_anchor": "ME-29",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "仓库已有持久化 GitHub Actions：Python 3.11 使用 uv sync --locked 运行完整 pytest 且 warnings-as-errors，Python 3.13 单独验证依赖 warning 基线。PR #15 最终合并检查为 172 passed。浏览器、MySQL 和真实外部 SDK 仍不在门禁内。",
+    "basis": "相较 V6，CI 可见性和覆盖面显著提升，但高风险集成域仍缺门禁，因此保持部分修复而不是关闭。",
+    "next_step": "增加 MySQL、浏览器/DOM、核心 provider mock/沙箱矩阵；在仓库分支保护中把 checks 设为 required，并验证合并提交 push 检查。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": ".github/workflows/tests.yml",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/.github/workflows/tests.yml",
+        "note": "只读、锁文件、严格 warnings 和双 job CI"
+      },
+      {
+        "label": "tests",
+        "url": "https://github.com/zhangyu-ch/tradingview/tree/3488462529c6ec052192eb41d1a6b74c5718c58f/tests",
+        "note": "当前 172 项测试集合"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 57,
+    "issue_id": "ME-10",
+    "status": "🟡 部分修复",
+    "severity": "中",
+    "domain": "Adapter Architecture",
+    "title": "统一 Exchange 接口没有能力声明和统一错误模型",
+    "source_title": "统一 Exchange 接口没有能力声明和统一错误模型",
+    "source_anchor": "ME-10",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "新增 Capability、统一领域错误、MarketRegistry 和 require_capability；未知市场/provider fail-closed，构造失败前不缓存。但旧 Exchange 大接口及部分 provider 的声明/实现一致性尚未完全解决。",
+    "basis": "能力发现和错误模型已有实质改进，原始架构根因只关闭一部分；V7 新列 NEW-06 说明 DB provider 仍存在能力过报。",
+    "next_step": "拆分细粒度 Protocol；对每个 provider 做“声明能力必须有真实实现”的契约测试；修正 DB provider 的 security_master/plates 声明。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/domain.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/domain.py",
+        "note": "Capability 与统一错误类型"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "provider 能力注册"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/__init__.py",
+        "note": "注册表驱动工厂"
+      },
+      {
+        "label": "tests/test_v6_market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_v6_market_registry.py",
+        "note": "市场/能力契约测试"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 58,
+    "issue_id": "ME-20",
+    "status": "🟡 部分修复",
+    "severity": "中",
+    "domain": "Strategy Protocol",
+    "title": "策略输出只有形状约定，没有边界校验和领域类型",
+    "source_title": "策略输出只有形状约定，没有边界校验和领域类型",
+    "source_anchor": "ME-20",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "策略加载器现在会验证目标是类、具有 run()、构造参数签名和参数类型，这修复了“构造前无边界”的一部分。可是 StrategySignal 返回值的 action、score、时间、code/frequency 和有限数值仍未在 runner 边界统一校验。",
+    "basis": "V6 已记录部分缓解；最新 master 未出现足以关闭全部根因的新增证据，状态保持部分修复。",
+    "next_step": "为策略输出建立版本化 schema/validated dataclass，并在 SelectionRunner/MonitoringRunner 接受结果时逐项验证。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/strategies/loader.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/strategies/loader.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/strategies/base.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/strategies/base.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 59,
+    "issue_id": "ME-25",
+    "status": "🟡 部分修复",
+    "severity": "中",
+    "domain": "Supply Chain",
+    "title": "依赖范围宽、旧 setup.py 与 pyproject 不一致，缺少可验证供应链清单",
+    "source_title": "依赖范围宽、旧 setup.py 与 pyproject 不一致，缺少可验证供应链清单",
+    "source_anchor": "ME-25",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "旧 setup.py 和 MANIFEST.in 已删除，Apache-2.0 与 setup.py 中 MIT 的许可证冲突、重复打包入口以及 PyArmor 依赖均已消除。仍存在大量仅设下界的依赖、本地 wheel 缺少显式哈希/来源说明、SBOM/漏洞审计门禁缺失等问题。",
+    "basis": "相关路径在 PR #15 中有实质变化，但静态复核仍能定位到原问题的一部分，因此标记部分修复。",
+    "next_step": "以 uv.lock 为唯一受支持安装路径并在 CI 校验；记录本地 wheel SHA-256/来源并生成 SBOM、许可证和漏洞报告。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "pyproject.toml",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/pyproject.toml",
+        "note": "包元数据与依赖策略"
+      },
+      {
+        "label": "uv.lock",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/uv.lock",
+        "note": "锁定依赖图"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 60,
+    "issue_id": "ME-27",
+    "status": "🟡 部分修复",
+    "severity": "中",
+    "domain": "Secrets",
+    "title": "交易/API 密钥设计为明文 Python 配置，缺少分级与轮换机制",
+    "source_title": "交易/API 密钥设计为明文 Python 配置，缺少分级与轮换机制",
+    "source_anchor": "ME-27",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "Web 登录密码和 Flask 会话密钥现在支持环境变量/随机持久化，且默认远程免密访问被阻止，降低了配置泄露后的直接利用面。但是数据库、交易所、券商、AI 和飞书等业务密钥仍集中在明文 Python 配置/通用缓存中，设置页仍回显飞书 Secret。",
+    "basis": "相关路径在 PR #15 中有实质变化，但静态复核仍能定位到原问题的一部分，因此标记部分修复。",
+    "next_step": "将业务密钥迁移到环境变量、系统 keyring 或 Vault；设置 API 只接受新值而不返回旧值，统一日志脱敏与轮换。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/config.py.demo",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/config.py.demo",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/templates/setting.html",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/templates/setting.html",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/web_security.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/web_security.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 61,
+    "issue_id": "ME-04",
+    "status": "🟡 部分修复",
+    "severity": "中",
+    "domain": "Web Payload",
+    "title": "K 线 payload 对时区、schema、排序和重复值缺少边界校验",
+    "source_title": "K 线 payload 对时区、schema、排序和重复值缺少边界校验",
+    "source_anchor": "ME-04",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "K 线进入 TradingView 前已有 required columns、有限数、OHLC、volume、code/frequency、严格排序、重复时间和市场时区校验；但 /tv/history 在时区本地化之前先执行时间范围过滤，naive 市场本地时间会按服务器时区解释。",
+    "basis": "PR #15 关闭了大部分 schema 根因，但筛选顺序留下独立时区边界（V7 新列 NEW-04），因此只能标记部分修复。",
+    "next_step": "先补全 code/市场时区并规范化，再按 Unix 秒过滤；增加服务器 UTC、A 股 naive 时间的路由级测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/kline_schema.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/kline_schema.py",
+        "note": "严格 KlineFrame 协议"
+      },
+      {
+        "label": "src/tradingview_zy/web_payloads.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/web_payloads.py",
+        "note": "时区补全与范围过滤函数"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前先过滤、后规范化的调用顺序"
+      },
+      {
+        "label": "tests/test_v6_kline_schema.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_v6_kline_schema.py",
+        "note": "schema 回归测试"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 62,
+    "issue_id": "ME-01",
+    "status": "🟡 部分修复",
+    "severity": "中",
+    "domain": "Web Storage",
+    "title": "TradingView 存储接口信任请求中的 client/user 作为授权边界",
+    "source_title": "TradingView 存储接口信任请求中的 client/user 作为授权边界",
+    "source_anchor": "ME-01",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "登录、会话和远程免密边界已加强，匿名攻击面下降；但 TradingView chart/template/drawing 存储仍信任请求中的 client/user 作为数据分区，没有绑定已认证主体。",
+    "basis": "认证改进属于实质缓解，但授权主键根因仍在，因此保持部分修复。",
+    "next_step": "服务端从会话派生主体；忽略或校验客户端 user/client；为跨用户读写增加授权测试和迁移方案。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "存储路由仍读取请求 client/user"
+      },
+      {
+        "label": "src/tradingview_zy/web_security.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/web_security.py",
+        "note": "已完成的认证边界"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 63,
+    "issue_id": "ME-03",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Web UDF",
+    "title": "/tv/config 的周期并集遗漏 ny_futures；当前默认适配器无独有周期，属于潜在能力漂移",
+    "source_title": "/tv/config 的周期并集遗漏 ny_futures；当前默认适配器无独有周期，属于潜在能力漂移",
+    "source_anchor": "ME-03",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "market_frequencys 已包含 ny_futures，但 /tv/config 构造全局 supported_resolutions 时仍没有把该市场加入并集。",
+    "basis": "原始能力漂移仍可直接定位；新增 MarketRegistry 尚未被该 Web 路由消费，因此判为未修复。",
+    "next_step": "由 MarketRegistry 生成 UDF 配置，或至少把 ny_futures 纳入并集并增加“任一市场独有周期”回归测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "UDF 周期并集与 per-market 配置"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "尚未被 Web UDF 完整消费的注册表"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 64,
+    "issue_id": "MX-11",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Configuration",
+    "title": "配置模板暴露具体 IB 账户标识",
+    "source_title": "配置模板暴露具体 IB 账户标识",
+    "source_anchor": "MX-11",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "最新 config.py.demo 仍包含具体 IB_ACCOUNT = 'DU6941075'。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "改为明显占位符/空值，并在启动时拒绝示例值。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/config.py.demo",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/config.py.demo",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 65,
+    "issue_id": "MX-07",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Frontend",
+    "title": "alert.js 七个列定义把 field 拼成 filed，字段元数据和排序绑定失效",
+    "source_title": "alert.js 七个列定义把 field 拼成 filed，字段元数据和排序绑定失效",
+    "source_anchor": "MX-07",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "alert.js 仅修改策略列标题等少量文本，七处 filed: 拼写仍存在。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "统一改为 field，并增加前端 lint/schema 测试；对可排序列在浏览器中验证排序请求/本地排序键。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/static/js/alert.js",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/static/js/alert.js",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 66,
+    "issue_id": "MX-10",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Frontend",
+    "title": "图表显示函数参数契约漂移",
+    "source_title": "图表显示函数参数契约漂移",
+    "source_anchor": "MX-10",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（web/tradingview_zy_chart/cl_app/static/js/charts.js、web/tradingview_zy_chart/cl_app/templates/index.html）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "删除无效参数或让函数显式应用高度；用 TypeScript/JSDoc 固化签名。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/static/js/charts.js",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/static/js/charts.js",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/templates/index.html",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/templates/index.html",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 67,
+    "issue_id": "NX-09",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Backtesting Fees",
+    "title": "未实现的 fee_us() 作为公开函数残留，但仓库内未发现调用方",
+    "source_title": "未实现的 fee_us() 作为公开函数残留，但仓库内未发现调用方",
+    "source_anchor": "NX-09",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/backtesting/base.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "无兼容需求则删除；否则抛 NotImplementedError 或实现数据驱动费率。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/backtesting/base.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/base.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 68,
+    "issue_id": "NX-18",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Frontend",
+    "title": "zixuan.js 的 templet 未声明，泄漏为全局变量",
+    "source_title": "zixuan.js 的 templet 未声明，泄漏为全局变量",
+    "source_anchor": "NX-18",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（web/tradingview_zy_chart/cl_app/static/js/zixuan.js）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "块级 `const templet` 或表达式返回。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/static/js/zixuan.js",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/static/js/zixuan.js",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 69,
+    "issue_id": "NX-17",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Web UDF",
+    "title": "TradingView UDF 把所有市场 session 声明为 24x7，并把 FX 类型标成 stock",
+    "source_title": "TradingView UDF 把所有市场 session 声明为 24x7，并把 FX 类型标成 stock",
+    "source_anchor": "NX-17",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "最新 Web 文件仍把所有市场 session 写为 24x7，FX 类型仍为 stock。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "由市场描述符/交易日历生成 TradingView session、timezone 和 type；FX 使用符合 UDF 的 forex 类型。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 70,
+    "issue_id": "LO-02",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Maintainability",
+    "title": "TDX/US/同步适配器存在大段复制（Duplicated Code）",
+    "source_title": "TDX/US/同步适配器存在大段复制（Duplicated Code）",
+    "source_anchor": "LO-02",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "TDX、US 历史适配器和同步脚本仍包含重复的分页、日期解析、缓存与重试代码；PR #15 只新增注册表/领域边界，没有提取这些重复实现。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "提取共享分页器、日期解析、Kline normalizer、缓存与 deadline 策略，用 provider contract tests 固定差异点。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx.py",
+        "note": "TDX 适配器实现"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "note": "港股 TDX 复制路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "note": "美股 TDX 复制路径"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/exchange_alpaca.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_alpaca.py",
+        "note": "US 历史适配器重复逻辑"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 71,
+    "issue_id": "LO-06",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Readability",
+    "title": "大量短变量、宽泛异常和 wildcard import 降低可审计性（Mysterious Name）",
+    "source_title": "大量短变量、宽泛异常和 wildcard import 降低可审计性（Mysterious Name）",
+    "source_anchor": "LO-06",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_alpaca.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。",
+    "basis": "从 V6 快照到当前 master 未发现消除根因的实现或专项测试，状态保持未修复。",
+    "next_step": "显式 import；领域命名；窄异常；结构化日志包含 market/code/request_id；启用 lint 规则 F403/F405/BLE001。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/exchange/exchange_alpaca.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/exchange_alpaca.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 72,
+    "issue_id": "MX-16",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Dead Code",
+    "title": "存在未加载的 ai.js 和完全 no-op 的 OtherTasks",
+    "source_title": "存在未加载的 ai.js 和完全 no-op 的 OtherTasks",
+    "source_anchor": "MX-16",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "ai.js 仍是未加载/不可用桩，OtherTasks.run_task() 仍为 pass；能力边界没有删除或实现。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "删除无效资产和任务壳，或实现后显式注册、展示与测试。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/static/js/ai.js",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/static/js/ai.js",
+        "note": "AI 前端桩"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/other_tasks.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/other_tasks.py",
+        "note": "no-op 任务实现"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 73,
+    "issue_id": "MX-18",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Strategy Architecture",
+    "title": "StrategySignal 与 Operation 是两套独立协议，跨选股/监控/回测复用需要手工转换（架构债务）",
+    "source_title": "StrategySignal 与 Operation 是两套独立协议，跨选股/监控/回测复用需要手工转换（架构债务）",
+    "source_anchor": "MX-18",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "删除架构文档没有合并协议；StrategySignal 与 Operation 两套模型仍独立存在。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "在确有跨场景复用需求时修复：定义 Signal→Decision→Order 管线和版本化转换协议；没有该需求时，应在文档中明确边界而不是强行统一。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/strategies/base.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/strategies/base.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/backtesting/base.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/backtesting/base.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 74,
+    "issue_id": "NX-11",
+    "status": "❌ 未修复",
+    "severity": "低",
+    "domain": "Database Schema",
+    "title": "通用监控事件继续复用旧短字符串列，当前值可容纳但扩展空间受限",
+    "source_title": "通用监控事件继续复用旧短字符串列，当前值可容纳但扩展空间受限",
+    "source_anchor": "NX-11",
+    "v7_status": "❌ 未修复",
+    "severity_confidence": "",
+    "latest_conclusion": "策略加载改为注册表不改变监控事件数据库列长度；event_type/action/score 仍复用旧短字符串列。",
+    "basis": "V6 顶层状态与其展开历史证据或当前源码不一致；V7 按实际代码纠正为未修复。这是报告误标纠正，不是代码回归。",
+    "next_step": "迁移为独立 event_type/action Enum 和数值 score，并在策略边界验证。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/strategies/base.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/strategies/base.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/alert_tasks.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/alert_tasks.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "src/tradingview_zy/db.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/db.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 75,
+    "issue_id": "LO-05",
+    "status": "🟡 部分修复",
+    "severity": "低",
+    "domain": "Architecture",
+    "title": "新增市场需要跨枚举、配置、工厂、DB、UDF、模板和脚本散改（Shotgun Surgery）",
+    "source_title": "新增市场需要跨枚举、配置、工厂、DB、UDF、模板和脚本散改（Shotgun Surgery）",
+    "source_anchor": "LO-05",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "MarketRegistry 已集中配置属性、时区、TradingView 类型/session、默认代码、provider、能力和 DB 分区；Exchange 工厂与 DB 路由已接入。Web UDF、模板和若干脚本仍有独立市场映射。",
+    "basis": "Shotgun Surgery 的核心市场工厂/DB 部分显著收敛，但未成为全栈唯一来源，故部分修复。",
+    "next_step": "让 UDF/config、页面和脚本消费注册表，并删除重复映射；新增市场用单一注册+穷尽测试验收。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "市场单一注册表"
+      },
+      {
+        "label": "src/tradingview_zy/exchange/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/exchange/__init__.py",
+        "note": "注册表驱动工厂"
+      },
+      {
+        "label": "tests/test_v6_market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_v6_market_registry.py",
+        "note": "穷尽性测试"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 76,
+    "issue_id": "LO-07",
+    "status": "🟡 部分修复",
+    "severity": "低",
+    "domain": "Dead Code",
+    "title": "保留多处 pass/旧桩/历史任务壳，能力边界不清（Speculative Generality）",
+    "source_title": "保留多处 pass/旧桩/历史任务壳，能力边界不清（Speculative Generality）",
+    "source_anchor": "LO-07",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "清理提交删除了 cl_myquant/cl_vnpy/cl_wtpy 和旧 trader 墓碑脚本，减少了一批历史桩。但 tradingview_zy.monitor、other_tasks.py、部分 Exchange 不支持方法和其他 pass/RuntimeError 桩仍在，能力边界仍不清楚。",
+    "basis": "V6 已记录部分缓解；最新 master 未出现足以关闭全部根因的新增证据，状态保持部分修复。",
+    "next_step": "从能力注册表移除未实现能力；真正需要兼容的入口使用单一、可测试的 Unsupported 错误，不再散布空桩。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/other_tasks.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/other_tasks.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 77,
+    "issue_id": "LO-08",
+    "status": "🟡 部分修复",
+    "severity": "低",
+    "domain": "Documentation",
+    "title": "文档、测试现状和遗留授权描述存在漂移",
+    "source_title": "文档、测试现状和遗留授权描述存在漂移",
+    "source_anchor": "LO-08",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "CLAUDE.md、旧架构/迁移文档、PyArmor 授权说明、setup.py 许可证冲突和三个旧适配目录已清理，文档漂移明显减少。但 check_env.py 的 Python 版本/环境结论仍与 pyproject 不一致，joinquant/ 仍是活跃根目录遗留，README 对部分能力的支持边界仍需校准。",
+    "basis": "V6 已记录部分缓解；最新 master 未出现足以关闭全部根因的新增证据，状态保持部分修复。",
+    "next_step": "修复 check_env 契约；处理 joinquant；建立由能力注册表和 CI 自动生成/校验的支持矩阵。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "check_env.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/check_env.py",
+        "note": "环境检查实现"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 78,
+    "issue_id": "LO-03",
+    "status": "🟡 部分修复",
+    "severity": "低",
+    "domain": "Domain Model",
+    "title": "市场、周期、订单状态和方向广泛使用裸字符串（Primitive Obsession）",
+    "source_title": "市场、周期、订单状态和方向广泛使用裸字符串（Primitive Obsession）",
+    "source_anchor": "LO-03",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "新增 Market、OrderSide、PositionSide、OrderStatus、Capability 等枚举/领域对象，市场解析和部分订单边界不再依赖裸字符串；大量旧模块仍使用 market/frequency/order 字符串。",
+    "basis": "PR #15 对核心边界有实质收敛，但全仓迁移未完成，因此保持部分修复。",
+    "next_step": "逐步迁移旧适配器、Web 路由和数据库字段；在序列化边界统一转换。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/domain.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/domain.py",
+        "note": "订单/能力领域类型"
+      },
+      {
+        "label": "src/tradingview_zy/market_registry.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/market_registry.py",
+        "note": "统一 Market 解析"
+      },
+      {
+        "label": "tests/test_v6_domain_contracts.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_v6_domain_contracts.py",
+        "note": "领域不变量测试"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 79,
+    "issue_id": "LO-04",
+    "status": "🟡 部分修复",
+    "severity": "低",
+    "domain": "Domain Model",
+    "title": "OHLCV、订单和策略参数以重复 dict 传递（Data Clumps）",
+    "source_title": "OHLCV、订单和策略参数以重复 dict 传递（Data Clumps）",
+    "source_anchor": "LO-04",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "新增不可变 OrderRequest、Fill、OrderState 和严格 KlineFrame 边界，部分核心 dict 已被领域对象替代；旧适配器和策略参数仍广泛传 dict。",
+    "basis": "数据团块问题得到实质但不完整的重构，标记部分修复。",
+    "next_step": "按模块边界渐进迁移，不要求内部 DataFrame 全部对象化；优先交易/成交和外部 provider payload。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "src/tradingview_zy/domain.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/domain.py",
+        "note": "订单/成交 dataclass"
+      },
+      {
+        "label": "src/tradingview_zy/kline_schema.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/src/tradingview_zy/kline_schema.py",
+        "note": "KlineFrame 协议"
+      },
+      {
+        "label": "tests/test_v6_domain_contracts.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/tests/test_v6_domain_contracts.py",
+        "note": "领域对象测试"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 80,
+    "issue_id": "LO-01",
+    "status": "🟡 部分修复",
+    "severity": "低",
+    "domain": "Maintainability",
+    "title": "Flask app factory 承担过多职责（Divergent Change）",
+    "source_title": "Flask app factory 承担过多职责（Divergent Change）",
+    "source_anchor": "LO-01",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "cl_app/__init__.py 继续集中认证、调度、UDF、存储、自选、监控和选股；文件职责没有拆分。",
+    "basis": "相关路径在 PR #15 中有实质变化，但静态复核仍能定位到原问题的一部分，因此标记部分修复。",
+    "next_step": "按 auth/udf/storage/watchlist/tasks/health 蓝图拆分；依赖通过 app extensions 注入。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  },
+  {
+    "index": 81,
+    "issue_id": "MX-12",
+    "status": "🟡 部分修复",
+    "severity": "低",
+    "domain": "Architecture / Spec",
+    "title": "Web app factory 保留旧模块专用降级分支，当前成为无覆盖的迁移残留",
+    "source_title": "Web app factory 保留旧模块专用降级分支，当前成为无覆盖的迁移残留",
+    "source_anchor": "MX-12",
+    "v7_status": "🟡 部分修复",
+    "severity_confidence": "",
+    "latest_conclusion": "最新 create_app() 仍完整保留 _REMOVED_LEGACY_*、_UnavailableTasks 和 _LazyTasks。",
+    "basis": "相关路径在 PR #15 中有实质变化，但静态复核仍能定位到原问题的一部分，因此标记部分修复。",
+    "next_step": "清理旧模块专用判断；保留通用 lazy loading 时，错误应携带真实模块、异常链和健康状态。",
+    "minimum_reproduction": "",
+    "evidence": [
+      {
+        "label": "web/tradingview_zy_chart/cl_app/__init__.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/__init__.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/alert_tasks.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/alert_tasks.py",
+        "note": "当前实现路径"
+      },
+      {
+        "label": "web/tradingview_zy_chart/cl_app/xuangu_tasks.py",
+        "url": "https://github.com/zhangyu-ch/tradingview/blob/3488462529c6ec052192eb41d1a6b74c5718c58f/web/tradingview_zy_chart/cl_app/xuangu_tasks.py",
+        "note": "当前实现路径"
+      }
+    ],
+    "remediation": {
+      "status": "待处理",
+      "problem_verified": null,
+      "problem_summary": "",
+      "fix_summary": "",
+      "verification_performed": null,
+      "verification_method": [],
+      "verification_result": "",
+      "commit": "",
+      "files_changed": [],
+      "limitations": []
+    }
+  }
+]

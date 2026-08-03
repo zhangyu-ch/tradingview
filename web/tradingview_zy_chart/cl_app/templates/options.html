@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <title>配置不可用</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+    {% include 'dark.html' %}
+  </head>
+  <body class="layui-fluid">
+    <div class="layui-card" style="margin: 16px">
+      <div class="layui-card-header">配置页已不可用</div>
+      <div class="layui-card-body">
+        <p>旧分析配置已从运行路径移除。</p>
+        <p>当前项目保留普通 K 线、TradingView 图表、选股监控、回测和交易执行能力。</p>
+        <p>策略接入请参考 <code>docs/custom-strategy-integration.md</code>。</p>
+      </div>
+    </div>
+  </body>
+</html>

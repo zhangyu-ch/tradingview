@@ -1,0 +1,2 @@
+5769a24b599fd6f2f695050ea9184c44ad07fd15fa31ac74007b9aba0c81cbbe  /mnt/data/tradingview(1).zip
+c59ea157c60be11dc2d107478ec39f99be1e6d9c3e73816fe4d739ec04b805f0  /mnt/data/tradingview_current_open_issues_v1.md

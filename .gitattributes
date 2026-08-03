@@ -1,0 +1,6 @@
+*.ipynb linguist-language=python
+
+# TradingView 图表库产物与补丁基准副本按二进制处理，禁止 EOL 转换，
+# 保证 charting_library_patches 的字节级校验可复现
+web/tradingview_zy_chart/cl_app/static/charting_library/** -text
+charting_library_patches/pristine/** -text

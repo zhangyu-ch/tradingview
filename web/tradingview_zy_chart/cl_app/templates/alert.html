@@ -1,0 +1,211 @@
+<!DOCTYPE HTML>
+<html lang="zh">
+
+<head>
+    <title>提醒配置</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layui.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+    <script type="text/javascript" src="{{ url_for('static', filename='layui.js') }}"></script>
+    <script type="text/javascript" src="{{ url_for('static', filename='jquery-3.7.0.min.js') }}"></script>
+    {% include 'dark.html' %}
+</head>
+
+<body class="layui-fluid">
+
+    <form class="layui-form layui-row alert_add" role="form" style="padding: 20px;">
+        <input type="hidden" name="id" value="{{ id }}" lay-filter="alert_config" />
+
+        <div class="layui-form-item">
+            <label class="layui-form-label">市场</label>
+            <div class="layui-input-block" title="当前市场">
+                <select type="select" name="market" lay-filter="alert_config" disabled>
+                    <option value="a" {% if market=='a' %} selected {% endif %}>沪深A股</option>
+                    <option value="hk" {% if market=='hk' %} selected {% endif %}>港股</option>
+                    <option value="futures" {% if market=='futures' %} selected {% endif %}>国内期货</option>
+                    <option value="ny_futures" {% if market=='ny_futures' %} selected {% endif %}>纽约期货</option>
+                    <option value="us" {% if market=='us' %} selected {% endif %}>美股</option>
+                    <option value="fx" {% if market=='fx' %} selected {% endif %}>外汇</option>
+                    <option value="currency" {% if market=='currency' %} selected {% endif %}>数字货币(合约)</option>
+                    <option value="currency_spot" {% if market=='currency_spot' %} selected {% endif %}>数字货币(现货)</option>
+                </select>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">任务名称</label>
+            <div class="layui-input-block">
+                <input type="text" name="task_name" value="{{ task_name }}" placeholder="请输入任务名称"
+                    class="layui-input" lay-verify="required" lay-filter="alert_config" />
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">运行间隔</label>
+            <div class="layui-input-block" title="设置每几分钟检测一次（1-1380分钟，60分钟以上必须是60的整数倍，表示小时数）">
+                <input type="text" name="interval_minutes" value="{{ interval_minutes }}"
+                    placeholder="设置每几分钟检测一次" lay-filter="alert_config" lay-verify="required|number"
+                    class="layui-input" />
+                <div class="layui-form-mid layui-word-aux" style="margin-top: 5px; color: #999; font-size: 12px;">
+                    <div>单位：分钟；60分钟以上需为60的整数倍；最大不超过1380分钟。</div>
+                </div>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">自选组</label>
+            <div class="layui-input-block" title="自选组">
+                <select type="select" class="form-control" name="zx_group" lay-filter="alert_config">
+                    {% for zg in zixuan_groups %}
+                    <option value="{{ zg['name'] }}" {% if zg['name']==zx_group %} selected {% endif %}>{{ zg['name'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">行情周期</label>
+            <div class="layui-input-block" title="行情周期">
+                <select type="select" class="form-control" name="frequency" lay-filter="alert_config">
+                    {% for f, v in frequencys.items() %}
+                    <option value="{{ f }}" {% if frequency==f %} selected {% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">监控策略</label>
+            <div class="layui-input-block">
+                <select name="strategy_id" lay-filter="alert_config" lay-verify="required">
+                    <option value="">请选择已注册策略</option>
+                    {% for strategy in alert_strategies %}
+                    <option value="{{ strategy.strategy_id }}" {% if strategy_id==strategy.strategy_id %} selected {% endif %}>
+                        {{ strategy.name }}（{{ strategy.strategy_id }}）
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="layui-form-mid layui-word-aux" style="margin-top: 5px; color: #999; font-size: 12px;">
+                    策略由服务端 config.py 的 ALERT_STRATEGIES 注册；页面不再接受任意 Python 导入路径。
+                </div>
+                {% if not alert_strategies %}
+                <div class="layui-form-mid" style="color: #ff5722;">
+                    尚未配置 ALERT_STRATEGIES，当前不能新建或启用监控任务。
+                </div>
+                {% endif %}
+                {% if legacy_strategy_path %}
+                <div class="layui-form-mid" style="color: #ff5722;">
+                    旧任务使用未注册路径 {{ legacy_strategy_path }}。请先在 ALERT_STRATEGIES 登记该策略，再重新选择并保存。
+                </div>
+                {% endif %}
+                {% if unavailable_strategy_id %}
+                <div class="layui-form-mid" style="color: #ff5722;">
+                    旧任务引用的策略 ID {{ unavailable_strategy_id }} 已不在 ALERT_STRATEGIES 中。请重新选择并保存。
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="layui-form-item layui-form-text">
+            <label class="layui-form-label">策略参数</label>
+            <div class="layui-input-block">
+                <textarea name="strategy_kwargs" placeholder="JSON 对象，可空，默认 {}" class="layui-textarea"
+                    lay-filter="alert_config">{{ strategy_kwargs or '{}' }}</textarea>
+            </div>
+        </div>
+        <div class="layui-form-item layui-form-text">
+            <label class="layui-form-label">策略备注</label>
+            <div class="layui-input-block">
+                <textarea name="strategy_memo" placeholder="可选" class="layui-textarea"
+                    lay-filter="alert_config">{{ strategy_memo }}</textarea>
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">发送消息</label>
+            <div class="layui-input-block" title="启用">
+                <input type="radio" name="is_send_msg" value="1" title="发送" {% if is_send_msg==1 %} checked {% endif %}
+                    lay-filter="alert_config" />
+                <input type="radio" name="is_send_msg" value="0" title="不发送" {% if is_send_msg==0 %} checked {% endif %}
+                    lay-filter="alert_config" />
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">启用</label>
+            <div class="layui-input-block" title="启用">
+                <input type="radio" name="is_run" value="1" title="启用" {% if is_run==1 %} checked {% endif %}
+                    lay-filter="alert_config" />
+                <input type="radio" name="is_run" value="0" title="禁用" {% if is_run==0 %} checked {% endif %}
+                    lay-filter="alert_config" />
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <button class="layui-btn layui-btn-fluid layui-bg-red" lay-submit lay-filter="save_alert">保存任务</button>
+        </div>
+    </form>
+
+    <script>
+        $(function () {
+            function save_alert() {
+                let alert_config = {}
+                $.each($('[lay-filter="alert_config"]'), function (i, obj) {
+                    let _name = $(obj).attr('name');
+                    let _type = $(obj).attr('type');
+                    let _val = $(this).val();
+                    if (_type === 'radio') {
+                        _val = $('input[name="' + _name + '"]:checked').val();
+                    }
+                    alert_config[_name] = _val
+                });
+
+                let interval = parseInt(alert_config['interval_minutes']);
+                if (isNaN(interval) || interval < 1 || interval > 1380) {
+                    layer.msg('运行间隔必须在1-1380分钟之间');
+                    return false;
+                }
+                if (interval >= 60 && interval % 60 !== 0) {
+                    layer.msg('运行间隔60分钟以上必须是60的整数倍');
+                    return false;
+                }
+                if ($.trim(alert_config['strategy_id'] || '') === '') {
+                    layer.msg('请选择已注册策略');
+                    return false;
+                }
+                if ($.trim(alert_config['strategy_kwargs'] || '') === '') {
+                    alert_config['strategy_kwargs'] = '{}';
+                }
+                try {
+                    let strategy_kwargs = JSON.parse(alert_config['strategy_kwargs']);
+                    if (Object.prototype.toString.call(strategy_kwargs) !== '[object Object]') {
+                        layer.msg('策略参数必须是 JSON 对象');
+                        return false;
+                    }
+                } catch (e) {
+                    layer.msg('策略参数必须是合法 JSON');
+                    return false;
+                }
+
+                $.ajax({
+                    type: "POST",
+                    url: "/alert_save",
+                    data: alert_config,
+                    dataType: 'json',
+                    traditional: true,
+                    success: function (result) {
+                        if (result['ok'] === true) {
+                            let index = parent.layer.getFrameIndex(window.name);
+                            parent.layer.msg('任务保存成功');
+                            parent.layer.close(index);
+                        } else {
+                            layer.msg(result['msg'] || '任务保存失败');
+                        }
+                    }
+                });
+            }
+
+            layui.use(function () {
+                const form = layui.form;
+                const layer = layui.layer;
+                form.on('submit(save_alert)', function (data) {
+                    save_alert();
+                    return false;
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>
