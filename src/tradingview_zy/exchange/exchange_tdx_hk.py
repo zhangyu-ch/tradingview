@@ -16,6 +16,10 @@ from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.file_db import FileCacheDB
+from tradingview_zy.exchange.tdx_reliability import (
+    ProviderUnavailableError,
+    call_with_bounded_retry,
+)
 from tradingview_zy.tools import tdx_best_ip as best_ip
 
 
@@ -41,30 +45,38 @@ class ExchangeTDXHK(Exchange):
             self.connect_info = db.cache_get("tdxex_connect_ip")
             if self.connect_info is None:
                 self.connect_info = self.reset_tdx_ip()
-                # print(f"最优服务器：{self.connect_info}")
 
-            # 初始化，映射交易所代码
+            def load_markets(remaining_seconds):
+                client = TdxExHq_API(raise_exception=True, auto_retry=True)
+                with client.connect(
+                    self.connect_info["ip"],
+                    self.connect_info["port"],
+                    time_out=max(0.1, min(remaining_seconds, 4.0)),
+                ):
+                    return client.get_markets()
+
+            all_markets = call_with_bounded_retry(
+                load_markets,
+                recover=self.reset_tdx_ip,
+                retry_on=(TdxConnectionError,),
+                max_attempts=3,
+                deadline_seconds=12.0,
+                description="exchange_tdx_hk market-map initialization",
+            )
             self.market_maps = {}
-            while True:
-                try:
-                    client = TdxExHq_API(raise_exception=True, auto_retry=True)
-                    with client.connect(
-                        self.connect_info["ip"], self.connect_info["port"]
-                    ):
-                        all_markets = client.get_markets()
-                        for _m in all_markets:
-                            if _m["category"] == 2:
-                                self.market_maps[_m["short_name"]] = {
-                                    "market": _m["market"],
-                                    "category": _m["category"],
-                                    "name": _m["name"],
-                                }
-                    break
-                except TdxConnectionError:
-                    self.reset_tdx_ip()
-        except Exception:
-            print(traceback.format_exc())
-            print("通达信 香港行情接口初始化失败，香港行情不可用")
+            for market in all_markets:
+                if market["category"] == 2:
+                    self.market_maps[market["short_name"]] = {
+                        "market": market["market"],
+                        "category": market["category"],
+                        "name": market["name"],
+                    }
+        except ProviderUnavailableError:
+            raise
+        except Exception as exc:
+            raise ProviderUnavailableError(
+                "exchange_tdx_hk initialization failed"
+            ) from exc
 
     def reset_tdx_ip(self):
         """

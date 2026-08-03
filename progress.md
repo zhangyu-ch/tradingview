@@ -89,3 +89,11 @@
 - 修复：增加 AST 门禁，未来若引入 FIFO 关闭路径，必须先完成结算校验再消费 lot。
 - 专项测试：`tests/test_new05_fifo_atomicity_guard.py`，3 passed。
 - 提交：`test(NEW-05): guard FIFO settlement atomicity`。
+
+### 问题 06：NX-20
+- **状态：** complete
+- **完成时间：** 2026-08-03T11:45:00+00:00
+- 验证结论：问题存在于 4 个 TDX-ExHq 构造器。
+- 修复：3 次尝试、12 秒总 deadline、受剩余预算约束的 SDK connect timeout、统一 ProviderUnavailableError。
+- 专项测试：`tests/test_nx20_tdx_bounded_retry.py`，3 passed。
+- 提交：`fix(NX-20): bound TDX ExHq constructor retries`。

@@ -326,16 +326,34 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "港股、国内期货、纽约期货和外汇四个 TDX-ExHq 构造器都用 `while True` 初始化 market map；连接持续失败时只重选节点并无限重试，构造器可能永久阻塞 Web 启动、测试和停机。",
+      "fix_summary": "新增共享 `call_with_bounded_retry()`：同时限制最大 3 次尝试和 12 秒总 deadline，向每次 SDK connect 传递剩余预算并使用指数退避；失败统一抛 `ProviderUnavailableError`。四个 ExHq 构造器均改为该机制，并把 pytdx `time_out` 限制在剩余预算内，不再吞异常后留下半初始化对象。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src python3 -m pytest -q tests/test_nx20_tdx_bounded_retry.py`，3 项测试通过。",
+        "Fake clock 故障注入确认持续连接失败最多调用 3 次且不超过总 deadline；第二次成功路径确认只恢复一次。",
+        "AST 契约逐一检查四个 ExHq 构造器，确认 `__init__` 内不存在恒真 while，并且都调用共享有界重试函数。",
+        "读取仓库内 pytdx wheel，确认 `connect(..., time_out=...)` 是受支持参数；运行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（3 项专项测试通过，4 个构造器均已移除无上限重连）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/exchange/tdx_reliability.py",
+        "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "src/tradingview_zy/exchange/exchange_tdx_futures.py",
+        "src/tradingview_zy/exchange/exchange_tdx_ny_futures.py",
+        "src/tradingview_zy/exchange/exchange_tdx_fx.py",
+        "tests/test_nx20_tdx_bounded_retry.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "未连接真实 TDX 节点；重试、deadline 和异常语义由 fake clock/operation 验证，SDK 连接超时参数由随仓库提供的 pytdx wheel 源码确认。"
+      ],
+      "commit_subject": "fix(NX-20): bound TDX ExHq constructor retries"
     }
   },
   {

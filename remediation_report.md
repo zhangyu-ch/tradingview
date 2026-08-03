@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 3
-- **待处理：** 78
+- **已完成：** 4
+- **待处理：** 77
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -16,7 +16,7 @@
 |3|`NEW-03`|高|Dependencies / Packaging|🆕 新问题（未修复）|已完成|通过（2 项专项测试与静态依赖契约检查通过）|`fix(NEW-03)`|
 |4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|已完成|通过（6 项 web payload 测试通过）|`fix(NEW-04)`|
 |5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归不在本地；3 项防回归测试通过）|`test(NEW-05)`|
-|6|`NX-20`|高|TDX Reliability|❌ 未修复|待处理|—|—|
+|6|`NX-20`|高|TDX Reliability|❌ 未修复|已完成|通过（3 项专项测试通过，4 个构造器均已移除无上限重连）|`fix(NX-20)`|
 |7|`RV-08`|高|Web Security / Secrets|❌ 未修复|待处理|—|—|
 |8|`HI-13`|高|Binance|❌ 未修复|待处理|—|—|
 |9|`HI-14`|高|TQ SDK|❌ 未修复|待处理|—|—|
@@ -201,16 +201,21 @@
 ### 06. NX-20 · 多个 TDX-ExHq 构造器用无上限 while True 重连
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 高 / TDX Reliability
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 港股、国内期货、纽约期货和外汇四个 TDX-ExHq 构造器都用 `while True` 初始化 market map；连接持续失败时只重选节点并无限重试，构造器可能永久阻塞 Web 启动、测试和停机。
+- **b. 我是怎么修复的？** 新增共享 `call_with_bounded_retry()`：同时限制最大 3 次尝试和 12 秒总 deadline，向每次 SDK connect 传递剩余预算并使用指数退避；失败统一抛 `ProviderUnavailableError`。四个 ExHq 构造器均改为该机制，并把 pytdx `time_out` 限制在剩余预算内，不再吞异常后留下半初始化对象。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python3 -m pytest -q tests/test_nx20_tdx_bounded_retry.py`，3 项测试通过。
+  - Fake clock 故障注入确认持续连接失败最多调用 3 次且不超过总 deadline；第二次成功路径确认只恢复一次。
+  - AST 契约逐一检查四个 ExHq 构造器，确认 `__init__` 内不存在恒真 while，并且都调用共享有界重试函数。
+  - 读取仓库内 pytdx wheel，确认 `connect(..., time_out=...)` 是受支持参数；运行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（3 项专项测试通过，4 个构造器均已移除无上限重连）
+- **提交：** fix(NX-20): bound TDX ExHq constructor retries
+- **修改文件：** `src/tradingview_zy/exchange/tdx_reliability.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_ny_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_fx.py`, `tests/test_nx20_tdx_bounded_retry.py`, `audit/remediation_state.json`, `remediation_report.md`, `progress.md`
+- **验证限制：**
+  - 未连接真实 TDX 节点；重试、deadline 和异常语义由 fake clock/operation 验证，SDK 连接超时参数由随仓库提供的 pytdx wheel 源码确认。
 - **原报告最新结论：** 多个 TDX-ExHq 构造器仍使用无上限 while True 重连；V6 顶层“已修复”没有源码依据。
 - **原报告建议：** 有限次数+指数退避+总 deadline；失败抛 ProviderUnavailableError；构造器不得永久阻塞。
 
