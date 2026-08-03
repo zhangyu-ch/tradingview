@@ -200,3 +200,9 @@
 - 删除旧标的、目标组重排和插入显式放入 `Session.begin()`；故障注入确认插入失败不会留下已删记录或已移动位置。
 - 仅做 position+1 在“已有标的重新置顶”时会保留排序空洞，因此修复在 flush 删除后把目标 market/group 剩余行压实为 1..N，再插入 position=0。
 - 其他市场的同名组完全不读取、不更新。
+## RV-07 UDF/search/marks 参数契约复核
+- 公开路由的输入校验必须发生在 `Market(...)`、provider 构造和数据库访问之前；否则即使最终返回错误，畸形请求仍可能触发网络、线程或数据库副作用。
+- TradingView symbol 收敛为精确一个 `market:code` 分隔符，市场必须在静态元数据中存在，code 受字符、控制字符和 UTF-8 字节上限约束。
+- UDF 读取接口保持 `s:error/errmsg`，普通 search 与写入 del_marks 使用 422 和稳定错误码。
+- 空 search query 是现有合法行为，仍允许列出前 N 个标的；limit 收敛为 1–100，布尔只接受 true/false，时间区间要求 from<=to。
+- 合法 history 继续先按市场时区规范化，再做范围过滤和 OHLCV 转换。

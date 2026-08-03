@@ -70,7 +70,13 @@ from tradingview_zy.watchlist_transfer import (
 from tradingview_zy.web_api_validation import (
     WebParameterError,
     parse_bounded_text,
+    parse_int,
+    parse_market,
     parse_positive_int,
+    parse_resolution,
+    parse_strict_bool,
+    parse_symbol,
+    parse_time_range,
 )
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
@@ -536,47 +542,43 @@ def create_app(test_config=None):
     @app.route("/tv/symbol_info")
     @login_required
     def tv_symbol_info():
-        """
-        商品集合信息
-        supports_search is True 则不会调用这个接口
-        """
-        group = request.args.get("group")
+        try:
+            group = parse_market(
+                request.args.get("group"), allowed_markets=market_frequencys.keys(), field="group"
+            )
+        except WebParameterError as exc:
+            return {"s": "error", "errmsg": str(exc)}
         ex = get_exchange(Market(group))
         all_symbols = ex.all_stocks()
-
-        info = {
-            "symbol": [s["code"] for s in all_symbols],
-            "description": [s["name"] for s in all_symbols],
+        return {
+            "symbol": [stock["code"] for stock in all_symbols],
+            "description": [stock["name"] for stock in all_symbols],
             "exchange-listed": group,
             "exchange-traded": group,
         }
-        return info
 
     @app.route("/tv/symbols")
     @login_required
     def tv_symbols():
-        """
-        商品解析
-        """
-        symbol: str = request.args.get("symbol")
-        symbol: list = symbol.split(":")
-        market: str = symbol[0].lower()
-        code: str = symbol[1]
+        try:
+            market, code = parse_symbol(
+                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
+            )
+        except WebParameterError as exc:
+            return {"s": "error", "errmsg": str(exc)}
 
         ex = get_exchange(Market(market))
         stocks = ex.stock_info(code)
-
         sector = ""
         industry = ""
         if market == "a":
             try:
                 gnbk = ex.stock_owner_plate(code)
-                sector = " / ".join([_g["name"] for _g in gnbk["GN"]])
-                industry = " / ".join([_h["name"] for _h in gnbk["HY"]])
+                sector = " / ".join([item["name"] for item in gnbk["GN"]])
+                industry = " / ".join([item["name"] for item in gnbk["HY"]])
             except Exception:
                 pass
-
-        info = {
+        return {
             "name": stocks["code"],
             "ticker": f"{market}:{stocks['code']}",
             "full_name": f"{market}:{stocks['code']}",
@@ -585,193 +587,130 @@ def create_app(test_config=None):
             "type": market_types[market],
             "session": market_session[market],
             "timezone": market_timezone[market],
-            "pricescale": (
-                stocks["precision"] if "precision" in stocks.keys() else 1000
-            ),
+            "pricescale": stocks.get("precision", 1000),
             "visible_plots_set": "ohlcv",
             "supported_resolutions": [
-                v for k, v in frequency_maps.items() if k in market_frequencys[market]
+                value for key, value in frequency_maps.items() if key in market_frequencys[market]
             ],
-            "intraday_multipliers": [
-                "1",
-                "2",
-                "3",
-                "5",
-                "10",
-                "15",
-                "20",
-                "30",
-                "60",
-                "120",
-                "240",
-            ],
-            "seconds_multipliers": [
-                "1",
-                "2",
-                "3",
-                "5",
-                "10",
-                "15",
-                "20",
-                "30",
-                "40",
-                "50",
-                "60",
-            ],
-            "daily_multipliers": [
-                "1",
-                "2",
-            ],
+            "intraday_multipliers": ["1", "2", "3", "5", "10", "15", "20", "30", "60", "120", "240"],
+            "seconds_multipliers": ["1", "2", "3", "5", "10", "15", "20", "30", "40", "50", "60"],
+            "daily_multipliers": ["1", "2"],
             "minmov": 1,
             "minmov2": 0,
             "has_intraday": True,
-            "has_seconds": True if market in ["futures", "ny_futures"] else False,
+            "has_seconds": market in ["futures", "ny_futures"],
             "has_daily": True,
             "has_weekly_and_monthly": True,
             "sector": sector,
             "industry": industry,
         }
-        return info
 
     @app.route("/tv/search")
     @login_required
     def tv_search():
-        """
-        商品检索
-        """
-        query = request.args.get("query")
-        type = request.args.get("type")
-        exchange = request.args.get("exchange")
-        limit = request.args.get("limit")
+        try:
+            query = parse_bounded_text(
+                request.args.get("query", ""), field="query", max_chars=100, allow_empty=True
+            )
+            type_value = parse_bounded_text(
+                request.args.get("type", ""), field="type", max_chars=32, allow_empty=True
+            )
+            exchange = parse_market(
+                request.args.get("exchange"), allowed_markets=market_frequencys.keys(), field="exchange"
+            )
+            limit = parse_int(request.args.get("limit", "30"), field="limit", minimum=1, maximum=100)
+        except WebParameterError as exc:
+            return {"error": "invalid_search_request", "message": str(exc)}, 422
 
         ex = get_exchange(Market(exchange))
         all_stocks = ex.all_stocks()
-
+        query_lower = query.lower()
         if exchange in ["currency", "currency_spot"]:
-            res_stocks = [
-                stock for stock in all_stocks if query.lower() in stock["code"].lower()
-            ]
+            res_stocks = [stock for stock in all_stocks if query_lower in stock["code"].lower()]
         else:
             res_stocks = [
                 stock
                 for stock in all_stocks
-                if query.lower() in stock["code"].lower()
-                or query.lower() in stock["name"].lower()
-                or query.lower()
-                in "".join([pinyin.get_initial(_p)[0] for _p in stock["name"]]).lower()
+                if query_lower in stock["code"].lower()
+                or query_lower in stock["name"].lower()
+                or query_lower in "".join([pinyin.get_initial(char)[0] for char in stock["name"]]).lower()
             ]
-        res_stocks = res_stocks[0 : int(limit)]
-
         infos = []
-        for stock in res_stocks:
-            infos.append(
-                {
-                    "symbol": stock["code"],
-                    "name": stock["code"],
-                    "full_name": f"{exchange}:{stock['code']}",
-                    "description": stock["name"],
-                    "exchange": exchange,
-                    "ticker": f"{exchange}:{stock['code']}",
-                    "type": type,
-                    "session": market_session[exchange],
-                    "timezone": market_timezone[exchange],
-                    "supported_resolutions": [
-                        v
-                        for k, v in frequency_maps.items()
-                        if k in market_frequencys[exchange]
-                    ],
-                }
-            )
+        for stock in res_stocks[:limit]:
+            infos.append({
+                "symbol": stock["code"],
+                "name": stock["code"],
+                "full_name": f"{exchange}:{stock['code']}",
+                "description": stock["name"],
+                "exchange": exchange,
+                "ticker": f"{exchange}:{stock['code']}",
+                "type": type_value,
+                "session": market_session[exchange],
+                "timezone": market_timezone[exchange],
+                "supported_resolutions": [
+                    value for key, value in frequency_maps.items() if key in market_frequencys[exchange]
+                ],
+            })
         return infos
 
     @app.route("/tv/history")
     @login_required
     def tv_history():
-        """
-        K线柱
-        """
-
-        symbol = request.args.get("symbol")
-        resolution = request.args.get("resolution")
-        firstDataRequest = request.args.get("firstDataRequest", "false")
         try:
-            _from = int(request.args.get("from"))
-            _to = int(request.args.get("to"))
-        except (TypeError, ValueError):
-            return {"s": "error", "errmsg": "invalid from/to"}
+            market, code = parse_symbol(
+                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
+            )
+            resolution, frequency = parse_resolution(
+                request.args.get("resolution"), resolution_map=resolution_maps
+            )
+            first_data_request = parse_strict_bool(
+                request.args.get("firstDataRequest", "false"), field="firstDataRequest"
+            )
+            from_timestamp, to_timestamp = parse_time_range(
+                request.args.get("from"), request.args.get("to")
+            )
+        except WebParameterError as exc:
+            return {"s": "error", "errmsg": str(exc)}
 
-        if _from < 0 and _to < 0:
+        if from_timestamp < 0 and to_timestamp < 0:
             return {"s": "no_data"}
-
-        if resolution not in resolution_maps:
-            return {"s": "error", "errmsg": "unsupported resolution"}
-
-        _symbol_res_old_k_time_key = f"{symbol}_{resolution}"
-
+        symbol = f"{market}:{code}"
+        counter_key = f"{symbol}_{resolution}"
         now_time = time.time()
-
-        s = "ok"
-
-        if firstDataRequest == "false":
-            # 判断在 5 秒内，同一个请求大于 5 次，返回 no_data
-            if _symbol_res_old_k_time_key not in __history_req_counter.keys():
-                __history_req_counter[_symbol_res_old_k_time_key] = {
-                    "counter": 0,
-                    "tm": now_time,
-                }
+        status = "ok"
+        if not first_data_request:
+            if counter_key not in __history_req_counter:
+                __history_req_counter[counter_key] = {"counter": 0, "tm": now_time}
+            elif __history_req_counter[counter_key]["counter"] >= 5:
+                __history_req_counter[counter_key] = {"counter": 0, "tm": now_time}
+                status = "no_data"
+            elif now_time - __history_req_counter[counter_key]["tm"] <= 5:
+                __history_req_counter[counter_key]["counter"] += 1
+                __history_req_counter[counter_key]["tm"] = now_time
             else:
-                if __history_req_counter[_symbol_res_old_k_time_key]["counter"] >= 5:
-                    __history_req_counter[_symbol_res_old_k_time_key] = {
-                        "counter": 0,
-                        "tm": now_time,
-                    }
-                    s = "no_data"
-                elif (
-                    now_time - __history_req_counter[_symbol_res_old_k_time_key]["tm"]
-                    <= 5
-                ):
-                    __history_req_counter[_symbol_res_old_k_time_key]["counter"] += 1
-                    __history_req_counter[_symbol_res_old_k_time_key]["tm"] = now_time
-                else:
-                    __history_req_counter[_symbol_res_old_k_time_key] = {
-                        "counter": 0,
-                        "tm": now_time,
-                    }
-
-        market = symbol.split(":")[0].lower()
-        code = symbol.split(":")[1]
+                __history_req_counter[counter_key] = {"counter": 0, "tm": now_time}
 
         ex = get_exchange(Market(market))
-
-        # 判断当前是否可交易时间
         if (
-            firstDataRequest == "false"
-            and _from >= int(now_time - (10 * 60))
+            not first_data_request
+            and from_timestamp >= int(now_time - (10 * 60))
             and ex.now_trading() is False
         ):
             return {"s": "no_data", "nextTime": int(now_time + (10 * 60))}
-
-        frequency = resolution_maps[resolution]
         klines = ex.klines(code, frequency)
         if klines is None or len(klines) == 0:
             return {"s": "no_data"}
-
         klines = normalize_klines_for_market(klines, market)
-        if _to < datetime_to_timestamp_seconds(klines.iloc[0]["date"]):
+        if to_timestamp < datetime_to_timestamp_seconds(klines.iloc[0]["date"]):
             return {"s": "no_data"}
-
-        if firstDataRequest != "true":
+        if not first_data_request:
             klines = filter_klines_by_timestamp_range(
-                klines, _from, _to, market=market
+                klines, from_timestamp, to_timestamp, market=market
             )
             if klines is None or len(klines) == 0:
                 return {"s": "no_data"}
-
         return klines_to_tv_history(
-            klines,
-            update=False if firstDataRequest == "true" else True,
-            status=s,
-            market=market,
+            klines, update=not first_data_request, status=status, market=market
         )
 
     # (symbol, frequency) -> 全量足迹聚合结果，TTL 内直接复用，按请求窗口切片返回
@@ -780,30 +719,23 @@ def create_app(test_config=None):
     @app.route("/tv/footprint")
     @login_required
     def tv_footprint():
-        """
-        K线分价成交量（Volume Footprint），供样式 17 的足迹渲染使用
-        """
-        symbol = request.args.get("symbol")
-        resolution = request.args.get("resolution")
         try:
-            _from = int(request.args.get("from"))
-            _to = int(request.args.get("to"))
-        except (TypeError, ValueError):
-            return {"s": "error", "errmsg": "invalid from/to"}
-
-        if not symbol or ":" not in symbol:
-            return {"s": "error", "errmsg": "invalid symbol"}
-        if resolution not in resolution_maps:
-            return {"s": "error", "errmsg": "unsupported resolution"}
-
-        frequency = resolution_maps[resolution]
+            market, code = parse_symbol(
+                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
+            )
+            resolution, frequency = parse_resolution(
+                request.args.get("resolution"), resolution_map=resolution_maps
+            )
+            from_timestamp, to_timestamp = parse_time_range(
+                request.args.get("from"), request.args.get("to")
+            )
+        except WebParameterError as exc:
+            return {"s": "error", "errmsg": str(exc)}
         sub_frequency = SUB_FREQUENCY_MAP.get(frequency)
-        market = symbol.split(":")[0].lower()
-        code = symbol.split(":")[1]
         ex = get_exchange(Market(market))
         if sub_frequency is None or sub_frequency not in ex.support_frequencys():
             return {"s": "no_data"}
-
+        symbol = f"{market}:{code}"
         cache_key = (symbol, frequency)
         footprint_bars = __footprint_cache.get(cache_key)
         if footprint_bars is None:
@@ -811,123 +743,93 @@ def create_app(test_config=None):
             sub_klines = ex.klines(code, sub_frequency)
             footprint_bars = aggregate_footprint(display_klines, sub_klines)
             __footprint_cache.set(cache_key, footprint_bars)
-
         return {
             "s": "ok",
-            "bars": {ts: bar for ts, bar in footprint_bars.items() if _from <= ts <= _to},
+            "bars": {
+                timestamp: bar
+                for timestamp, bar in footprint_bars.items()
+                if from_timestamp <= timestamp <= to_timestamp
+            },
         }
 
     @app.route("/tv/timescale_marks")
     @login_required
     def tv_timescale_marks():
-        symbol = request.args.get("symbol")
-        _from = int(request.args.get("from"))
-        _to = int(request.args.get("to"))
-        resolution = request.args.get("resolution")
-        market = symbol.split(":")[0]
-        code = symbol.split(":")[1]
-
-        freq = resolution_maps[resolution]
-
+        try:
+            market, code = parse_symbol(
+                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
+            )
+            _, frequency = parse_resolution(
+                request.args.get("resolution"), resolution_map=resolution_maps
+            )
+            from_timestamp, to_timestamp = parse_time_range(
+                request.args.get("from"), request.args.get("to")
+            )
+        except WebParameterError as exc:
+            return {"s": "error", "errmsg": str(exc)}
         order_type_maps = {
-            "buy": "买入",
-            "sell": "卖出",
-            "open_long": "买入开多",
-            "open_short": "买入开空",
-            "close_long": "卖出平多",
-            "close_short": "买入平空",
+            "buy": "买入", "sell": "卖出", "open_long": "买入开多",
+            "open_short": "买入开空", "close_long": "卖出平多", "close_short": "买入平空",
         }
         marks = []
-
-        # 增加订单的信息
         orders = db.order_query_by_code(market, code)
-        for i in range(len(orders)):
-            o = orders[i]
-            _dt_int = fun.datetime_to_int(o["datetime"])
-            if _from <= _dt_int <= _to:
-                m = {
-                    "id": i,
-                    "time": _dt_int,
-                    "color": (
-                        "red"
-                        if o["type"] in ["buy", "open_long", "close_short"]
-                        else "green"
-                    ),
-                    "label": (
-                        "B" if o["type"] in ["buy", "open_long", "close_short"] else "S"
-                    ),
+        for index, order in enumerate(orders):
+            timestamp = fun.datetime_to_int(order["datetime"])
+            if from_timestamp <= timestamp <= to_timestamp:
+                is_buy = order["type"] in ["buy", "open_long", "close_short"]
+                marks.append({
+                    "id": index, "time": timestamp, "color": "red" if is_buy else "green",
+                    "label": "B" if is_buy else "S",
                     "tooltip": [
-                        f"{order_type_maps[o['type']]}[{o['price']}/{o['amount']}]",
-                        f"{'' if 'info' not in o else o['info']}",
+                        f"{order_type_maps[order['type']]}[{order['price']}/{order['amount']}]",
+                        f"{'' if 'info' not in order else order['info']}",
                     ],
-                    "shape": (
-                        "earningUp"
-                        if o["type"] in ["buy", "open_long", "close_short"]
-                        else "earningDown"
-                    ),
-                }
-                marks.append(m)
-
-        # 增加其他自定义信息
-        other_marks = db.marks_query(market, code)
-        for i in range(len(other_marks)):
-            _m = other_marks[i]
-            if _m.frequency == "" or _m.frequency == freq:
-                if _from <= _m.mark_time <= _to:
-                    marks.append(
-                        {
-                            "id": f"m-{i}",
-                            "time": int(_m.mark_time),
-                            "color": _m.mark_color,
-                            "label": _m.mark_label,
-                            "tooltip": _m.mark_tooltip,
-                            "shape": _m.mark_shape,
-                        }
-                    )
-
+                    "shape": "earningUp" if is_buy else "earningDown",
+                })
+        for index, mark in enumerate(db.marks_query(market, code)):
+            if (mark.frequency == "" or mark.frequency == frequency) and from_timestamp <= mark.mark_time <= to_timestamp:
+                marks.append({
+                    "id": f"m-{index}", "time": int(mark.mark_time), "color": mark.mark_color,
+                    "label": mark.mark_label, "tooltip": mark.mark_tooltip, "shape": mark.mark_shape,
+                })
         return marks
 
     @app.route("/tv/marks")
     @login_required
     def tv_marks():
-        symbol = request.args.get("symbol")
-        _from = int(request.args.get("from"))
-        _to = int(request.args.get("to"))
-        resolution = request.args.get("resolution")
-        market = symbol.split(":")[0]
-        code = symbol.split(":")[1]
-
-        freq = resolution_maps[resolution]
-
+        try:
+            market, code = parse_symbol(
+                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
+            )
+            _, frequency = parse_resolution(
+                request.args.get("resolution"), resolution_map=resolution_maps
+            )
+            from_timestamp, to_timestamp = parse_time_range(
+                request.args.get("from"), request.args.get("to")
+            )
+        except WebParameterError as exc:
+            return {"s": "error", "errmsg": str(exc)}
         marks = []
-        price_marks = db.marks_query_by_price(market, code, start_date=_from)
-        for i in range(len(price_marks)):
-            _m = price_marks[i]
-            if _m.frequency == "" or _m.frequency == freq:
-                if _from <= _m.mark_time <= _to:
-                    marks.append(
-                        {
-                            "id": f"m-{i}",
-                            "time": int(_m.mark_time),
-                            "color": _m.mark_color,
-                            "text": _m.mark_text,
-                            "label": _m.mark_label,
-                            "labelFontColor": _m.mark_label_font_color,
-                            "minSize": _m.mark_min_size,
-                        }
-                    )
-
+        price_marks = db.marks_query_by_price(market, code, start_date=from_timestamp)
+        for index, mark in enumerate(price_marks):
+            if (mark.frequency == "" or mark.frequency == frequency) and from_timestamp <= mark.mark_time <= to_timestamp:
+                marks.append({
+                    "id": f"m-{index}", "time": int(mark.mark_time), "color": mark.mark_color,
+                    "text": mark.mark_text, "label": mark.mark_label,
+                    "labelFontColor": mark.mark_label_font_color, "minSize": mark.mark_min_size,
+                })
         return marks
 
     @app.route("/tv/del_marks", methods=["POST"])
     @login_required
     def tv_del_marks():
-        symbol = request.form["symbol"]
-        market = symbol.split(":")[0]
-        code = symbol.split(":")[1]
-
+        try:
+            market, code = parse_symbol(
+                request.form.get("symbol"), allowed_markets=market_frequencys.keys()
+            )
+        except WebParameterError as exc:
+            return {"error": "invalid_marks_request", "message": str(exc)}, 422
         db.marks_del_all_by_code(market, code)
-
         return {"status": "ok"}
 
     @app.route("/tv/time")

@@ -350,3 +350,10 @@
 - 修复：删除、目标 market/group 连续重排和插入使用单事务；已有标的重新置顶不再留下 position 空洞。
 - 专项与相邻测试：7 passed；真实 SQLite 验证 A/HK 隔离、插入失败全回滚和重复置顶。
 - 提交：`fix(RV-01): isolate watchlist top ordering by market`。
+### 问题 37：RV-07
+- **状态：** complete
+- **完成时间：** 2026-08-03（会话恢复后重建）
+- 验证结论：UDF/search/marks 路由直接 split/lower/int/枚举/字典索引，畸形参数可返回 500 并提前触发副作用。
+- 修复：扩展共享 parser；8 个入口统一校验文本、market:code、周期、严格布尔、整数和时间区间；UDF 返回稳定 error，普通接口返回 422。
+- 专项与相邻测试：77 passed；Web 主文件保持 CRLF，payload 时区契约未回归。
+- 提交：`fix(RV-07): validate TradingView UDF request parameters`。

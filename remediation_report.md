@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 36
-- **待处理：** 45
+- **已完成：** 37
+- **待处理：** 44
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -47,7 +47,7 @@
 |34|`RV-05`|中|Backtesting / Process|❌ 未修复|已完成|通过（18 项专项与相邻测试通过；缺少保存路径在主进程明确失败，合法路径安全生成）|`fix(RV-05)`|
 |35|`RV-04`|中|Backtesting Metrics|❌ 未修复|已完成|通过（20 项专项与相邻测试通过；零值与容差内噪声计入持平，不再污染失败统计）|`fix(RV-04)`|
 |36|`RV-01`|中|Database / Watchlist|❌ 未修复|已完成|通过（7 项专项与相邻测试通过；跨市场隔离、失败回滚和连续重排均正确）|`fix(RV-01)`|
-|37|`RV-07`|中|Web API Robustness|❌ 未修复|待处理|—|—|
+|37|`RV-07`|中|Web API Robustness|❌ 未修复|已完成|通过（77 项专项与相邻测试通过；相关公开入口的畸形参数在外部副作用前被拒绝）|`fix(RV-07)`|
 |38|`ME-11`|中|Baostock|❌ 未修复|待处理|—|—|
 |39|`HI-17`|中|Scripts|❌ 未修复|待处理|—|—|
 |40|`ME-12`|中|TDX Adapters|❌ 未修复|待处理|—|—|
@@ -887,16 +887,24 @@
 ### 37. RV-07 · UDF/search/marks 路由缺少统一参数校验，畸形请求返回 500
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web API Robustness
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** TradingView UDF 与相关搜索/标记路由直接对未经校验的公开参数执行 `split`、`lower`、`int`、枚举构造和周期字典索引。缺失参数、多余冒号、未知市场/周期、非整数时间、反向区间或非法布尔值会触发 AttributeError、IndexError、ValueError 或 KeyError，部分路径还会在失败前构造行情 provider 或访问数据库。
+- **b. 我是怎么修复的？** 扩展无外部依赖的共享 Web 参数校验模块，统一提供有长度与控制字符边界的文本、严格布尔、带上下界整数、支持市场、精确单个 `market:code` 和周期映射解析。`symbol_info`、`symbols`、`history`、`footprint`、`timescale_marks`、`marks` 在任何 provider/数据库访问前完成校验，并按 UDF 契约返回 `s:error/errmsg`；`search` 对 query/type/exchange/limit 做边界校验并以 422 `invalid_search_request` 返回；`del_marks` 对表单 symbol 做相同校验并以 422 `invalid_marks_request` 返回。合法请求的既有成功 payload、空列表和删除成功结构保持不变。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前逐路由确认 search 的 lower/int/Market、history/marks 的 split/int/字典索引会把畸形请求升级为异常，并可能先构造 provider 或访问数据库。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_rv07_web_parameter_validation.py tests/test_nx14_storage_not_found.py tests/test_nx16_tick_request_limits.py tests/test_web_payloads.py tests/test_remediation_report_counts.py`，77 项专项、相邻输入、payload 和报告测试全部通过。
+  - 共享 parser 参数化覆盖缺失、多冒号、空 code、未知市场、控制字符、非法/非规范整数、严格布尔、未知周期、超长文本和反向时间区间。
+  - 对 8 个真实路由做源码顺序契约检查，确认共享校验调用出现在 `get_exchange` 或 `db.` 前；普通 search/del_marks 与 UDF 错误结构均有稳定错误码。
+  - 运行既有 `test_web_payloads.py`，确认 A 股 naive 时间规范化、范围过滤和 OHLCV 历史 payload 未回归。
+  - 执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。
+- **e. 验证是否通过？** 通过（77 项专项与相邻测试通过；相关公开入口的畸形参数在外部副作用前被拒绝）
+- **提交：** fix(RV-07): validate TradingView UDF request parameters
+- **修改文件：** `src/tradingview_zy/web_api_validation.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_rv07_web_parameter_validation.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 未启动完整 Flask/Layui/TradingView 浏览器会话；共享 parser 动态测试、真实路由源码顺序契约、编译和 payload 单元测试覆盖本条输入边界。
+  - provider 返回畸形数据和统一外部错误模型属于后续问题，本条只关闭公开请求参数导致的 500 与提前副作用。
 - **原报告最新结论：** 本轮 Web 改动没有为 UDF/search/marks 路由增加统一参数 schema 和 4xx 错误处理。
 - **原报告建议：** 共享 parser/schema，验证 symbol、市场、周期、limit 和时间；UDF 返回 s:error/errmsg，普通 API 返回400/422。
 

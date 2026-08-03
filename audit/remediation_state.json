@@ -2077,16 +2077,36 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "TradingView UDF 与相关搜索/标记路由直接对未经校验的公开参数执行 `split`、`lower`、`int`、枚举构造和周期字典索引。缺失参数、多余冒号、未知市场/周期、非整数时间、反向区间或非法布尔值会触发 AttributeError、IndexError、ValueError 或 KeyError，部分路径还会在失败前构造行情 provider 或访问数据库。",
+      "fix_summary": "扩展无外部依赖的共享 Web 参数校验模块，统一提供有长度与控制字符边界的文本、严格布尔、带上下界整数、支持市场、精确单个 `market:code` 和周期映射解析。`symbol_info`、`symbols`、`history`、`footprint`、`timescale_marks`、`marks` 在任何 provider/数据库访问前完成校验，并按 UDF 契约返回 `s:error/errmsg`；`search` 对 query/type/exchange/limit 做边界校验并以 422 `invalid_search_request` 返回；`del_marks` 对表单 symbol 做相同校验并以 422 `invalid_marks_request` 返回。合法请求的既有成功 payload、空列表和删除成功结构保持不变。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前逐路由确认 search 的 lower/int/Market、history/marks 的 split/int/字典索引会把畸形请求升级为异常，并可能先构造 provider 或访问数据库。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_rv07_web_parameter_validation.py tests/test_nx14_storage_not_found.py tests/test_nx16_tick_request_limits.py tests/test_web_payloads.py tests/test_remediation_report_counts.py`，77 项专项、相邻输入、payload 和报告测试全部通过。",
+        "共享 parser 参数化覆盖缺失、多冒号、空 code、未知市场、控制字符、非法/非规范整数、严格布尔、未知周期、超长文本和反向时间区间。",
+        "对 8 个真实路由做源码顺序契约检查，确认共享校验调用出现在 `get_exchange` 或 `db.` 前；普通 search/del_marks 与 UDF 错误结构均有稳定错误码。",
+        "运行既有 `test_web_payloads.py`，确认 A 股 naive 时间规范化、范围过滤和 OHLCV 历史 payload 未回归。",
+        "执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。"
+      ],
+      "verification_result": "通过（77 项专项与相邻测试通过；相关公开入口的畸形参数在外部副作用前被拒绝）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/web_api_validation.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_rv07_web_parameter_validation.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "未启动完整 Flask/Layui/TradingView 浏览器会话；共享 parser 动态测试、真实路由源码顺序契约、编译和 payload 单元测试覆盖本条输入边界。",
+        "provider 返回畸形数据和统一外部错误模型属于后续问题，本条只关闭公开请求参数导致的 500 与提前副作用。"
+      ],
+      "commit_subject": "fix(RV-07): validate TradingView UDF request parameters"
     }
   },
   {
