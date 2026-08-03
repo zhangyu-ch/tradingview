@@ -50,3 +50,10 @@
 ## NEW-05 本地复核
 - 用户提供的本地 ZIP 没有报告固定点中的 `backtesting/accounting.py`，`POSITION` 也没有 `lots` 字段；全仓不存在 `consume_fifo_lots` / `close_settlement` 调用，因此“FIFO lot 先消费后校验”的确切回归不在本地代码中。
 - 当前本地回测仍采用聚合仓位模型；本条不应凭空引入一套未被调用的 FIFO 会计实现。处理方式是保存“不存在”的验证证据，并增加 AST 门禁：若未来重新引入这两个步骤，结算校验必须排在 lot 消费之前。
+
+## HI-14 TQ 生命周期复核
+- `ExchangeTq` 原构造函数会立即创建默认非 daemon 线程；即使调用者只想读取静态能力，也会产生线程与潜在 SDK 连接副作用。
+- 原命令队列是普通 list，结果字典由工作线程与请求线程无锁读写；关闭只设置 `stop_thread` 并 sleep，不具备 join 或资源释放完成语义。
+- 参数化类上的 `@fun.singleton` 会忽略后续 `use_simulate_account` 参数，属于与线程问题耦合的实例隔离缺陷。
+- 修复采用独立 `ManagedWorker`：构造无副作用、首个订阅命令惰性启动、daemon + Event + join timeout；Queue/RLock/快照避免跨线程容器竞态，API 关闭集中化。
+- 真实导入烟雾测试先后被容器缺失 `tzlocal` 与 `tqsdk` 阻断；未继续伪造完整 SDK，因为专项测试已覆盖本地生命周期核心，真实 SDK 行为在报告中保留限制。

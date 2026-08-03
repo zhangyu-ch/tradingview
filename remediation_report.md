@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 5
-- **待处理：** 76
+- **已完成：** 6
+- **待处理：** 75
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -19,7 +19,7 @@
 |6|`NX-20`|高|TDX Reliability|❌ 未修复|已完成|通过（3 项专项测试通过，4 个构造器均已移除无上限重连）|`fix(NX-20)`|
 |7|`RV-08`|高|Web Security / Secrets|❌ 未修复|已完成（共享修复已复验）|通过（共享根因已修复，2 项独立防回归测试通过）|`test(RV-08)`|
 |8|`HI-13`|高|Binance|❌ 未修复|已完成|通过（5 项专项测试通过，合约/现货均使用严格分页器）|`fix(HI-13)`|
-|9|`HI-14`|高|TQ SDK|❌ 未修复|待处理|—|—|
+|9|`HI-14`|高|TQ SDK|❌ 未修复|已完成|通过（3 项离线生命周期/源码契约测试通过；真实 TQ SDK 导入与联调受缺失依赖和账户环境阻断）|`fix(HI-14)`|
 |10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
 |11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
 |12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
@@ -265,16 +265,23 @@
 ### 09. HI-14 · ExchangeTq 构造即启动非 daemon 线程，队列/缓存无同步与确定性关闭
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 高 / TQ SDK
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** ExchangeTq 的构造函数立即启动默认非 daemon Thread；命令使用普通 list、行情缓存和 API 状态由调用线程与工作线程无锁共享；close_task_thread 只设置布尔值并 sleep，既不 join 也不保证释放 TqApi。参数化类还被全局 singleton 包装，使第一次构造参数永久影响后续调用。
+- **b. 我是怎么修复的？** 移除参数化 singleton 与构造时线程启动，新增 ManagedWorker 管理显式/惰性 start、daemon 策略、停止 Event、幂等启动和带 timeout 的 join。命令改为 queue.Queue，订阅集合与结果缓存受 RLock 保护，K 线和 Tick 以快照形式跨线程交付；SDK API 创建/替换/关闭受独立 RLock 管理，close 在停止工作线程后确定性释放 API，并支持上下文管理器。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python3 -m pytest -q tests/test_hi14_tq_lifecycle.py`，3 项专项测试通过。
+  - 动态测试 ManagedWorker：线程为 daemon、重复 start 不会创建第二线程、stop 设置 Event 并在 1 秒内 join；从未启动时 close 安全返回。
+  - AST/源码契约确认 ExchangeTq 构造器不调用 start、已移除 singleton、使用 Queue/RLock/ManagedWorker、close 调用带 timeout 的 stop，且不存在 list.append 命令队列或 stop_thread 轮询。
+  - 运行 compileall、git diff --check 和旧危险模式 grep。
+  - 尝试真实导入实例化；容器缺少项目依赖 tzlocal 与 tqsdk，故未连接天勤 SDK，已记录为环境限制。
+- **e. 验证是否通过？** 通过（3 项离线生命周期/源码契约测试通过；真实 TQ SDK 导入与联调受缺失依赖和账户环境阻断）
+- **提交：** fix(HI-14): make TQ worker lifecycle deterministic
+- **修改文件：** `src/tradingview_zy/exchange/worker_lifecycle.py`, `src/tradingview_zy/exchange/exchange_tq.py`, `tests/test_hi14_tq_lifecycle.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 容器未安装 tqsdk，且完整项目导入还缺 tzlocal；未执行真实天勤行情订阅、账户登录和网络断线联调。
+  - SDK 内部协程停止语义通过 1 秒 wait_update deadline 与 API close 边界推演，真实 SDK 版本仍应在 Python 3.11 环境做集成测试。
 - **原报告最新结论：** ExchangeTq 构造仍启动非 daemon 线程；共享队列/字典缺少同步，close() 只置标记并 sleep，没有 join/确定性释放。
 - **原报告建议：** 显式 start/close 生命周期、daemon 策略、锁/线程安全队列、join timeout 和资源释放测试。
 

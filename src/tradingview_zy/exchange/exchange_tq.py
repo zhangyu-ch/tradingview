@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import datetime
 import math
+import queue
 import threading
 import time
 from typing import Dict, List, Union
@@ -8,43 +11,114 @@ import pandas as pd
 import pytz
 import tqsdk
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
-from tqsdk.objs import Account, Position, Quote
+from tqsdk.objs import Account, Position
 
-from tradingview_zy import config, fun
+from tradingview_zy import config
 from tradingview_zy.exchange.exchange import Exchange, Tick
+from tradingview_zy.exchange.worker_lifecycle import ManagedWorker
 
 
-@fun.singleton
 class ExchangeTq(Exchange):
-    """
-    天勤期货行情
-    """
+    """天勤期货行情与交易适配器。"""
 
     g_all_stocks = []
-    g_api: tqsdk.TqApi = None
-    g_account: tqsdk.TqAccount = None
-    g_account_enable: bool = False
 
-    def __init__(self, use_simulate_account=True):
-        # 是否使用模拟账号，进行交易测试（这种模式无需设置实盘账号）
+    def __init__(self, use_simulate_account: bool = True):
+        # 构造函数只建立本地状态；外部 SDK 和线程在第一次命令时惰性启动。
         self.use_simulate_account = use_simulate_account
-
-        # 命令任务队列
-        self.command_tasks: List[str] = []
-        # 记录已经收到并执行的命令
-        self.past_commands = []
-        # K线返回对象
+        self.command_tasks: queue.Queue[str] = queue.Queue()
+        self.past_commands: set[str] = set()
+        self.requested_commands: set[str] = set()
         self.res_klines: Dict[str, pd.DataFrame] = {}
-        # Tick 返回对象
-        self.res_ticks: Dict[str, Quote] = {}
-
-        # 设置时区
+        self.res_ticks: Dict[str, Dict[str, float]] = {}
         self.tz = pytz.timezone("Asia/Shanghai")
 
-        # 运行的子进程
-        self.stop_thread = False
-        self.t = threading.Thread(target=self.thread_run_tasks)
-        self.t.start()
+        self.g_api: tqsdk.TqApi | None = None
+        self.g_account: object | None = None
+        self.g_account_enable = False
+        self._api_lock = threading.RLock()
+        self._cache_lock = threading.RLock()
+        self._worker = ManagedWorker("tradingview-tq-worker")
+
+    @property
+    def t(self) -> threading.Thread | None:
+        """Backward-compatible access to the managed worker thread."""
+        return self._worker.thread
+
+    def start(self) -> bool:
+        """Start the daemon market-data worker explicitly and idempotently."""
+        return self._worker.start(self.thread_run_tasks)
+
+    def close(self, timeout: float = 5.0) -> bool:
+        """Stop and join the worker, then release the TQ API deterministically."""
+        try:
+            return self._worker.stop(timeout=timeout)
+        except TimeoutError:
+            # Closing the API can release a worker blocked inside SDK wait_update.
+            self.close_api()
+            return self._worker.stop(timeout=timeout)
+        finally:
+            self.close_api()
+
+    def __enter__(self) -> "ExchangeTq":
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self.close()
+
+    def close_task_thread(self):
+        return self.close()
+
+    def restart_task_thread(self):
+        self.close()
+        return self.start()
+
+    def _ensure_started(self) -> None:
+        self.start()
+
+    def _put_command(self, command: str) -> None:
+        self._ensure_started()
+        with self._cache_lock:
+            if command in self.requested_commands:
+                return
+            self.requested_commands.add(command)
+        self.command_tasks.put(command)
+
+    def _wait_for_cache(self, cache: Dict[str, object], key: str, timeout: float):
+        deadline = time.monotonic() + timeout
+        while not self._worker.stop_event.is_set():
+            with self._cache_lock:
+                value = cache.get(key)
+                if isinstance(value, pd.DataFrame):
+                    return value.copy(deep=True)
+                if value is not None:
+                    return dict(value) if isinstance(value, dict) else value
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            self._worker.stop_event.wait(min(0.05, remaining))
+        return None
+
+    @staticmethod
+    def _quote_snapshot(quote) -> Dict[str, float]:
+        fields = (
+            "last_price",
+            "bid_price1",
+            "ask_price1",
+            "highest",
+            "lowest",
+            "open",
+            "volume",
+            "pre_settlement",
+        )
+        snapshot: Dict[str, float] = {}
+        for field in fields:
+            try:
+                snapshot[field] = quote[field]
+            except (KeyError, TypeError):
+                snapshot[field] = getattr(quote, field)
+        return snapshot
 
     def default_code(self):
         return "KQ.m@SHFE.rb"
@@ -67,120 +141,120 @@ class ExchangeTq(Exchange):
             "10s": "10s",
         }
 
-    def close_task_thread(self):
-        self.stop_thread = True
-        time.sleep(1)
-        return True
-
-    def restart_task_thread(self):
-        self.close_task_thread()
-        time.sleep(2)
-        self.stop_thread = False
-        self.t = threading.Thread(target=self.thread_run_tasks)
-        self.t.start()
-        return True
-
     def thread_run_tasks(self):
-        """
-        子进程发送并更新行情请求
-        """
-        print("启动天勤子进程任务-更新K线与tick数据")
+        """Own all asynchronous subscriptions in one managed worker thread."""
+        print("启动天勤工作线程-更新K线与tick数据")
 
         async def get_tick(code):
-            quote = await self.get_api().get_quote(code)
-            self.res_ticks[code] = quote
-            async with self.get_api().register_update_notify() as update_chan:
+            api = self.get_api()
+            quote = await api.get_quote(code)
+            with self._cache_lock:
+                self.res_ticks[code] = self._quote_snapshot(quote)
+            async with api.register_update_notify() as update_chan:
                 async for _ in update_chan:
-                    if self.get_api().is_changing(quote):
-                        # print(f'Tick {code} 更新信息：', quote)
-                        self.res_ticks[code] = quote
+                    if self._worker.stop_event.is_set():
+                        break
+                    if api.is_changing(quote):
+                        with self._cache_lock:
+                            self.res_ticks[code] = self._quote_snapshot(quote)
 
         async def get_kline(code, frequency):
-            kline = await self.get_api().get_kline_serial(
+            api = self.get_api()
+            kline = await api.get_kline_serial(
                 code, duration_seconds=frequency, data_length=8000
             )
-            self.res_klines[f"{code}_{frequency}"] = kline
-            async with self.get_api().register_update_notify() as update_chan:
+            cache_key = f"{code}_{frequency}"
+            with self._cache_lock:
+                self.res_klines[cache_key] = kline.copy(deep=True)
+            async with api.register_update_notify() as update_chan:
                 async for _ in update_chan:
-                    if self.get_api().is_changing(kline):
-                        # print(f'Kline {code} {frequency} 更新信息：', len(kline))
-                        self.res_klines[f"{code}_{frequency}"] = kline
+                    if self._worker.stop_event.is_set():
+                        break
+                    if api.is_changing(kline):
+                        with self._cache_lock:
+                            self.res_klines[cache_key] = kline.copy(deep=True)
 
-        def reset_api(force: bool = False):
+        def reset_api():
             print("天勤 : 重启服务")
-            try:
-                self.close_api()
-            except Exception:
-                pass
-            self.res_klines = {}
-            self.res_ticks = {}
-            self.past_commands = []
+            self.close_api()
+            with self._cache_lock:
+                self.res_klines.clear()
+                self.res_ticks.clear()
+                self.past_commands.clear()
+                commands = tuple(self.requested_commands)
+            for command in commands:
+                self.command_tasks.put(command)
 
-        while True:
+        while not self._worker.stop_event.is_set():
             try:
-                if self.stop_thread:
-                    print("退出天勤任务子线程")
+                while not self._worker.stop_event.is_set():
+                    try:
+                        command = self.command_tasks.get_nowait()
+                    except queue.Empty:
+                        break
+                    try:
+                        if command in self.past_commands:
+                            continue
+                        self.past_commands.add(command)
+                        parts = command.split(":")
+                        if parts[0] == "kline":
+                            print("执行 Kline 命令：", command)
+                            self.get_api().create_task(
+                                get_kline(parts[1], int(parts[2]))
+                            )
+                        elif parts[0] == "tick":
+                            print("执行 Tick 命令：", command)
+                            self.get_api().create_task(get_tick(parts[1]))
+                    finally:
+                        self.command_tasks.task_done()
+                if self._worker.stop_event.is_set():
                     break
-                while len(self.command_tasks) > 0:
-                    commands = self.command_tasks.pop()
-                    if commands in self.past_commands:
-                        continue
-                    self.past_commands.append(commands)
-                    commands = commands.split(":")
-                    if commands[0] == "kline":
-                        print("执行 Kline 命令：", ":".join(commands))
-                        self.get_api().create_task(
-                            get_kline(commands[1], int(commands[2]))
-                        )
-                    elif commands[0] == "tick":
-                        print("执行 Tick 命令：", ":".join(commands))
-                        self.get_api().create_task(get_tick(commands[1]))
                 self.get_api().wait_update(time.time() + 1)
-            except Exception as e:
-                print(f"天勤 循环等待更新行情数据异常 {e}，重启")
-                reset_api(force=True)
-                time.sleep(5)
+            except Exception as exc:
+                if self._worker.stop_event.is_set():
+                    break
+                print(f"天勤 循环等待更新行情数据异常 {exc}，重启")
+                reset_api()
+                self._worker.wait(5.0)
+        print("退出天勤任务工作线程")
 
-    def get_api(self, use_account=False):
-        """
-        获取 天勤API 对象
-        use_account : 标记是否使用账户对象，在特殊时间，账户是无法登录的，这时候只能使用行情服务，使用账户则会报错
-        """
-        # 这时候使用账户模式，但是账户并不可用，尝试关闭 API，并重新创建 账户 API 连接
-        if (
-            use_account is True
-            and self.g_account_enable is False
-            and self.g_api is not None
-        ):
-            self.g_api.close()
-            self.g_api = None
+    def get_api(self, use_account: bool = False):
+        """Return the lazily-created API, serializing creation and replacement."""
+        with self._api_lock:
+            if (
+                use_account
+                and not self.g_account_enable
+                and self.g_api is not None
+            ):
+                self.g_api.close()
+                self.g_api = None
 
-        if self.g_api is None:
-            account = self.get_account()
-            if use_account and account is None:
-                raise Exception(
-                    "使用实盘账户操作，但是并没有配置实盘账户，请检查实盘配置"
-                )
-            try:
-                self.g_api = tqsdk.TqApi(
-                    account=account, auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD)
-                )
-                self.g_account_enable = True
-            except Exception as e:
-                print(
-                    "初始化默认的天勤 API 报错，重新尝试初始化无账户的 API：", {str(e)}
-                )
-                self.g_api = tqsdk.TqApi(
-                    auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD)
-                )
-                self.g_account_enable = False
-
-        return self.g_api
+            if self.g_api is None:
+                account = self.get_account()
+                if use_account and account is None:
+                    raise RuntimeError(
+                        "使用实盘账户操作，但是并没有配置实盘账户，请检查实盘配置"
+                    )
+                try:
+                    self.g_api = tqsdk.TqApi(
+                        account=account,
+                        auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD),
+                    )
+                    self.g_account_enable = True
+                except Exception as exc:
+                    print("初始化默认的天勤 API 报错，重新尝试初始化无账户的 API：", str(exc))
+                    self.g_api = tqsdk.TqApi(
+                        auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD)
+                    )
+                    self.g_account_enable = False
+            return self.g_api
 
     def close_api(self):
-        if self.g_api is not None:
-            self.g_api.close()
-            self.g_api = None
+        with self._api_lock:
+            api, self.g_api = self.g_api, None
+            self.g_account_enable = False
+        if api is not None:
+            api.close()
         return True
 
     def get_account(self):
@@ -271,21 +345,11 @@ class ExchangeTq(Exchange):
         if start_date is not None and end_date is not None:
             raise Exception("期货行情不支持历史数据查询，因为账号不是专业版，没权限")
 
-        # 添加命令
-        kline_key = f"{code}_{frequency_maps[frequency]}"
-        self.command_tasks.append(f"kline:{code}:{frequency_maps[frequency]}")
-        # 获取返回的K线
-        klines = None
-        try_nums = 0
-        while True:
-            if kline_key not in self.res_klines.keys():
-                time.sleep(1)
-                try_nums += 1
-                if try_nums > 5:  # 5秒后没有结果直接返回空
-                    return None
-                continue
-            klines = self.res_klines[kline_key]
-            break
+        # 添加命令，并在有界等待中读取由工作线程复制的快照。
+        duration = frequency_maps[frequency]
+        kline_key = f"{code}_{duration}"
+        self._put_command(f"kline:{code}:{duration}")
+        klines = self._wait_for_cache(self.res_klines, kline_key, timeout=5.0)
         if klines is None:
             return None
         klines.loc[:, "date"] = klines["datetime"].apply(
@@ -303,43 +367,33 @@ class ExchangeTq(Exchange):
         :param codes:
         :return:
         """
-        # 循环增加命令
         for code in codes:
-            self.command_tasks.append(f"tick:{code}")
-        time.sleep(1)
-        # 循环获取更新后的 tick
+            self._put_command(f"tick:{code}")
         res_ticks = {}
         for code in codes:
-            try_nums = 0
-            while True:
-                if code not in self.res_ticks.keys():
-                    time.sleep(1)
-                    try_nums += 1
-                    if try_nums > 3:
-                        break
-                    continue
-                tick = self.res_ticks[code]
-                res_ticks[code] = Tick(
-                    code=code,
-                    last=0 if math.isnan(tick["last_price"]) else tick["last_price"],
-                    buy1=0 if math.isnan(tick["bid_price1"]) else tick["bid_price1"],
-                    sell1=0 if math.isnan(tick["ask_price1"]) else tick["ask_price1"],
-                    high=0 if math.isnan(tick["highest"]) else tick["highest"],
-                    low=0 if math.isnan(tick["lowest"]) else tick["lowest"],
-                    open=0 if math.isnan(tick["open"]) else tick["open"],
-                    volume=0 if math.isnan(tick["volume"]) else tick["volume"],
-                    rate=(
-                        0
-                        if math.isnan(tick["pre_settlement"])
-                        else round(
-                            (tick["last_price"] - tick["pre_settlement"])
-                            / tick["pre_settlement"]
-                            * 100,
-                            2,
-                        )
-                    ),
-                )
-                break
+            tick = self._wait_for_cache(self.res_ticks, code, timeout=3.0)
+            if tick is None:
+                continue
+            res_ticks[code] = Tick(
+                code=code,
+                last=0 if math.isnan(tick["last_price"]) else tick["last_price"],
+                buy1=0 if math.isnan(tick["bid_price1"]) else tick["bid_price1"],
+                sell1=0 if math.isnan(tick["ask_price1"]) else tick["ask_price1"],
+                high=0 if math.isnan(tick["highest"]) else tick["highest"],
+                low=0 if math.isnan(tick["lowest"]) else tick["lowest"],
+                open=0 if math.isnan(tick["open"]) else tick["open"],
+                volume=0 if math.isnan(tick["volume"]) else tick["volume"],
+                rate=(
+                    0
+                    if math.isnan(tick["pre_settlement"])
+                    else round(
+                        (tick["last_price"] - tick["pre_settlement"])
+                        / tick["pre_settlement"]
+                        * 100,
+                        2,
+                    )
+                ),
+            )
         return res_ticks
 
     def stock_info(self, code: str) -> Union[Dict, None]:

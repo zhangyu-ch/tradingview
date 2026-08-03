@@ -113,3 +113,12 @@
 - 修复：共享严格游标分页器，0/1/N 缓存安全、±1ms 推进、去重、无进展与最大页数保护。
 - 专项测试：`tests/test_hi13_binance_pagination.py`，5 passed。
 - 提交：`fix(HI-13): make Binance pagination strictly progressive`。
+
+### 问题 09：HI-14
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：构造即启动非 daemon 线程、普通 list/字典跨线程共享、无 join 关闭和参数化 singleton 均存在。
+- 修复：显式/惰性 ManagedWorker 生命周期，daemon + Event + join；Queue、RLock、行情快照与确定性 API 释放。
+- 专项测试：`tests/test_hi14_tq_lifecycle.py`，3 passed；compileall、危险模式 grep、diff 检查通过。
+- 环境限制：容器缺 `tzlocal`/`tqsdk`，未运行真实 TQ SDK 联调。
+- 提交：`fix(HI-14): make TQ worker lifecycle deterministic`。
