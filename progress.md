@@ -307,3 +307,11 @@
 - 文件：`/mnt/data/tradingview_remediation_issues_021-030.zip`
 - 校验和：见同名 `.sha256` sidecar。
 - 验证：使用系统 `unzip` 重新解压后工作树干净；问题 021–030 标签逐一存在；`git fsck --full` 通过。
+### 问题 31：NX-16
+- **状态：** complete
+- **完成时间：** 2026-08-03（会话恢复后重建）
+- 验证结论：`/ticks` 原始请求没有代码数量、长度、去重、速率和 provider deadline 边界，问题存在。
+- 修复：新增集中式输入契约、稳定去重、线程安全有界滑动窗口限流，以及带总 deadline/固定并发槽的 daemon provider 调用门；路由对非法、限流、异常、忙和超时返回明确 4xx/5xx。
+- 专项及相邻测试：20 passed；覆盖解析边界、20 线程限流竞争、deadline、容量耗尽、槽位恢复和路由调用顺序。
+- 真实同步 SDK 无法被 Python 强制取消；超时调用的残留线程数量由固定槽限制。
+- 提交：`fix(NX-16): bound tick fanout and provider waits`。

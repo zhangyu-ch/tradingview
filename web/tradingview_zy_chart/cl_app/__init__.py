@@ -70,6 +70,16 @@ from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
 )
+from tradingview_zy.tick_request import (
+    BoundedProviderCaller,
+    SlidingWindowLimiter,
+    TickProviderBusyError,
+    TickProviderCallError,
+    TickProviderTimeoutError,
+    TickRateLimitError,
+    TickRequestError,
+    parse_tick_request,
+)
 
 
 def create_app(test_config=None):
@@ -128,6 +138,16 @@ def create_app(test_config=None):
             "WEB_MAX_WATCHLIST_LINE_BYTES",
             getattr(config, "WEB_MAX_WATCHLIST_LINE_BYTES", 512),
         )
+    )
+
+    tick_rate_limiter = SlidingWindowLimiter(
+        max_requests=int(security_overrides.get("WEB_TICKS_RATE_LIMIT", getattr(config, "WEB_TICKS_RATE_LIMIT", 30))),
+        window_seconds=float(security_overrides.get("WEB_TICKS_RATE_WINDOW_SECONDS", getattr(config, "WEB_TICKS_RATE_WINDOW_SECONDS", 60))),
+        max_keys=int(security_overrides.get("WEB_TICKS_RATE_MAX_KEYS", getattr(config, "WEB_TICKS_RATE_MAX_KEYS", 1024))),
+    )
+    tick_provider_caller = BoundedProviderCaller(
+        max_concurrent=int(security_overrides.get("WEB_TICKS_PROVIDER_MAX_CONCURRENT", getattr(config, "WEB_TICKS_PROVIDER_MAX_CONCURRENT", 8))),
+        timeout_seconds=float(security_overrides.get("WEB_TICKS_PROVIDER_TIMEOUT_SECONDS", getattr(config, "WEB_TICKS_PROVIDER_TIMEOUT_SECONDS", 5))),
     )
 
     login_limiter = LoginAttemptLimiter(
@@ -1083,21 +1103,37 @@ def create_app(test_config=None):
     @app.route("/ticks", methods=["POST"])
     @login_required
     def ticks():
-        market = request.form["market"]
-        codes = request.form["codes"]
-        codes = json.loads(codes)
-        ex = get_exchange(Market(market))
-        stock_ticks = ex.ticks(codes)
         try:
-            now_trading = ex.now_trading()
+            tick_request = parse_tick_request(
+                request.form.get("market"),
+                request.form.get("codes"),
+                allowed_markets=market_frequencys.keys(),
+                max_codes=int(security_overrides.get("WEB_TICKS_MAX_CODES", getattr(config, "WEB_TICKS_MAX_CODES", 200))),
+                max_code_bytes=int(security_overrides.get("WEB_TICKS_MAX_CODE_BYTES", getattr(config, "WEB_TICKS_MAX_CODE_BYTES", 128))),
+            )
+            tick_rate_limiter.check(request.remote_addr or "unknown")
+        except TickRateLimitError as exc:
+            return {"error": exc.code, "message": str(exc)}, exc.http_status
+        except TickRequestError as exc:
+            return {"error": exc.code, "message": str(exc)}, exc.http_status
+
+        try:
+            ex = get_exchange(Market(tick_request.market))
+            stock_ticks = tick_provider_caller.call(ex.ticks, list(tick_request.codes))
+            now_trading = bool(ex.now_trading())
             res_ticks = [
-                {"code": _c, "price": _t.last, "rate": round(float(_t.rate), 2)}
-                for _c, _t in stock_ticks.items()
+                {"code": code, "price": tick.last, "rate": round(float(tick.rate), 2)}
+                for code, tick in stock_ticks.items()
             ]
             return {"now_trading": now_trading, "ticks": res_ticks}
+        except (TickProviderBusyError, TickProviderTimeoutError) as exc:
+            return {"error": exc.code, "message": str(exc), "now_trading": False, "ticks": []}, exc.http_status
+        except TickProviderCallError as exc:
+            __log.exception("tick provider call failed")
+            return {"error": exc.code, "message": "tick provider call failed", "now_trading": False, "ticks": []}, exc.http_status
         except Exception:
-            traceback.print_exc()
-        return {"now_trading": False, "ticks": []}
+            __log.exception("tick response conversion failed")
+            return {"error": "tick_provider_failed", "message": "tick provider call failed", "now_trading": False, "ticks": []}, 502
 
     # 获取自选组列表
     @app.route("/get_zixuan_groups/<market>")

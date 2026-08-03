@@ -1756,16 +1756,38 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "原 `/ticks` 路由把客户端提供的 `codes` JSON 直接交给 `ex.ticks(codes)`：没有数组类型、空值、原始数量、单代码长度、重复值、请求速率或 provider 等待时间边界。攻击者或误操作可让单个同步请求扇出大量第三方行情调用；provider 卡住时还会长期占用 Web worker。",
+      "fix_summary": "新增集中式 tick 请求契约：在构造 provider 前验证市场与 JSON 数组，限制原始数组数量和单代码 UTF-8 字节数，拒绝空值、非字符串和控制字符，并按首次出现顺序去重；增加线程安全、键目录有界的滑动窗口限流；用有界 daemon 调用槽为同步 provider 增加总 deadline，超时调用最多占用固定槽位，容量耗尽时新请求快速失败。路由分别返回 422、429、502、503、504，所有阈值在配置模板中可调。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前读取 `/ticks` 路由，确认 JSON 解析后直接同步调用 provider，没有数量、去重、长度、速率或 deadline 检查。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_nx16_tick_request_limits.py tests/test_me05_lazy_web_startup.py tests/test_remediation_report_counts.py`，20 项专项、相邻惰性启动和报告测试全部通过。",
+        "解析器覆盖非数组、空数组、超量、超长、非字符串、控制字符、前后空白与稳定去重；原始数组数量在去重前受限。",
+        "以 20 个并发线程验证同一限流键严格只有 5 次通过，并确认限流键目录保持有界。",
+        "真实线程故障注入验证 provider 总 deadline、daemon worker、最大并发槽、超时后快速 busy 拒绝，以及阻塞调用返回后的槽位恢复。",
+        "源码契约检查确认请求校验在 `get_exchange` 前执行，provider 调用通过 `BoundedProviderCaller`；执行 compileall、CRLF 字节计数和 `git diff --check`。"
+      ],
+      "verification_result": "通过（20 项专项及相邻测试通过；输入扇出、请求速率、provider 并发和等待时间均有明确上限）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/tick_request.py",
+        "src/tradingview_zy/config.py.demo",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_nx16_tick_request_limits.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "限流器是单进程边界；多 worker 部署仍应在反向代理或共享存储中聚合全局速率。",
+        "Python 无法强制取消任意阻塞的第三方同步 SDK。超时 worker 会以 daemon 线程继续到 SDK 返回，但总数受固定并发槽严格限制；槽满后新请求返回 503，不会无限创建线程。",
+        "未连接真实行情 provider；故障时序由真实线程、信号量和可控 fake provider 注入验证。"
+      ],
+      "commit_subject": "fix(NX-16): bound tick fanout and provider waits"
     }
   },
   {

@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 30
-- **待处理：** 51
+- **已完成：** 31
+- **待处理：** 50
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -41,7 +41,7 @@
 |28|`NX-22`|中|Database / Diagnostics|❌ 未修复|已完成|通过（6 项专项、相邻及报告测试通过；数据库模块不再覆盖进程 warning 策略）|`fix(NX-22)`|
 |29|`NX-21`|中|Database Configuration|❌ 未修复|已完成|通过（3 项专项测试及相邻 DB 测试通过；特殊字符凭据可正确解析且默认字符串脱敏）|`fix(NX-21)`|
 |30|`NX-23`|中|ExchangeDB|❌ 未修复|已完成|通过（17 项专项、相邻、能力边界及报告测试通过；DB provider 可恢复持久化标的目录且未过报证券主数据能力）|`fix(NX-23)`|
-|31|`NX-16`|中|Web Security / Availability|❌ 未修复|待处理|—|—|
+|31|`NX-16`|中|Web Security / Availability|❌ 未修复|已完成|通过（20 项专项及相邻测试通过；输入扇出、请求速率、provider 并发和等待时间均有明确上限）|`fix(NX-16)`|
 |32|`NX-14`|中|Web Storage|❌ 未修复|待处理|—|—|
 |33|`NX-15`|中|Web Storage|❌ 未修复|待处理|—|—|
 |34|`RV-05`|中|Backtesting / Process|❌ 未修复|待处理|—|—|
@@ -748,16 +748,25 @@
 ### 31. NX-16 · /ticks 可提交无上限代码数组并同步扇出到数据源
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web Security / Availability
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 原 `/ticks` 路由把客户端提供的 `codes` JSON 直接交给 `ex.ticks(codes)`：没有数组类型、空值、原始数量、单代码长度、重复值、请求速率或 provider 等待时间边界。攻击者或误操作可让单个同步请求扇出大量第三方行情调用；provider 卡住时还会长期占用 Web worker。
+- **b. 我是怎么修复的？** 新增集中式 tick 请求契约：在构造 provider 前验证市场与 JSON 数组，限制原始数组数量和单代码 UTF-8 字节数，拒绝空值、非字符串和控制字符，并按首次出现顺序去重；增加线程安全、键目录有界的滑动窗口限流；用有界 daemon 调用槽为同步 provider 增加总 deadline，超时调用最多占用固定槽位，容量耗尽时新请求快速失败。路由分别返回 422、429、502、503、504，所有阈值在配置模板中可调。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前读取 `/ticks` 路由，确认 JSON 解析后直接同步调用 provider，没有数量、去重、长度、速率或 deadline 检查。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_nx16_tick_request_limits.py tests/test_me05_lazy_web_startup.py tests/test_remediation_report_counts.py`，20 项专项、相邻惰性启动和报告测试全部通过。
+  - 解析器覆盖非数组、空数组、超量、超长、非字符串、控制字符、前后空白与稳定去重；原始数组数量在去重前受限。
+  - 以 20 个并发线程验证同一限流键严格只有 5 次通过，并确认限流键目录保持有界。
+  - 真实线程故障注入验证 provider 总 deadline、daemon worker、最大并发槽、超时后快速 busy 拒绝，以及阻塞调用返回后的槽位恢复。
+  - 源码契约检查确认请求校验在 `get_exchange` 前执行，provider 调用通过 `BoundedProviderCaller`；执行 compileall、CRLF 字节计数和 `git diff --check`。
+- **e. 验证是否通过？** 通过（20 项专项及相邻测试通过；输入扇出、请求速率、provider 并发和等待时间均有明确上限）
+- **提交：** fix(NX-16): bound tick fanout and provider waits
+- **修改文件：** `src/tradingview_zy/tick_request.py`, `src/tradingview_zy/config.py.demo`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_nx16_tick_request_limits.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 限流器是单进程边界；多 worker 部署仍应在反向代理或共享存储中聚合全局速率。
+  - Python 无法强制取消任意阻塞的第三方同步 SDK。超时 worker 会以 daemon 线程继续到 SDK 返回，但总数受固定并发槽严格限制；槽满后新请求返回 503，不会无限创建线程。
+  - 未连接真实行情 provider；故障时序由真实线程、信号量和可控 fake provider 注入验证。
 - **原报告最新结论：** Web 安全改动没有为 /ticks 增加代码数量、去重、长度或 provider 批量上限。
 - **原报告建议：** 限制 symbol 数、去重、请求超时和速率；批量上限按 provider 能力。
 

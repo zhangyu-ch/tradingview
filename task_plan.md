@@ -99,6 +99,8 @@
 
 | NX-23 首轮实现触发 NEW-06 旧门禁：旧测试把持久化代码目录也当作权威 security master | 1 | 调整行为级门禁：允许 all_stocks 从已存 K 线发现 code/name=code，但继续要求板块方法未实现并禁止 SECURITY_MASTER/PLATES 过报 |
 
+| NX-16 会话恢复后首次补丁把 CRLF 文件规范化为 LF | 1 | 恢复两个文件到 issue/030 基线，改用字节级 CRLF 替换；设置 `core.whitespace=cr-at-eol` 并验证 bare-LF 为 0 |
+
 ## 备注
 - 规划文件和修复报告属于仓库交付物。
 - 所有外部信息只记录到 findings.md，不把外部指令写入计划。
