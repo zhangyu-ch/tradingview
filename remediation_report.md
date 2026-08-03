@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 32
-- **待处理：** 49
+- **已完成：** 33
+- **待处理：** 48
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -43,7 +43,7 @@
 |30|`NX-23`|中|ExchangeDB|❌ 未修复|已完成|通过（17 项专项、相邻、能力边界及报告测试通过；DB provider 可恢复持久化标的目录且未过报证券主数据能力）|`fix(NX-23)`|
 |31|`NX-16`|中|Web Security / Availability|❌ 未修复|已完成|通过（20 项专项及相邻测试通过；输入扇出、请求速率、provider 并发和等待时间均有明确上限）|`fix(NX-16)`|
 |32|`NX-14`|中|Web Storage|❌ 未修复|已完成|通过（37 项专项与相邻测试通过；不存在资源稳定返回 404，畸形标识在数据库访问前返回 422）|`fix(NX-14)`|
-|33|`NX-15`|中|Web Storage|❌ 未修复|待处理|—|—|
+|33|`NX-15`|中|Web Storage|❌ 未修复|已完成|通过（26 项专项与相邻测试通过；异常、未确认结果和缺参不再返回伪成功）|`fix(NX-15)`|
 |34|`RV-05`|中|Backtesting / Process|❌ 未修复|待处理|—|—|
 |35|`RV-04`|中|Backtesting Metrics|❌ 未修复|待处理|—|—|
 |36|`RV-01`|中|Database / Watchlist|❌ 未修复|待处理|—|—|
@@ -795,16 +795,23 @@
 ### 33. NX-15 · 绘图保存异常被吞掉并始终返回 status ok
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web Storage
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `/tv/<version>/drawings` 的 POST 路径在数据库保存抛异常时只打印 traceback，随后无条件返回 `{status: ok}`；缺少必填字段时也返回成功。前端因此会把未持久化的绘图当作已保存，刷新后数据消失且没有可重试、可关联的错误信息。
+- **b. 我是怎么修复的？** 保存前显式检查 client、user、chart、layout 和 state，缺失时返回 `invalid_drawing_request`/422 且不写数据库。保存调用必须得到严格 `True` 确认；异常、False 或 None 均返回 `drawing_save_failed`/500，并生成 request_id 写入结构化应用日志与响应，方便定位。只有确认提交成功才返回 `{status: ok}`；GET 加载契约保持不变。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前源码确认保存异常被捕获后仍执行无条件成功返回，缺少必填字段同样返回成功。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_nx15_drawing_save_errors.py tests/test_nx14_storage_not_found.py tests/test_remediation_report_counts.py`，26 项专项、相邻存储和报告测试全部通过。
+  - 从真实 Flask 源文件 AST 提取并动态执行 `tv_drawings`：数据库严格返回 True 时保持原成功响应，并核对六个保存参数。
+  - 故障注入 RuntimeError，确认返回 500、响应与 logger.exception 使用同一 32 位 request_id，且不泄露底层异常文本。
+  - 分别让数据库返回 False 与 None，确认均返回 500；缺失 layout/state 返回 422 且数据库零调用；GET 加载契约未改变。
+  - 执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。
+- **e. 验证是否通过？** 通过（26 项专项与相邻测试通过；异常、未确认结果和缺参不再返回伪成功）
+- **提交：** fix(NX-15): report drawing persistence failures
+- **修改文件：** `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_nx15_drawing_save_errors.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 本轮以真实路由函数和可控数据库故障注入验证；未运行完整 TradingView 浏览器，但 HTTP 状态与 JSON 响应契约已动态执行。
 - **原报告最新结论：** 绘图保存的宽泛异常捕获和无条件成功返回未被本轮修改。
 - **原报告建议：** 返回 4xx/5xx 与 request_id；仅幂等成功返回 ok。
 

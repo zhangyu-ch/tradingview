@@ -322,3 +322,10 @@
 - 修复：新增轻量参数校验器；charts GET/DELETE/update 统一正整数 ID，study_templates GET/DELETE 统一名称契约；不存在资源返回稳定 404，非法参数返回 422。
 - 专项与相邻测试：37 passed；成功响应结构和 CRLF 未回归。
 - 提交：`fix(NX-14): return stable storage not-found responses`。
+### 问题 33：NX-15
+- **状态：** complete
+- **完成时间：** 2026-08-03（会话恢复后重建）
+- 验证结论：绘图保存异常、未确认结果和缺少必填字段都会返回 `status: ok`，问题存在。
+- 修复：必填字段缺失返回 422；保存异常或非严格 True 返回带 request_id 的 500 并写关联日志；仅确认提交成功返回 ok。
+- 专项与相邻测试：26 passed；覆盖成功、异常、False、None、缺参和 GET。
+- 提交：`fix(NX-15): report drawing persistence failures`。

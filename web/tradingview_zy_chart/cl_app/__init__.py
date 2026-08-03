@@ -3,6 +3,7 @@ import json
 import os
 import time
 import traceback
+import uuid
 import importlib
 from io import BytesIO
 
@@ -1052,9 +1053,7 @@ def create_app(test_config=None):
     @app.route("/tv/<version>/drawings", methods=["GET", "POST"])
     @login_required
     def tv_drawings(version):
-        """
-        图表绘图保存与加载
-        """
+        """TradingView drawing persistence with explicit failure semantics."""
         client_id = str(request.args.get("client") or "")
         user_id = str(request.args.get("user") or "")
         chart_id = str(request.args.get("chart") or "")
@@ -1077,24 +1076,35 @@ def create_app(test_config=None):
                 state_obj = json.loads(state) if isinstance(state, str) else state
                 if isinstance(state_obj, dict):
                     symbol = str(state_obj.get("symbol") or "")
-            except Exception:
-                traceback.print_exc()
+            except (TypeError, ValueError, json.JSONDecodeError):
+                symbol = ""
 
-        if (
-            client_id == ""
-            or user_id == ""
-            or chart_id == ""
-            or layout_id == ""
-            or state is None
-        ):
-            return {"status": "ok"}
+        if client_id == "" or user_id == "" or chart_id == "" or layout_id == "" or state is None:
+            return {
+                "status": "error",
+                "error": "invalid_drawing_request",
+                "message": "client, user, chart, layout and state are required",
+            }, 422
 
+        request_id = uuid.uuid4().hex
         try:
-            db.tv_drawing_save_or_update(
+            saved = db.tv_drawing_save_or_update(
                 client_id, user_id, layout_id, chart_id, symbol, state
             )
         except Exception:
-            traceback.print_exc()
+            __log.exception("drawing save failed request_id=%s", request_id)
+            return {
+                "status": "error",
+                "error": "drawing_save_failed",
+                "request_id": request_id,
+            }, 500
+        if saved is not True:
+            __log.error("drawing save was not confirmed request_id=%s", request_id)
+            return {
+                "status": "error",
+                "error": "drawing_save_failed",
+                "request_id": request_id,
+            }, 500
         return {"status": "ok"}
 
     # 股票涨跌幅
