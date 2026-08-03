@@ -46,3 +46,7 @@
 - 远程固定点的 `pyproject.toml` 已采用 `requires-python = ">=3.11,<3.12"`、移除直接 `chardet`、增加 `websockets>=13.1,<14`；远程锁文件对应 `websockets 13.1` 且无 `chardet` 根依赖。
 - 本地 TA-Lib 供应方式仅包含 CPython 3.11 轮子；在声明支持 3.12+ 时，离线 `uv lock` 会明确报出不可满足，说明 Python 上界也是同一依赖契约的一部分。
 - GitHub 代码搜索接口首次调用参数格式错误，修正后未返回锁文件片段；改用 `fetch_blob` 成功读取完整远程锁文件，不再重复搜索。
+
+## NEW-05 本地复核
+- 用户提供的本地 ZIP 没有报告固定点中的 `backtesting/accounting.py`，`POSITION` 也没有 `lots` 字段；全仓不存在 `consume_fifo_lots` / `close_settlement` 调用，因此“FIFO lot 先消费后校验”的确切回归不在本地代码中。
+- 当前本地回测仍采用聚合仓位模型；本条不应凭空引入一套未被调用的 FIFO 会计实现。处理方式是保存“不存在”的验证证据，并增加 AST 门禁：若未来重新引入这两个步骤，结算校验必须排在 lot 消费之前。

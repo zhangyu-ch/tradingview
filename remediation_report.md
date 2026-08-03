@@ -15,7 +15,7 @@
 |2|`NEW-02`|高|CI / Supply Chain|🆕 新问题（未修复）|已完成（本地已不存在，已加防回归）|通过（本地风险不存在，3 项防回归测试通过）|`fix(NEW-02)`|
 |3|`NEW-03`|高|Dependencies / Packaging|🆕 新问题（未修复）|已完成|通过（2 项专项测试与静态依赖契约检查通过）|`fix(NEW-03)`|
 |4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|已完成|通过（6 项 web payload 测试通过）|`fix(NEW-04)`|
-|5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|待处理|—|—|
+|5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归不在本地；3 项防回归测试通过）|`test(NEW-05)`|
 |6|`NX-20`|高|TDX Reliability|❌ 未修复|待处理|—|—|
 |7|`RV-08`|高|Web Security / Secrets|❌ 未修复|待处理|—|—|
 |8|`HI-13`|高|Binance|❌ 未修复|待处理|—|—|
@@ -180,16 +180,21 @@
 ### 05. NEW-05 · FIFO lot 在结算校验完成前原地消费，异常会留下“lot 已减、聚合仓位未减”的半提交状态
 
 - **原始状态 / 严重度 / 领域：** 🆕 新问题（未修复） / 高 / Backtesting / Accounting
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（本地不存在，已加防回归）
+- **问题是否存在：** 否
+- **a. 这个问题是什么？** 报告固定点中的问题依赖 `backtesting/accounting.py`、`POSITION.lots`、`consume_fifo_lots()` 与 `close_settlement()`；用户提供的本地 ZIP 不包含该模块/字段/调用，当前回测仍使用聚合仓位模型，所以本地不存在“lot 已减、聚合仓位未减”的确切半提交路径。
+- **b. 我是怎么修复的？** 没有为不存在的运行路径凭空引入 FIFO 会计代码；新增 AST 原子性门禁，扫描全部产品源码：若同一函数同时出现结算校验和 FIFO lot 消费，校验必须先于消费。门禁包含原始不安全顺序与安全顺序 fixture，防止远程代码或后续重构把该回归重新带入。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 全仓搜索 `accounting.py`、`lots`、`consume_fifo_lots` 与 `close_settlement`，确认本地运行树没有报告所述实现。
+  - 运行 `python3 script/remediation/check_fifo_atomicity.py`，当前源码通过。
+  - 运行 `python3 -m pytest -q tests/test_new05_fifo_atomicity_guard.py`，覆盖当前仓库、原始半提交顺序与安全顺序。
+  - 运行 `python3 -m compileall` 与 `git diff --check`。
+- **e. 验证是否通过？** 通过（确切回归不在本地；3 项防回归测试通过）
+- **提交：** test(NEW-05): guard FIFO settlement atomicity
+- **修改文件：** `script/remediation/check_fifo_atomicity.py`, `tests/test_new05_fifo_atomicity_guard.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 本地代码没有 FIFO lot 功能，因此不能执行报告固定点中的动态故障注入；本提交验证的是本地不存在该路径，并对未来重新引入的调用顺序建立自动门禁。
 - **原报告最新结论：** 平仓路径先 consume_fifo_lots(pos.lots, ...) 原地减少/删除 lot，再调用 close_settlement 校验 close price、direction、期货 symbol_size 等。若后者抛错，后续聚合 amount/now_pos_rate/cash 尚未提交，但 pos.lots 已被修改，状态模型分叉。
 - **原报告建议：** 让 lot 消费成为纯函数/对深拷贝工作；所有结算参数验证通过后一次性替换 lots、amount、rate、cash、records。增加无效 symbol_size/fee/price 的故障注入回归测试。
 

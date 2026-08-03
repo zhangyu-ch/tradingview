@@ -81,3 +81,11 @@
 - 修复：新增市场时区规范化并确保 history 的所有时间运算都在规范化后执行。
 - 专项测试：`tests/test_web_payloads.py`，6 passed。
 - 提交：`fix(NEW-04): normalize market time before history filtering`。
+
+### 问题 05：NEW-05
+- **状态：** complete（本地不存在，已加防回归）
+- **完成时间：** 2026-08-03T11:38:00+00:00
+- 验证结论：本地无 FIFO lot 会计模块或调用，确切半提交回归不存在。
+- 修复：增加 AST 门禁，未来若引入 FIFO 关闭路径，必须先完成结算校验再消费 lot。
+- 专项测试：`tests/test_new05_fifo_atomicity_guard.py`，3 passed。
+- 提交：`test(NEW-05): guard FIFO settlement atomicity`。
