@@ -71,17 +71,17 @@ class POSITION:
         """
         if uids is None:
             return None
-        if "clear" not in uids:
-            uids.append("clear")
+        query_uids = set(uids)
+        query_uids.add("clear")
         # 按照时间从早到晚排序
         close_profit = sorted(
             self.close_uid_profit.items(), key=lambda _r: _r[1]["close_datetime"]
         )
         for _r in close_profit:
-            if _r[0] in uids:
+            if _r[0] in query_uids:
                 return _r[1]
         raise Exception(
-            f"{self.code} - {self.mmd} - {self.open_datetime} 没有找到对应的平仓记录: {uids}"
+            f"{self.code} - {self.mmd} - {self.open_datetime} 没有找到对应的平仓记录: {sorted(query_uids)}"
         )
 
     def get_close_profit(self, uids: List[str] = None):

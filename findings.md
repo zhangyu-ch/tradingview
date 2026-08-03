@@ -143,3 +143,8 @@
 - 原 `select_best_ip` 用列表推导串行调用全部候选节点；冷缓存或显式 reset 的总耗时随候选数线性增长，且没有调用级总 deadline。
 - 新选择器用有界数量 daemon worker 并发探测，调用方只等待一个全局 wall-clock deadline；单节点异常、畸形延迟或违反自身 socket timeout 都不会无限拖住选择调用。
 - `tdx_connect_ip` 与共享 `tdxex_connect_ip` 现在写入 6 小时绝对过期时间，避免永久相信旧节点；过期后的同步重选仍受 3 秒总预算约束。
+
+## NX-08 POSITION 输入副作用复核
+- 最小复现确认 `get_close_profit(["uid-a"])` 返回后调用方列表变为 `["uid-a", "clear"]`；根因是私有查询方法直接 append。
+- 查询只需要成员判断，不需要修改调用方顺序；修复在局部 set 副本上补 `clear`，重复调用与异常路径均不泄漏状态。
+- 相邻综合回测测试在收集阶段因容器缺失 `empyrical` 被阻断；专项 POSITION 测试不依赖该库并覆盖正常、fallback、异常三条路径。

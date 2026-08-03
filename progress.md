@@ -257,3 +257,12 @@
 - 修复：新增并发有界 TDX 节点选择器，最多 16 个 daemon worker、3 秒总 deadline、最小成功数与明确失败；全部 TDX 节点缓存增加 6 小时 TTL。
 - 专项测试：`tests/test_mx17_tdx_node_selection.py` 6 passed，NX-20 相邻测试 3 passed；并发度、最快节点、挂起节点、失败解释和 TTL 契约均通过。
 - 提交：`fix(MX-17): bound and parallelize TDX node selection`。
+
+### 问题 26：NX-08
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 最小复现：输入 `uids=["uid-a"]`，调用后变为 `["uid-a", "clear"]`，问题确认存在。
+- 修复：在局部 set 副本中补 `clear`，不再原地修改调用方列表。
+- 专项测试：`tests/test_nx08_position_close_profit.py` 3 passed；覆盖指定 uid、clear fallback、无记录异常及重复调用。
+- 相邻套件限制：`test_backtesting_base_generic.py` 因缺失 `empyrical` 无法收集；compileall 与 diff 检查通过。
+- 提交：`fix(NX-08): keep close-profit queries side-effect free`。

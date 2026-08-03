@@ -1492,16 +1492,32 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "POSITION.get_close_profit() 把调用方传入的 uids 列表直接交给私有查询方法；该方法为加入兜底记录执行 `uids.append(\"clear\")`。同一列表被复用时会被静默污染，影响后续过滤、缓存键和错误信息。",
+      "fix_summary": "私有查询方法现在先构造局部 `set(uids)` 副本，再在副本中加入 `clear`；所有成员判断与错误信息都使用局部集合，调用方容器在成功、fallback、重复调用和异常路径中保持不变。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前运行最小复现，确认输入 `[\"uid-a\"]` 在调用后变为 `[\"uid-a\", \"clear\"]`。",
+        "运行 `pytest -q tests/test_nx08_position_close_profit.py`，3 项专项测试全部通过。",
+        "覆盖指定 uid 命中、缺失 uid 自动使用 clear fallback、clear 也缺失时抛错；每条路径都断言原输入列表不变，并验证同一列表重复调用无状态泄漏。",
+        "执行 `python -m compileall` 针对实现与测试文件，并运行 `git diff --check`。"
+      ],
+      "verification_result": "通过（3 项专项测试通过；成功、fallback、重复调用和异常路径均不再修改调用方列表）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/backtesting/base.py",
+        "tests/test_nx08_position_close_profit.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "容器缺失 `empyrical`，相邻 `tests/test_backtesting_base_generic.py` 在收集阶段被阻断；本条专项测试仅导入 POSITION，完整覆盖该副作用根因且不需要绩效库。"
+      ],
+      "commit_subject": "fix(NX-08): keep close-profit queries side-effect free"
     }
   },
   {

@@ -91,6 +91,7 @@
 | CR-03 首次 AST 写回把 CRLF 文件转换为 LF，造成大面积无意义 diff | 1 | 恢复相关文件到 HEAD，改用 newline="" 保留原换行符后重新应用真实改动 |
 | MX-05 首次 JavaScript 语法测试跨越多个 `<script>` 标签，Node 报 `Unexpected token <` | 1 | 改为只提取无 `src` 的独立内联脚本并逐段编译 |
 | MX-17 首次改写 CRLF 的 `tdx_best_ip.py` 造成全文件换行差异 | 1 | 恢复文件后用 `newline=""` 保留 CRLF，仅重做真实逻辑变更 |
+| NX-08 相邻 `test_backtesting_base_generic.py` 收集时缺失 `empyrical` 依赖 | 1 | 保留环境限制，运行专项 POSITION 测试、compileall 和静态契约验证 |
 | 修复报告生成器只统计字面值“已完成”，漏算带说明的完成状态 | 1 | 改为统计所有以“已完成”开头的状态，并增加回归测试 |
 
 | MX-05 批量写入命令发生容器传输超时 | 1 | 检查实际 Git 状态后发现步骤已完成；不重复执行，转而清理历史并保留最小 CRLF 差异 |
