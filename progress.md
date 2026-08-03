@@ -343,3 +343,10 @@
 - 修复：新增 flat_num 和 1e-9 三分容差；结果表、汇总和总交易数展示持平，旧结果自动补字段。
 - 专项与相邻测试：20 passed；真实 BackTestTrader 的 +/0/-、容差和旧数据兼容路径通过。
 - 提交：`fix(RV-04): track breakeven trades separately`。
+### 问题 36：RV-01
+- **状态：** complete
+- **完成时间：** 2026-08-03（会话恢复后重建）
+- 验证结论：置顶重排遗漏 market，会同时移动跨市场同名组，问题存在。
+- 修复：删除、目标 market/group 连续重排和插入使用单事务；已有标的重新置顶不再留下 position 空洞。
+- 专项与相邻测试：7 passed；真实 SQLite 验证 A/HK 隔离、插入失败全回滚和重复置顶。
+- 提交：`fix(RV-01): isolate watchlist top ordering by market`。

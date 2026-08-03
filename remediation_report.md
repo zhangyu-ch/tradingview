@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 35
-- **待处理：** 46
+- **已完成：** 36
+- **待处理：** 45
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -46,7 +46,7 @@
 |33|`NX-15`|中|Web Storage|❌ 未修复|已完成|通过（26 项专项与相邻测试通过；异常、未确认结果和缺参不再返回伪成功）|`fix(NX-15)`|
 |34|`RV-05`|中|Backtesting / Process|❌ 未修复|已完成|通过（18 项专项与相邻测试通过；缺少保存路径在主进程明确失败，合法路径安全生成）|`fix(RV-05)`|
 |35|`RV-04`|中|Backtesting Metrics|❌ 未修复|已完成|通过（20 项专项与相邻测试通过；零值与容差内噪声计入持平，不再污染失败统计）|`fix(RV-04)`|
-|36|`RV-01`|中|Database / Watchlist|❌ 未修复|待处理|—|—|
+|36|`RV-01`|中|Database / Watchlist|❌ 未修复|已完成|通过（7 项专项与相邻测试通过；跨市场隔离、失败回滚和连续重排均正确）|`fix(RV-01)`|
 |37|`RV-07`|中|Web API Robustness|❌ 未修复|待处理|—|—|
 |38|`ME-11`|中|Baostock|❌ 未修复|待处理|—|—|
 |39|`HI-17`|中|Scripts|❌ 未修复|待处理|—|—|
@@ -864,16 +864,23 @@
 ### 36. RV-01 · 添加“置顶”自选股时批量位移遗漏 market，跨市场同名组会被一起改序
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Database / Watchlist
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `zx_add_group_stock(..., location="top")` 删除目标市场旧记录后，对同名自选组执行 position+1，但 UPDATE 只过滤 zx_group、遗漏 market。A 股和港股都使用“我的关注”等同名组时，在一个市场置顶会无提示改动另一个市场的排序。
+- **b. 我是怎么修复的？** 将删除旧标的、重排目标市场/分组和插入新记录放入 `Session.begin()` 单事务。置顶时先 flush 删除，再只查询相同 market + zx_group 的剩余行并按原 position/id 压实为 1..N，新标的写入 position=0；这样既隔离跨市场同名组，也避免已有标的重新置顶后留下排序空洞。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前源码确认置顶排序只按 zx_group 更新，遗漏 market；删除、位移和插入依赖手工 commit。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_rv01_watchlist_market_isolation.py tests/test_nx21_mysql_url.py tests/test_remediation_report_counts.py`，7 项专项、相邻 DB URL 和报告测试全部通过。
+  - 在真实 SQLAlchemy + 文件 SQLite 中建立 A/HK 两个同名组；向 A 组置顶后 A 为 0/1/2，HK 逐行不变。
+  - 用 SQLite BEFORE INSERT trigger 注入失败，确认删除与重排全部回滚，A/HK 两组和调用前一致。
+  - 重新添加已有 A 股标的，确认目标只保留一行、名称更新、位置为 0，其他行连续为 1..N。
+  - 执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。
+- **e. 验证是否通过？** 通过（7 项专项与相邻测试通过；跨市场隔离、失败回滚和连续重排均正确）
+- **提交：** fix(RV-01): isolate watchlist top ordering by market
+- **修改文件：** `src/tradingview_zy/db.py`, `tests/test_rv01_watchlist_market_isolation.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 未连接真实 MySQL；复合过滤、事务回滚和排序行为使用 SQLAlchemy ORM 与 SQLite 实际执行验证。现有生产库若已有重复行，仍需单独数据清理/迁移。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/db.py、src/tradingview_zy/db.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 给 UPDATE 加 market 过滤；移动+插入放同一事务；增加 (market,zx_group,stock_code) 唯一约束并规范化 position。
 

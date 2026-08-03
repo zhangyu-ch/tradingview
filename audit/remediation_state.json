@@ -2025,16 +2025,33 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "`zx_add_group_stock(..., location=\"top\")` 删除目标市场旧记录后，对同名自选组执行 position+1，但 UPDATE 只过滤 zx_group、遗漏 market。A 股和港股都使用“我的关注”等同名组时，在一个市场置顶会无提示改动另一个市场的排序。",
+      "fix_summary": "将删除旧标的、重排目标市场/分组和插入新记录放入 `Session.begin()` 单事务。置顶时先 flush 删除，再只查询相同 market + zx_group 的剩余行并按原 position/id 压实为 1..N，新标的写入 position=0；这样既隔离跨市场同名组，也避免已有标的重新置顶后留下排序空洞。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前源码确认置顶排序只按 zx_group 更新，遗漏 market；删除、位移和插入依赖手工 commit。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_rv01_watchlist_market_isolation.py tests/test_nx21_mysql_url.py tests/test_remediation_report_counts.py`，7 项专项、相邻 DB URL 和报告测试全部通过。",
+        "在真实 SQLAlchemy + 文件 SQLite 中建立 A/HK 两个同名组；向 A 组置顶后 A 为 0/1/2，HK 逐行不变。",
+        "用 SQLite BEFORE INSERT trigger 注入失败，确认删除与重排全部回滚，A/HK 两组和调用前一致。",
+        "重新添加已有 A 股标的，确认目标只保留一行、名称更新、位置为 0，其他行连续为 1..N。",
+        "执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。"
+      ],
+      "verification_result": "通过（7 项专项与相邻测试通过；跨市场隔离、失败回滚和连续重排均正确）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/db.py",
+        "tests/test_rv01_watchlist_market_isolation.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "未连接真实 MySQL；复合过滤、事务回滚和排序行为使用 SQLAlchemy ORM 与 SQLite 实际执行验证。现有生产库若已有重复行，仍需单独数据清理/迁移。"
+      ],
+      "commit_subject": "fix(RV-01): isolate watchlist top ordering by market"
     }
   },
   {

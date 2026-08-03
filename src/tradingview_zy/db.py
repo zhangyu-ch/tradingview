@@ -613,8 +613,8 @@ class DB(object):
         color: str = "",
         location: str = "bottom",
     ):
-        with self.Session() as session:
-            # 添加前，统一删除在自选组下的股票信息
+        # Delete/reorder/insert are one business operation and must commit atomically.
+        with self.Session.begin() as session:
             session.query(TableByZixuan).filter(
                 TableByZixuan.market == market,
                 TableByZixuan.zx_group == zx_group,
@@ -623,15 +623,20 @@ class DB(object):
 
             position = 0
             if location == "top":
-                # 自选组的股票位置+1
-                session.query(TableByZixuan).filter(
-                    TableByZixuan.zx_group == zx_group
-                ).update(
-                    {TableByZixuan.position: TableByZixuan.position + 1},
-                    synchronize_session=False,
+                # Flush the delete, then compact only this market/group to 1..N.
+                # This also avoids leaving a position gap when an existing item is
+                # removed from the middle and reinserted at the top.
+                session.flush()
+                existing_rows = (
+                    session.query(TableByZixuan)
+                    .filter(TableByZixuan.market == market)
+                    .filter(TableByZixuan.zx_group == zx_group)
+                    .order_by(TableByZixuan.position, TableByZixuan.id)
+                    .all()
                 )
+                for existing_position, existing_row in enumerate(existing_rows, start=1):
+                    existing_row.position = existing_position
             else:
-                # 获取自选组的 position 最大值
                 max_position = (
                     session.query(func.max(TableByZixuan.position))
                     .filter(TableByZixuan.market == market)
@@ -639,18 +644,18 @@ class DB(object):
                     .scalar()
                 )
                 position = max_position + 1 if max_position is not None else 0
-            zx_stock = TableByZixuan(
-                market=market,
-                zx_group=zx_group,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                stock_color=color,
-                position=position,
-                stock_memo=memo,
-                add_datetime=datetime.datetime.now(),
+            session.add(
+                TableByZixuan(
+                    market=market,
+                    zx_group=zx_group,
+                    stock_code=stock_code,
+                    stock_name=stock_name,
+                    stock_color=color,
+                    position=position,
+                    stock_memo=memo,
+                    add_datetime=datetime.datetime.now(),
+                )
             )
-            session.add(zx_stock)
-            session.commit()
 
         return True
 
