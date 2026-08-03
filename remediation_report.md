@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 28
-- **待处理：** 53
+- **已完成：** 29
+- **待处理：** 52
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -39,7 +39,7 @@
 |26|`NX-08`|中|Backtesting Model|❌ 未修复|已完成|通过（3 项专项测试通过；成功、fallback、重复调用和异常路径均不再修改调用方列表）|`fix(NX-08)`|
 |27|`NX-03`|中|Configuration / Messaging|❌ 未修复|已完成|通过（3 项专项测试通过；所有配置来源均返回独立映射，不再污染全局默认字典）|`fix(NX-03)`|
 |28|`NX-22`|中|Database / Diagnostics|❌ 未修复|已完成|通过（6 项专项、相邻及报告测试通过；数据库模块不再覆盖进程 warning 策略）|`fix(NX-22)`|
-|29|`NX-21`|中|Database Configuration|❌ 未修复|待处理|—|—|
+|29|`NX-21`|中|Database Configuration|❌ 未修复|已完成|通过（3 项专项测试及相邻 DB 测试通过；特殊字符凭据可正确解析且默认字符串脱敏）|`fix(NX-21)`|
 |30|`NX-23`|中|ExchangeDB|❌ 未修复|待处理|—|—|
 |31|`NX-16`|中|Web Security / Availability|❌ 未修复|待处理|—|—|
 |32|`NX-14`|中|Web Storage|❌ 未修复|待处理|—|—|
@@ -704,16 +704,21 @@
 ### 29. NX-21 · MySQL DSN 直接字符串插值，特殊字符密码会破坏 URL
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Database Configuration
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** DB.__init__ 通过 f-string 直接拼接 `mysql+pymysql://user:password@host:port/database`。用户名、密码或数据库名包含 @、:、/、%、#、?、空格等 URL 保留字符时会被误解析；完整 DSN 进入异常文本时还可能暴露凭据。
+- **b. 我是怎么修复的？** 新增纯函数 `build_mysql_url()`，用 SQLAlchemy `URL.create` 分字段传入 driver、用户名、密码、主机、端口、数据库和 charset；MySQL create_engine 路径只接收结构化 URL。URL 默认字符串渲染自动把密码隐藏为 `***`。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前 AST 检查确认 DB 构造器包含 `mysql+pymysql://` 的 JoinedStr/f-string。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_nx21_mysql_url.py`，3 项专项测试全部通过。
+  - 以包含 @、:、/、%、#、?、& 和空格的用户名/密码/数据库名构造 URL，再用 SQLAlchemy make_url 解析，确认所有原值、端口和 charset 完整 round-trip。
+  - 验证 `str(URL)` 不含明文密码且显示 `***`；AST 确认 DB.__init__ 调用结构化 builder，不再拼接 MySQL DSN；执行 compileall、DB 相邻测试和 `git diff --check`。
+- **e. 验证是否通过？** 通过（3 项专项测试及相邻 DB 测试通过；特殊字符凭据可正确解析且默认字符串脱敏）
+- **提交：** fix(NX-21): build MySQL URLs without credential interpolation
+- **修改文件：** `src/tradingview_zy/db.py`, `tests/test_nx21_mysql_url.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 未连接真实 MySQL 服务；URL 编码、解析和 create_engine 入参契约由 SQLAlchemy 2.x 的真实 URL/make_url 实现验证。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/db.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 使用 `sqlalchemy.engine.URL.create()` 和 secret 类型。
 

@@ -1644,16 +1644,31 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "DB.__init__ 通过 f-string 直接拼接 `mysql+pymysql://user:password@host:port/database`。用户名、密码或数据库名包含 @、:、/、%、#、?、空格等 URL 保留字符时会被误解析；完整 DSN 进入异常文本时还可能暴露凭据。",
+      "fix_summary": "新增纯函数 `build_mysql_url()`，用 SQLAlchemy `URL.create` 分字段传入 driver、用户名、密码、主机、端口、数据库和 charset；MySQL create_engine 路径只接收结构化 URL。URL 默认字符串渲染自动把密码隐藏为 `***`。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前 AST 检查确认 DB 构造器包含 `mysql+pymysql://` 的 JoinedStr/f-string。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_nx21_mysql_url.py`，3 项专项测试全部通过。",
+        "以包含 @、:、/、%、#、?、& 和空格的用户名/密码/数据库名构造 URL，再用 SQLAlchemy make_url 解析，确认所有原值、端口和 charset 完整 round-trip。",
+        "验证 `str(URL)` 不含明文密码且显示 `***`；AST 确认 DB.__init__ 调用结构化 builder，不再拼接 MySQL DSN；执行 compileall、DB 相邻测试和 `git diff --check`。"
+      ],
+      "verification_result": "通过（3 项专项测试及相邻 DB 测试通过；特殊字符凭据可正确解析且默认字符串脱敏）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/db.py",
+        "tests/test_nx21_mysql_url.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "未连接真实 MySQL 服务；URL 编码、解析和 create_engine 入参契约由 SQLAlchemy 2.x 的真实 URL/make_url 实现验证。"
+      ],
+      "commit_subject": "fix(NX-21): build MySQL URLs without credential interpolation"
     }
   },
   {

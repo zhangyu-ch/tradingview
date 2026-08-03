@@ -17,6 +17,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
 
@@ -253,6 +254,26 @@ class TableByAIAnalyse(Base):
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
+def build_mysql_url(
+    *,
+    username: str,
+    password: str,
+    host: str,
+    port: int | str,
+    database: str,
+) -> URL:
+    """Build a structured MySQL URL without interpolating credentials."""
+    return URL.create(
+        drivername="mysql+pymysql",
+        username=username,
+        password=password,
+        host=host,
+        port=int(port),
+        database=database,
+        query={"charset": "utf8mb4"},
+    )
+
+
 @fun.singleton
 class DB(object):
     global Base
@@ -272,7 +293,13 @@ class DB(object):
             )
         elif config.DB_TYPE == "mysql":
             self.engine = create_engine(
-                f"mysql+pymysql://{config.DB_USER}:{config.DB_PWD}@{config.DB_HOST}:{config.DB_PORT}/{config.DB_DATABASE}?charset=utf8mb4",
+                build_mysql_url(
+                    username=config.DB_USER,
+                    password=config.DB_PWD,
+                    host=config.DB_HOST,
+                    port=config.DB_PORT,
+                    database=config.DB_DATABASE,
+                ),
                 echo=False,
                 poolclass=QueuePool,
                 pool_recycle=3600,

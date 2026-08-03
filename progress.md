@@ -283,3 +283,11 @@
 - 专项、相邻与报告测试：6 passed；隔离子进程真实执行 DB/SQLAlchemy/SQLite 导入后，调用方 UserWarning=error 策略仍生效（仅为容器缺失的 tzlocal 提供 UTC stub）。
 - 首轮动态导入被容器缺失 `tzlocal` 阻断；测试改为只桩住纯时区查询，实际 DB 模块、SQLAlchemy 与 SQLite 初始化仍真实执行。
 - 提交：`fix(NX-22): preserve process warning policy on DB import`。
+
+### 问题 29：NX-21
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：MySQL DSN 直接插值用户名/密码/数据库，特殊字符会破坏解析，问题存在。
+- 修复：新增 `build_mysql_url()`，使用 SQLAlchemy `URL.create` 结构化构造并由默认渲染隐藏密码。
+- 专项测试：`tests/test_nx21_mysql_url.py`，3 passed；特殊字符完整 round-trip、默认脱敏和构造器无 f-string DSN 均通过。
+- 提交：`fix(NX-21): build MySQL URLs without credential interpolation`。

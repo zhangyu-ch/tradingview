@@ -158,3 +158,8 @@
 - `db.py` 在模块顶层调用 `warnings.filterwarnings("ignore")`，过滤器作用于整个 Python 进程，而不仅是数据库代码；后续 pandas、SQLAlchemy、弃用和业务警告都会被无差别吞掉。
 - 该文件没有任何局部 warning 处理需求，删除 import 与全局调用即可恢复调用方策略；TDX 中针对单个 FutureWarning 的 `catch_warnings` 局部过滤不受影响。
 - 子进程测试在导入前把 UserWarning 设为 error，并把 HOME 指向临时目录；容器缺少可选 tzlocal，测试仅提供返回 UTC 的兼容 stub，实际 DB/SQLAlchemy/SQLite 导入后 sentinel warning 仍抛出。
+
+## NX-21 MySQL URL 构造复核
+- 原代码把用户名、密码、主机、端口和数据库名直接拼入 DSN；`@`、`:`、`/`、`%`、空格等保留字符会被解析器误当作 URL 分隔符。
+- SQLAlchemy `URL.create` 保留原始 credential 属性并在需要渲染时正确转义；默认字符串表示还会把密码替换为 `***`，降低异常日志泄密风险。
+- 纯函数 `build_mysql_url` 让特殊字符 round-trip 可直接测试，DB 构造器只把结构化 URL 交给 `create_engine`。
