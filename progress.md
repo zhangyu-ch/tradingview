@@ -329,3 +329,10 @@
 - 修复：必填字段缺失返回 422；保存异常或非严格 True 返回带 request_id 的 500 并写关联日志；仅确认提交成功返回 ok。
 - 专项与相邻测试：26 passed；覆盖成功、异常、False、None、缺参和 GET。
 - 提交：`fix(NX-15): report drawing persistence failures`。
+### 问题 34：RV-05
+- **状态：** complete
+- **完成时间：** 2026-08-03（会话恢复后重建）
+- 验证结论：多进程路径允许 save_file=None，却在 worker 内无条件 `.split()`，问题存在。
+- 修复：主进程先验证输出基路径并创建父目录；per-code 文件改用 pathlib 和安全代码名生成，禁止空路径/目录路径。
+- 专项与相邻测试：18 passed；完整 ProcessPool 历史回测仍受容器缺失 empyrical/pyfolio 限制。
+- 提交：`fix(RV-05): validate process backtest output paths`。

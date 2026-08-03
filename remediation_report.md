@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 33
-- **待处理：** 48
+- **已完成：** 34
+- **待处理：** 47
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -44,7 +44,7 @@
 |31|`NX-16`|中|Web Security / Availability|❌ 未修复|已完成|通过（20 项专项及相邻测试通过；输入扇出、请求速率、provider 并发和等待时间均有明确上限）|`fix(NX-16)`|
 |32|`NX-14`|中|Web Storage|❌ 未修复|已完成|通过（37 项专项与相邻测试通过；不存在资源稳定返回 404，畸形标识在数据库访问前返回 422）|`fix(NX-14)`|
 |33|`NX-15`|中|Web Storage|❌ 未修复|已完成|通过（26 项专项与相邻测试通过；异常、未确认结果和缺参不再返回伪成功）|`fix(NX-15)`|
-|34|`RV-05`|中|Backtesting / Process|❌ 未修复|待处理|—|—|
+|34|`RV-05`|中|Backtesting / Process|❌ 未修复|已完成|通过（18 项专项与相邻测试通过；缺少保存路径在主进程明确失败，合法路径安全生成）|`fix(RV-05)`|
 |35|`RV-04`|中|Backtesting Metrics|❌ 未修复|待处理|—|—|
 |36|`RV-01`|中|Database / Watchlist|❌ 未修复|待处理|—|—|
 |37|`RV-07`|中|Web API Robustness|❌ 未修复|待处理|—|—|
@@ -818,16 +818,22 @@
 ### 34. RV-05 · 多进程回测允许省略 save_file，但 run_by_code 无条件对 None 调 split()
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Backtesting / Process
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** BackTest 把 `save_file` 作为可选配置，但 `run_process()` 没有在主进程验证；worker 的 `run_by_code()` 首句无条件执行 `self.save_file.split(".pkl")`。省略 save_file 的合法单进程配置切换到多进程后会在子进程中以 AttributeError 失败，错误晚且难定位；字符串 split 还会误截断名称中含 `.pkl` 的父目录。
+- **b. 我是怎么修复的？** 新增独立的多进程输出路径契约：None、空白和目录路径立即抛出明确 `ProcessOutputConfigurationError`；`run_process()` 在创建 ProcessPoolExecutor 前验证并创建父目录。每个标的输出路径改用 pathlib 和受限代码文件名生成，不再对完整路径做字符串 split；`run_by_code()` 仍在直接调用时确保父目录存在。普通单进程回测继续允许不保存。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前源码确认构造器允许 `save_file=None`，而 `run_by_code()` 无条件 `.split()`，`run_process()` 在创建进程池前没有校验。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_rv05_process_save_file.py tests/test_nx15_drawing_save_errors.py tests/test_remediation_report_counts.py`，18 项专项、相邻和报告测试全部通过。
+  - 纯函数覆盖 None、空白、非路径、已有目录、父目录名含 `.pkl`、多后缀、危险/空代码名和父目录自动创建。
+  - 源码顺序契约确认 `prepare_process_output_base()` 在 `ProcessPoolExecutor` 前执行，worker 使用 pathlib 构造路径且不再对完整路径 `.split(".pkl")`。
+  - 执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。
+- **e. 验证是否通过？** 通过（18 项专项与相邻测试通过；缺少保存路径在主进程明确失败，合法路径安全生成）
+- **提交：** fix(RV-05): validate process backtest output paths
+- **修改文件：** `src/tradingview_zy/backtesting/process_output.py`, `src/tradingview_zy/backtesting/backtest.py`, `tests/test_rv05_process_save_file.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 容器缺失 empyrical/pyfolio 等完整回测依赖，因此未启动真实 ProcessPoolExecutor 执行完整历史回测；主进程终止顺序和 worker 路径通过真实方法 AST 动态执行与依赖无关路径模块验证。
 - **原报告最新结论：** 年化修复没有触及多进程 save_file 契约；可选配置与 worker 无条件 split() 的冲突仍在。
 - **原报告建议：** 主进程提前要求 save_file，或自动创建安全临时目录；不要在 worker 内才发现。
 

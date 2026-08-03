@@ -1918,16 +1918,33 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "BackTest 把 `save_file` 作为可选配置，但 `run_process()` 没有在主进程验证；worker 的 `run_by_code()` 首句无条件执行 `self.save_file.split(\".pkl\")`。省略 save_file 的合法单进程配置切换到多进程后会在子进程中以 AttributeError 失败，错误晚且难定位；字符串 split 还会误截断名称中含 `.pkl` 的父目录。",
+      "fix_summary": "新增独立的多进程输出路径契约：None、空白和目录路径立即抛出明确 `ProcessOutputConfigurationError`；`run_process()` 在创建 ProcessPoolExecutor 前验证并创建父目录。每个标的输出路径改用 pathlib 和受限代码文件名生成，不再对完整路径做字符串 split；`run_by_code()` 仍在直接调用时确保父目录存在。普通单进程回测继续允许不保存。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前源码确认构造器允许 `save_file=None`，而 `run_by_code()` 无条件 `.split()`，`run_process()` 在创建进程池前没有校验。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_rv05_process_save_file.py tests/test_nx15_drawing_save_errors.py tests/test_remediation_report_counts.py`，18 项专项、相邻和报告测试全部通过。",
+        "纯函数覆盖 None、空白、非路径、已有目录、父目录名含 `.pkl`、多后缀、危险/空代码名和父目录自动创建。",
+        "源码顺序契约确认 `prepare_process_output_base()` 在 `ProcessPoolExecutor` 前执行，worker 使用 pathlib 构造路径且不再对完整路径 `.split(\".pkl\")`。",
+        "执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。"
+      ],
+      "verification_result": "通过（18 项专项与相邻测试通过；缺少保存路径在主进程明确失败，合法路径安全生成）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/backtesting/process_output.py",
+        "src/tradingview_zy/backtesting/backtest.py",
+        "tests/test_rv05_process_save_file.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "容器缺失 empyrical/pyfolio 等完整回测依赖，因此未启动真实 ProcessPoolExecutor 执行完整历史回测；主进程终止顺序和 worker 路径通过真实方法 AST 动态执行与依赖无关路径模块验证。"
+      ],
+      "commit_subject": "fix(RV-05): validate process backtest output paths"
     }
   },
   {

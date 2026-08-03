@@ -26,6 +26,10 @@ from tradingview_zy.backtesting.backtest_klines import BackTestKlines
 from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 from tradingview_zy.backtesting.base import POSITION, Strategy
 from tradingview_zy.backtesting.optimize import OptimizationSetting
+from tradingview_zy.backtesting.process_output import (
+    build_process_output_path,
+    prepare_process_output_base,
+)
 from tradingview_zy.exchange.exchange import (
     convert_currency_kline_frequency,
     convert_futures_kline_frequency,
@@ -292,14 +296,9 @@ class BackTest:
         return True
 
     def run_by_code(self, code: str):
-        # 修改回测类中的属性，进行回测
-        # 保存文件更改
-        new_file = (
-            self.save_file.split(".pkl")[0]
-            + "_"
-            + code.lower().replace(".", "_").replace("/", "_")
-            + "_process_.pkl"
-        )
+        # Each worker writes a deterministic artifact beside the configured base file.
+        new_file = str(build_process_output_path(self.save_file, code))
+        Path(new_file).parent.mkdir(parents=True, exist_ok=True)
         # 默认如果之前的回测文件还有保存，可以直接返回，如果设置 重新运行，则不返回
         if self._process_re_again is False and Path(new_file).exists():
             return new_file
@@ -323,6 +322,8 @@ class BackTest:
         """
         if self.mode != "signal":
             raise Exception(f"多进程回测，不支持 {self.mode} 回测模式")
+
+        self.save_file = str(prepare_process_output_base(self.save_file))
 
         if next_frequency is None:
             next_frequency = self.frequencys[-1]
