@@ -194,23 +194,33 @@ class BackTestTrader(Trader):
 
     @staticmethod
     def _empty_result_stats():
-        return {"win_num": 0, "loss_num": 0, "win_balance": 0, "loss_balance": 0}
+        return {
+            "win_num": 0,
+            "loss_num": 0,
+            "flat_num": 0,
+            "win_balance": 0,
+            "loss_balance": 0,
+        }
 
     def ensure_result(self, signal: str):
         if signal not in self.results:
             self.results[signal] = self._empty_result_stats()
-        return self.results[signal]
+        result = self.results[signal]
+        for key, default in self._empty_result_stats().items():
+            result.setdefault(key, default)
+        return result
 
     def _record_closed_position(self, pos: POSITION, signal: str):
         result_stats = self.ensure_result(signal)
-        if pos.profit > 0:
-            # 盈利
+        flat_epsilon = 1e-9
+        if pos.profit > flat_epsilon:
             result_stats["win_num"] += 1
             result_stats["win_balance"] += pos.profit
-        else:
-            # 亏损
+        elif pos.profit < -flat_epsilon:
             result_stats["loss_num"] += 1
             result_stats["loss_balance"] += abs(pos.profit)
+        else:
+            result_stats["flat_num"] += 1
 
         if self.mode == "trade":
             self.balance += pos.balance + pos.profit

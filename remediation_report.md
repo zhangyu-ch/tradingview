@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 34
-- **待处理：** 47
+- **已完成：** 35
+- **待处理：** 46
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -45,7 +45,7 @@
 |32|`NX-14`|中|Web Storage|❌ 未修复|已完成|通过（37 项专项与相邻测试通过；不存在资源稳定返回 404，畸形标识在数据库访问前返回 422）|`fix(NX-14)`|
 |33|`NX-15`|中|Web Storage|❌ 未修复|已完成|通过（26 项专项与相邻测试通过；异常、未确认结果和缺参不再返回伪成功）|`fix(NX-15)`|
 |34|`RV-05`|中|Backtesting / Process|❌ 未修复|已完成|通过（18 项专项与相邻测试通过；缺少保存路径在主进程明确失败，合法路径安全生成）|`fix(RV-05)`|
-|35|`RV-04`|中|Backtesting Metrics|❌ 未修复|待处理|—|—|
+|35|`RV-04`|中|Backtesting Metrics|❌ 未修复|已完成|通过（20 项专项与相邻测试通过；零值与容差内噪声计入持平，不再污染失败统计）|`fix(RV-04)`|
 |36|`RV-01`|中|Database / Watchlist|❌ 未修复|待处理|—|—|
 |37|`RV-07`|中|Web API Robustness|❌ 未修复|待处理|—|—|
 |38|`ME-11`|中|Baostock|❌ 未修复|待处理|—|—|
@@ -840,16 +840,24 @@
 ### 35. RV-04 · 盈亏为 0 的平仓被计入失败交易
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Backtesting Metrics
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 平仓统计只有 `profit > 0` 与 `else` 两个分支，因此 `profit == 0` 以及浮点计算产生的极小正负噪声都会增加 `loss_num`。这会系统性压低胜率、放大失败次数和平均亏损，并把保本交易错误展示为亏损。
+- **b. 我是怎么修复的？** 为统计结果增加独立 `flat_num`，并使用绝对容差 1e-9 将接近零的收益归类为持平；严格正收益计胜、严格负收益计亏。新建和动态信号结果都包含 flat_num，旧 pickle/旧结果字典在下一次统计时自动补字段。结果表与汇总增加“持平”列，总交易数包含持平；胜率继续按有方向结果 win/(win+loss) 计算，不把持平当输或赢。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前动态确认 `_record_closed_position` 的二分 `else` 会把零和浮点噪声计入 loss_num。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_rv04_flat_trade_metrics.py tests/test_rv05_process_save_file.py tests/test_nx08_position_close_profit.py tests/test_remediation_report_counts.py`，20 项专项、相邻和报告测试全部通过。
+  - 用真实 BackTestTrader 连续记录 +10、-5、0、+0.5e-9、-0.5e-9，确认 win=1、loss=1、flat=3，金额只包含有方向收益。
+  - 注入不含 flat_num 的旧结果字典后记录零收益，确认自动补字段且原 win/loss 不变；trade 模式持平平仓仍释放本金。
+  - AST/源码检查确认结果表含“持平”、总交易数加入 flat_num，而胜率仍为 win/(win+loss)。
+  - 执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。
+- **e. 验证是否通过？** 通过（20 项专项与相邻测试通过；零值与容差内噪声计入持平，不再污染失败统计）
+- **提交：** fix(RV-04): track breakeven trades separately
+- **修改文件：** `src/tradingview_zy/backtesting/backtest_trader.py`, `src/tradingview_zy/backtesting/backtest.py`, `tests/test_rv04_flat_trade_metrics.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 完整 BackTest.result 动态导入受容器缺失 empyrical/pyfolio 阻断；核心分类使用真实 BackTestTrader 动态执行，结果表结构和汇总表达式由 AST 验证。
+  - 1e-9 是以账本货币单位计的绝对统计容差；若未来支持超高精度资产，应把货币精度纳入统一领域模型。
 - **原报告最新结论：** _record_closed_position() 仍仅以 profit > 0 判胜，其余（包括 0）全部计入 loss。
 - **原报告建议：** 定义 breakeven 计数或至少 0 不计 loss；补零收益和手续费后零收益测试。
 

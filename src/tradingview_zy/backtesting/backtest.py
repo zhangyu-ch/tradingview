@@ -678,6 +678,7 @@ class BackTest:
             "买卖点",
             "成功",
             "失败",
+            "持平",
             "胜率",
             "盈利",
             "亏损",
@@ -711,6 +712,7 @@ class BackTest:
         total_trade_num = 0  # 总的交易数量
         total_win_num = 0  # 总的盈利数量
         total_loss_num = 0  # 总的亏损数量
+        total_flat_num = 0  # 总的持平数量
         total_win_balance = 0
         total_loss_balance = 0
         for k in self.trader.results.keys():
@@ -718,6 +720,7 @@ class BackTest:
             result_stats = self.trader.results.get(k, {})
             win_num = result_stats.get("win_num", 0)
             loss_num = result_stats.get("loss_num", 0)
+            flat_num = result_stats.get("flat_num", 0)
             shenglv = (
                 0
                 if win_num == 0 and loss_num == 0
@@ -735,9 +738,10 @@ class BackTest:
                 else win_mean_balance / loss_mean_balance
             )
 
-            total_trade_num += win_num + loss_num
+            total_trade_num += win_num + loss_num + flat_num
             total_win_num += win_num
             total_loss_num += loss_num
+            total_flat_num += flat_num
             total_win_balance += win_balance
             total_loss_balance += loss_balance
 
@@ -746,6 +750,7 @@ class BackTest:
                     mmd,
                     win_num,
                     loss_num,
+                    flat_num,
                     f"{str(round(shenglv, 2))}%",
                     round(win_balance, 2),
                     round(loss_balance, 2),
@@ -784,6 +789,7 @@ class BackTest:
                 "汇总",
                 total_win_num,
                 total_loss_num,
+                total_flat_num,
                 f"{round(total_shenglv, 2)}%",
                 round(total_win_balance, 2),
                 round(total_loss_balance, 2),
