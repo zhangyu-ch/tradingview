@@ -105,3 +105,11 @@
 - 修复：新增独立 Secret 暴露扫描器、脆弱 fixture 与 CI 门禁。
 - 专项测试：`tests/test_rv08_secret_exposure_guard.py`，2 passed。
 - 提交：`test(RV-08): enforce no-secret-echo settings contract`。
+
+### 问题 08：HI-13
+- **状态：** complete
+- **完成时间：** 2026-08-03T11:56:00+00:00
+- 验证结论：合约/现货均存在单行 -2 越界与包含端点分页停滞风险。
+- 修复：共享严格游标分页器，0/1/N 缓存安全、±1ms 推进、去重、无进展与最大页数保护。
+- 专项测试：`tests/test_hi13_binance_pagination.py`，5 passed。
+- 提交：`fix(HI-13): make Binance pagination strictly progressive`。

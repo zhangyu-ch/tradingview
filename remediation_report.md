@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 4
-- **待处理：** 77
+- **已完成：** 5
+- **待处理：** 76
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -18,7 +18,7 @@
 |5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归不在本地；3 项防回归测试通过）|`test(NEW-05)`|
 |6|`NX-20`|高|TDX Reliability|❌ 未修复|已完成|通过（3 项专项测试通过，4 个构造器均已移除无上限重连）|`fix(NX-20)`|
 |7|`RV-08`|高|Web Security / Secrets|❌ 未修复|已完成（共享修复已复验）|通过（共享根因已修复，2 项独立防回归测试通过）|`test(RV-08)`|
-|8|`HI-13`|高|Binance|❌ 未修复|待处理|—|—|
+|8|`HI-13`|高|Binance|❌ 未修复|已完成|通过（5 项专项测试通过，合约/现货均使用严格分页器）|`fix(HI-13)`|
 |9|`HI-14`|高|TQ SDK|❌ 未修复|待处理|—|—|
 |10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
 |11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
@@ -243,16 +243,22 @@
 ### 08. HI-13 · Binance 合约/现货增量分页可能重复边界或停滞，单行缓存会越界
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 高 / Binance
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** Binance 合约与现货适配器都用 `db_klines.iloc[-2]` 作为增量起点，缓存仅一行时直接越界；前向分页又把上一页最后时间戳原样作为下一页 startTime，包含端点的 API 会重复边界，若服务端忽略游标还可能永久停滞；反向分页也未排除上一页第一条。
+- **b. 我是怎么修复的？** 新增共享 Binance OHLCV 分页器：缓存起点对 0/1/N 行均安全；前向游标严格推进到 `last+1ms`，反向游标退到 `first-1ms`；每页校验 schema/时间戳，按时间去重排序，限制最大页数并在无进展时抛 `PaginationStalledError`。合约和现货适配器统一调用该实现，对无新增数据安全返回缓存且不写入 None。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python3 -m pytest -q tests/test_hi13_binance_pagination.py`，5 项测试通过。
+  - 参数化验证空、单行和多行缓存起点；单行不再访问 -2 索引。
+  - 伪造包含上一页端点的前向响应，确认请求游标依次为 1000、2001、3001 且结果无重复。
+  - 伪造重复整页确认抛停滞错误；反向分页确认第二页 endTime 为 first-1；源码契约确认两个适配器均无 `iloc[-2]`。
+  - 运行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（5 项专项测试通过，合约/现货均使用严格分页器）
+- **提交：** fix(HI-13): make Binance pagination strictly progressive
+- **修改文件：** `src/tradingview_zy/exchange/binance_pagination.py`, `src/tradingview_zy/exchange/exchange_binance.py`, `src/tradingview_zy/exchange/exchange_binance_spot.py`, `tests/test_hi13_binance_pagination.py`, `audit/remediation_state.json`, `remediation_report.md`, `progress.md`
+- **验证限制：**
+  - 未调用真实 Binance/CCXT 网络接口；分页端点和停滞行为通过可控 fake API 响应验证。
 - **原报告最新结论：** Binance 合约/现货增量逻辑仍读取 db_klines.iloc[-2]，单行缓存会越界；分页起点仍可能停在上页最后时间戳，造成重复边界或停滞。
 - **原报告建议：** 单行/空缓存显式分支；下一页起点推进一个最小周期；去重并检测无进展。
 
