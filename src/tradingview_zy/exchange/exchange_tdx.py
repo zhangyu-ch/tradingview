@@ -58,7 +58,11 @@ class ExchangeTDX(Exchange):
         """
         connect_info = best_ip.select_best_ip("stock")
         connect_info = {"ip": connect_info["ip"], "port": int(connect_info["port"])}
-        db.cache_set("tdx_connect_ip", connect_info)
+        db.cache_set(
+            "tdx_connect_ip",
+            connect_info,
+            expire=best_ip.cache_expiry_epoch(),
+        )
         self.connect_info = connect_info
         return connect_info
 

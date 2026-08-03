@@ -249,3 +249,11 @@
 - 专项测试：`tests/test_mx05_rate_timer.py`，3 passed；Node fake timer 动态验证和全部内联脚本语法编译通过。
 - 首轮测试错误：2 passed、1 failed；失败来自测试脚本跨 `<script>` 标签提取，不是产品代码语法错误，已改用逐内联脚本编译。
 - 提交：`fix(MX-05): schedule watchlist rate refresh correctly`。
+
+### 问题 25：MX-17
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：TDX 冷启动/重置选优串行遍历全部候选，且无总体 deadline；节点缓存也永久有效。
+- 修复：新增并发有界 TDX 节点选择器，最多 16 个 daemon worker、3 秒总 deadline、最小成功数与明确失败；全部 TDX 节点缓存增加 6 小时 TTL。
+- 专项测试：`tests/test_mx17_tdx_node_selection.py` 6 passed，NX-20 相邻测试 3 passed；并发度、最快节点、挂起节点、失败解释和 TTL 契约均通过。
+- 提交：`fix(MX-17): bound and parallelize TDX node selection`。

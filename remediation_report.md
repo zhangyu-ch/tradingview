@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 24
-- **待处理：** 57
+- **已完成：** 25
+- **待处理：** 56
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -35,7 +35,7 @@
 |22|`MX-02`|中|Exchange Factory|❌ 未修复|已完成（通过移除不支持能力）|通过（4 项 MX-02 专项测试及 3 项相邻 provider 下线测试通过；支持声明与可选工厂已一致）|`fix(MX-02)`|
 |23|`MX-04`|中|ExchangeDB / Scheduling|❌ 未修复|已完成|通过（3 项专项测试通过；DB provider 不再暴露 None/null 三态）|`fix(MX-04)`|
 |24|`MX-05`|中|Frontend|❌ 未修复|已完成|通过（3 项专项测试通过；定时回调、重启清理和停止语义均通过 Node 动态验证）|`fix(MX-05)`|
-|25|`MX-17`|中|TDX / Performance|❌ 未修复|待处理|—|—|
+|25|`MX-17`|中|TDX / Performance|❌ 未修复|已完成|通过（6 项专项测试及相邻 NX-20 测试通过；冷启动/重置扫描具有并发上限、全局 deadline 与有限缓存 TTL）|`fix(MX-17)`|
 |26|`NX-08`|中|Backtesting Model|❌ 未修复|待处理|—|—|
 |27|`NX-03`|中|Configuration / Messaging|❌ 未修复|待处理|—|—|
 |28|`NX-22`|中|Database / Diagnostics|❌ 未修复|待处理|—|—|
@@ -618,16 +618,22 @@
 ### 25. MX-17 · TDX 节点选优在缓存缺失或重置时串行探测全部候选，缺少总体 deadline
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / TDX / Performance
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** TDX 节点选优通过列表推导串行探测所有候选。缓存缺失、过期或 reset 时，总延迟会按候选数累加；即使单个 SDK 探测卡住，也没有调用级总体 deadline。节点缓存还永久有效，无法定期重新验证健康状态。
+- **b. 我是怎么修复的？** 新增独立 `select_fastest_node`：以有界 daemon worker 并发探测，在一个全局 3 秒 wall-clock budget 内收集健康结果，按延迟和原始顺序稳定选优，单节点异常被隔离，无健康节点时抛出可解释的 `NodeSelectionError`。所有 TDX 适配器写入节点缓存时增加 6 小时绝对 TTL。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_mx17_tdx_node_selection.py`，6 项专项测试全部通过。
+  - 用 12 个延迟探针验证并发度至少为 4，耗时显著低于串行总和，并确认最快健康节点胜出。
+  - 故障注入一个快速成功节点和多个违反自身 timeout 的挂起节点，确认调用在全局 deadline 内返回；全部挂起时在 deadline 内抛出包含完成数量的明确错误。
+  - AST 检查 6 个 TDX 适配器的节点缓存均传入 `expire=best_ip.cache_expiry_epoch()`；运行 NX-20 相邻重试测试、compileall 与 `git diff --check`。
+- **e. 验证是否通过？** 通过（6 项专项测试及相邻 NX-20 测试通过；冷启动/重置扫描具有并发上限、全局 deadline 与有限缓存 TTL）
+- **提交：** fix(MX-17): bound and parallelize TDX node selection
+- **修改文件：** `src/tradingview_zy/tools/tdx_best_ip.py`, `src/tradingview_zy/tools/tdx_node_selector.py`, `src/tradingview_zy/exchange/exchange_tdx.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_us.py`, `src/tradingview_zy/exchange/exchange_tdx_fx.py`, `src/tradingview_zy/exchange/exchange_tdx_ny_futures.py`, `tests/test_mx17_tdx_node_selection.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 未对真实公网 TDX 候选做网络基准；探测并发、deadline、错误隔离和缓存 TTL 已用确定性故障注入验证。
+  - 缓存过期后仍在请求线程同步刷新，但刷新总耗时被严格限制为默认 3 秒；项目当前没有适合承载后台节点健康刷新的独立生命周期服务。
 - **原报告最新结论：** TDX 选优和各 TDX 构造器没有修改；Web 文件的安全变更不影响串行探测和总体 deadline。
 - **原报告建议：** 并发有界探测；设置全局 deadline、最小成功数和 TTL 健康缓存；后台刷新而非阻塞请求。
 

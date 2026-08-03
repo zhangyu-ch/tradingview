@@ -1434,16 +1434,39 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "TDX 节点选优通过列表推导串行探测所有候选。缓存缺失、过期或 reset 时，总延迟会按候选数累加；即使单个 SDK 探测卡住，也没有调用级总体 deadline。节点缓存还永久有效，无法定期重新验证健康状态。",
+      "fix_summary": "新增独立 `select_fastest_node`：以有界 daemon worker 并发探测，在一个全局 3 秒 wall-clock budget 内收集健康结果，按延迟和原始顺序稳定选优，单节点异常被隔离，无健康节点时抛出可解释的 `NodeSelectionError`。所有 TDX 适配器写入节点缓存时增加 6 小时绝对 TTL。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_mx17_tdx_node_selection.py`，6 项专项测试全部通过。",
+        "用 12 个延迟探针验证并发度至少为 4，耗时显著低于串行总和，并确认最快健康节点胜出。",
+        "故障注入一个快速成功节点和多个违反自身 timeout 的挂起节点，确认调用在全局 deadline 内返回；全部挂起时在 deadline 内抛出包含完成数量的明确错误。",
+        "AST 检查 6 个 TDX 适配器的节点缓存均传入 `expire=best_ip.cache_expiry_epoch()`；运行 NX-20 相邻重试测试、compileall 与 `git diff --check`。"
+      ],
+      "verification_result": "通过（6 项专项测试及相邻 NX-20 测试通过；冷启动/重置扫描具有并发上限、全局 deadline 与有限缓存 TTL）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/tools/tdx_best_ip.py",
+        "src/tradingview_zy/tools/tdx_node_selector.py",
+        "src/tradingview_zy/exchange/exchange_tdx.py",
+        "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "src/tradingview_zy/exchange/exchange_tdx_futures.py",
+        "src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "src/tradingview_zy/exchange/exchange_tdx_fx.py",
+        "src/tradingview_zy/exchange/exchange_tdx_ny_futures.py",
+        "tests/test_mx17_tdx_node_selection.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "未对真实公网 TDX 候选做网络基准；探测并发、deadline、错误隔离和缓存 TTL 已用确定性故障注入验证。",
+        "缓存过期后仍在请求线程同步刷新，但刷新总耗时被严格限制为默认 3 秒；项目当前没有适合承载后台节点健康刷新的独立生命周期服务。"
+      ],
+      "commit_subject": "fix(MX-17): bound and parallelize TDX node selection"
     }
   },
   {

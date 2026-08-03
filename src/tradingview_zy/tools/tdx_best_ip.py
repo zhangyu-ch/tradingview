@@ -7,6 +7,13 @@ import datetime
 from pytdx.exhq import TdxExHq_API
 from pytdx.hq import TdxHq_API
 
+from tradingview_zy.tools.tdx_node_selector import (
+    cache_expiry_epoch,
+    select_fastest_node,
+)
+
+from tradingview_zy.tools.tdx_node_selector import select_fastest_node
+
 stock_ip = [
     # 旧有的数据源
     # {"ip": "106.120.74.86", "port": 7711, "name": "北京行情主站1"},
@@ -183,31 +190,31 @@ def ping(ip, port=7709, type_="stock"):
         return datetime.timedelta(9, 9, 0)
 
 
-def select_best_ip(_type="stock"):
-    """目前这里给的是单线程的选优, 如果需要多进程的选优/ 最优ip缓存 可以参考
-    https://github.com/QUANTAXIS/QUANTAXIS/blob/master/QUANTAXIS/QAFetch/QATdx.py#L106
+def select_best_ip(
+    _type="stock",
+    *,
+    deadline_seconds=3.0,
+    max_workers=16,
+    minimum_successes=1,
+):
+    """Return the fastest healthy TDX node within one bounded scan.
 
-
-    Keyword Arguments:
-        _type {str} -- [description] (default: {'stock'})
-
-    Returns:
-        [type] -- [description]
+    Candidate probes run concurrently. A slow or broken node cannot make cold
+    startup latency grow linearly with the candidate list, and the global
+    deadline bounds both cache-miss and explicit reset scans.
     """
+    if _type not in {"stock", "future"}:
+        raise ValueError(f"unsupported TDX node type: {_type!r}")
 
     ip_list = stock_ip if _type == "stock" else future_ip
-
-    data = [ping(x["ip"], x["port"], _type) for x in ip_list]
-    results = []
-    for i in range(len(data)):
-        # 删除ping不通的数据
-        if data[i] < datetime.timedelta(0, 9, 0):
-            results.append((data[i], ip_list[i]))
-
-    # 按照ping值从小大大排序
-    results = [x[1] for x in sorted(results, key=lambda x: x[0])]
-
-    return results[0]
+    return select_fastest_node(
+        ip_list,
+        node_type=_type,
+        probe=ping,
+        deadline_seconds=deadline_seconds,
+        max_workers=max_workers,
+        minimum_successes=minimum_successes,
+    )
 
 
 if __name__ == "__main__":

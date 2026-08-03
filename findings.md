@@ -138,3 +138,8 @@
 - 原模板两处把 `ZiXuan.stocks_update_rate()` 的立即返回值交给 `setInterval`，因此只执行一次，定时器没有可调用回调。
 - 页面初始化与折叠面板重新打开还可能重复创建定时器；修复抽取 start/stop helper，启动前清理旧实例，先立即刷新一次，再传函数回调周期执行。
 - 首次语法测试用跨标签正则从第一个内联脚本匹配到最后一个 `</script>`，把 HTML 标签送入 Node；已改为逐个提取无 `src` 的内联脚本。
+
+## MX-17 TDX 节点选优复核
+- 原 `select_best_ip` 用列表推导串行调用全部候选节点；冷缓存或显式 reset 的总耗时随候选数线性增长，且没有调用级总 deadline。
+- 新选择器用有界数量 daemon worker 并发探测，调用方只等待一个全局 wall-clock deadline；单节点异常、畸形延迟或违反自身 socket timeout 都不会无限拖住选择调用。
+- `tdx_connect_ip` 与共享 `tdxex_connect_ip` 现在写入 6 小时绝对过期时间，避免永久相信旧节点；过期后的同步重选仍受 3 秒总预算约束。
