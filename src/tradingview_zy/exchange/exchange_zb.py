@@ -205,25 +205,10 @@ class ExchangeZB(Exchange):
 
     # 撤销所有挂单
     def cancel_all_order(self, code):
-        orders = self.exchange.fetch_open_orders(code)
-        for _o in orders:
-            self.exchange.cancel_order(_o["id"], code)
-        return True
+        return self._raise_live_trading_disabled("cancel_all_order")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        trade_maps = {
-            "open_long": {"side": "BUY", "positionSide": "LONG"},
-            "open_short": {"side": "SELL", "positionSide": "SHORT"},
-            "close_long": {"side": "SELL", "positionSide": "LONG"},
-            "close_short": {"side": "BUY", "positionSide": "SHORT"},
-        }
-        if o_type == "open_long":
-            order = self.exchange.create_market_buy_order(code, amount)
-            return order
-        if o_type == "close_long":
-            order = self.exchange.create_market_sell_order(code, amount)
-            return order
-        raise Exception("现货不支持做空")
+        return super().order(code, o_type, amount, args=args)
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")

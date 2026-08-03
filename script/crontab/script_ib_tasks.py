@@ -226,22 +226,6 @@ def run_tasks(client_id: int):
             return None
         return hold_positions
 
-    def orders(code, type, amount):
-        contract = get_contract_by_code(code)
-        if type == "buy":
-            req_order = ib_insync.MarketOrder("BUY", amount)
-        else:
-            req_order = ib_insync.MarketOrder("SELL", amount)
-
-        trade = get_ib().placeOrder(contract, req_order)
-        while True:
-            get_ib().sleep(1)
-            if trade.isDone():
-                break
-        return {
-            "price": trade.orderStatus.avgFillPrice,
-            "amount": trade.orderStatus.filled,
-        }
 
     def get_contract_by_code(code: str):
         """
@@ -299,7 +283,6 @@ def run_tasks(client_id: int):
                     CmdEnum.STOCK_INFO.value,
                     CmdEnum.BALANCE.value,
                     CmdEnum.POSITIONS.value,
-                    CmdEnum.ORDERS.value,
                 ],
                 0,
             )
@@ -337,10 +320,6 @@ def run_tasks(client_id: int):
                 # log.info(f'{client_id} Task Positions: {args}')
                 info = args["code"]
                 res = positions(args["code"])
-            elif cmd == CmdEnum.ORDERS.value:
-                # log.info(f'{client_id} Task Orders: {args}')
-                info = args["code"]
-                res = orders(args["code"], args["type"], args["amount"])
 
             rd.Robj().lpush(args["key"], json.dumps(res))
             log.info(
@@ -362,7 +341,6 @@ if __name__ == "__main__":
         CmdEnum.STOCK_INFO.value,
         CmdEnum.BALANCE.value,
         CmdEnum.POSITIONS.value,
-        CmdEnum.ORDERS.value,
     ]:
         rd.Robj().delete(_k)
 

@@ -28,3 +28,10 @@ order/fill state machine existed.
 Restoring QMT order execution requires an explicit trader factory/capability, mandatory external
 configuration, client-order idempotency, broker-confirmed fills, restart reconciliation, and QMT
 sandbox tests. Real-mode failures must never be converted into simulated fills.
+
+## All live order execution (`CR-03`)
+
+All remaining live order and cancellation entry points now fail closed. See
+[`live-trading-disabled.md`](live-trading-disabled.md) for the required Order/Fill state
+machine, idempotency, reconciliation, and sandbox acceptance criteria. Market-data and
+backtesting capabilities remain available.

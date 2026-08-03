@@ -318,7 +318,7 @@ class ExchangeDB(Exchange):
         pass
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        pass
+        return super().order(code, o_type, amount, args=args)
 
 
 if __name__ == "__main__":

@@ -400,7 +400,7 @@ class ExchangeQMT(Exchange):
         raise Exception("QMT 交易功能在 trader 目录实现")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        raise Exception("QMT 交易功能在 trader 目录实现")
+        return super().order(code, o_type, amount, args=args)
 
 
 if __name__ == "__main__":

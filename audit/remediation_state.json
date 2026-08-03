@@ -745,16 +745,42 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（通过移除未验收实盘订单执行能力）",
+      "problem_verified": true,
+      "problem_summary": "仓库中的 A 股、港股、数字货币、期货和 IB 交易路径没有统一持久化 Order/Fill 状态机。部分代码把本地行情价格、订单提交返回、固定等待后的单次查询、当前无持仓或一笔最终查询当成成交，并在缺少拒单、部分成交、撤单、重复回调、断线和重启对账语义时修改自选、通知成功或写共享订单账本。",
+      "fix_summary": "暂不保留不安全的实盘订单执行能力。删除 A/HK/Binance/TQ 四个未验收 live trader；Exchange 基类新增统一 LiveTradingDisabledError，所有 provider 的 order 与撤单入口都委托到同一 fail-closed 边界；移除 IB Redis 订单命令、worker 下单实现和队列消费。保留行情、账户只读查询、研究与回测，并新增恢复实盘所必须满足的持久化状态机、幂等、成交明细和重启对账准入文档。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_cr03_live_trading_disabled.py tests/test_cr04_qmt_trader_removed.py tests/test_cr05_ctp_removed.py tests/test_hi14_tq_lifecycle.py`，13 项测试全部通过。",
+        "AST 扫描所有 Exchange.order/cancel 方法，确认全部委托统一 fail-closed 边界；基础 Exchange.order 直接抛 LiveTradingDisabledError。",
+        "扫描 src/script/web 的 Python 运行树，确认不再含 create_order、place_order、placeOrder、insert_order、unlock_trade 或 CmdEnum.ORDERS 下单入口。",
+        "确认 A/HK/Binance/TQ live trader 文件已删除，行情 provider、在线行情辅助和回测订单记录仍保留；执行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（13 项专项/相邻测试通过；所有内置实盘订单和撤单入口均明确 fail-closed）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/exchange/exchange.py",
+        "src/tradingview_zy/exchange/exchange_*.py",
+        "src/tradingview_zy/trader/trader_a_stock.py（删除）",
+        "src/tradingview_zy/trader/trader_currency.py（删除）",
+        "src/tradingview_zy/trader/trader_futures.py（删除）",
+        "src/tradingview_zy/trader/trader_hk_stock.py（删除）",
+        "script/crontab/script_ib_tasks.py",
+        "docs/live-trading-disabled.md",
+        "docs/unsupported-providers.md",
+        "tests/test_cr03_live_trading_disabled.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本次关闭方式是禁用/移除实盘订单执行，不代表已经实现任何券商或交易所的实盘状态机。",
+        "账户余额和持仓等只读接口仍可能访问外部 SDK；其各自可靠性问题在后续对应条目中单独处理。",
+        "回测产生的订单记录继续存在，但文档明确其不是券商成交回报。"
+      ],
+      "commit_subject": "fix(CR-03): disable unreconciled live trading"
     }
   },
   {

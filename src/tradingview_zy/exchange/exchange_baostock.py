@@ -257,15 +257,7 @@ class ExchangeBaostock(Exchange):
         raise Exception("账户资产接口不支持")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        """
-        下单接口
-        :param args:
-        :param code:
-        :param o_type:
-        :param amount:
-        :return:
-        """
-        raise Exception("账户资产接口不支持")
+        return super().order(code, o_type, amount, args=args)
 
 
 if __name__ == "__main__":

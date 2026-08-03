@@ -391,25 +391,10 @@ class ExchangeBinance(Exchange):
 
     # 撤销所有挂单
     def cancel_all_order(self, code):
-        self.exchange.cancel_all_orders(symbol=code)
-        return True
+        return self._raise_live_trading_disabled("cancel_all_order")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        trade_maps = {
-            "open_long": {"side": "BUY", "positionSide": "LONG"},
-            "open_short": {"side": "SELL", "positionSide": "SHORT"},
-            "close_long": {"side": "SELL", "positionSide": "LONG"},
-            "close_short": {"side": "BUY", "positionSide": "SHORT"},
-        }
-        if "open" in o_type:
-            self.exchange.set_leverage(args["leverage"], symbol=code)
-        return self.exchange.create_order(
-            symbol=code,
-            type="MARKET",
-            side=trade_maps[o_type]["side"],
-            amount=amount,
-            params={"positionSide": trade_maps[o_type]["positionSide"]},
-        )
+        return super().order(code, o_type, amount, args=args)
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")

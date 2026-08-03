@@ -23,7 +23,7 @@
 |10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（5 项专项/依赖回归测试通过；不安全的 CTP 能力已从运行包彻底移除并 fail closed）|`fix(CR-05)`|
 |11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（3 项 CR-04 专项测试及相邻下线门禁均通过；危险 QMT 实盘适配器已从运行包移除）|`fix(CR-04)`|
 |12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|已完成|通过（14 项可执行测试通过；所有写请求的统一 CSRF 边界和 GET 删除根因已消除）|`fix(HI-06)`|
-|13|`CR-03`|高|Live Trading|🟡 部分修复|待处理|—|—|
+|13|`CR-03`|高|Live Trading|🟡 部分修复|已完成（通过移除未验收实盘订单执行能力）|通过（13 项专项/相邻测试通过；所有内置实盘订单和撤单入口均明确 fail-closed）|`fix(CR-03)`|
 |14|`ME-24`|中|Environment|🔴 回归（重新出现）|待处理|—|—|
 |15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|待处理|—|—|
 |16|`HI-01`|中|Futures Trader|❌ 未修复|待处理|—|—|
@@ -355,16 +355,23 @@
 ### 13. CR-03 · 实盘订单缺少成交状态机，内部账本可与券商/交易所永久分叉
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 高 / Live Trading
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通过移除未验收实盘订单执行能力）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 仓库中的 A 股、港股、数字货币、期货和 IB 交易路径没有统一持久化 Order/Fill 状态机。部分代码把本地行情价格、订单提交返回、固定等待后的单次查询、当前无持仓或一笔最终查询当成成交，并在缺少拒单、部分成交、撤单、重复回调、断线和重启对账语义时修改自选、通知成功或写共享订单账本。
+- **b. 我是怎么修复的？** 暂不保留不安全的实盘订单执行能力。删除 A/HK/Binance/TQ 四个未验收 live trader；Exchange 基类新增统一 LiveTradingDisabledError，所有 provider 的 order 与撤单入口都委托到同一 fail-closed 边界；移除 IB Redis 订单命令、worker 下单实现和队列消费。保留行情、账户只读查询、研究与回测，并新增恢复实盘所必须满足的持久化状态机、幂等、成交明细和重启对账准入文档。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_cr03_live_trading_disabled.py tests/test_cr04_qmt_trader_removed.py tests/test_cr05_ctp_removed.py tests/test_hi14_tq_lifecycle.py`，13 项测试全部通过。
+  - AST 扫描所有 Exchange.order/cancel 方法，确认全部委托统一 fail-closed 边界；基础 Exchange.order 直接抛 LiveTradingDisabledError。
+  - 扫描 src/script/web 的 Python 运行树，确认不再含 create_order、place_order、placeOrder、insert_order、unlock_trade 或 CmdEnum.ORDERS 下单入口。
+  - 确认 A/HK/Binance/TQ live trader 文件已删除，行情 provider、在线行情辅助和回测订单记录仍保留；执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（13 项专项/相邻测试通过；所有内置实盘订单和撤单入口均明确 fail-closed）
+- **提交：** fix(CR-03): disable unreconciled live trading
+- **修改文件：** `src/tradingview_zy/exchange/exchange.py`, `src/tradingview_zy/exchange/exchange_*.py`, `src/tradingview_zy/trader/trader_a_stock.py（删除）`, `src/tradingview_zy/trader/trader_currency.py（删除）`, `src/tradingview_zy/trader/trader_futures.py（删除）`, `src/tradingview_zy/trader/trader_hk_stock.py（删除）`, `script/crontab/script_ib_tasks.py`, `docs/live-trading-disabled.md`, `docs/unsupported-providers.md`, `tests/test_cr03_live_trading_disabled.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 本次关闭方式是禁用/移除实盘订单执行，不代表已经实现任何券商或交易所的实盘状态机。
+  - 账户余额和持仓等只读接口仍可能访问外部 SDK；其各自可靠性问题在后续对应条目中单独处理。
+  - 回测产生的订单记录继续存在，但文档明确其不是券商成交回报。
 - **原报告最新结论：** 旧 trader 启动提示脚本已删除，但 QMT/TQ/Binance 等交易类的订单提交、成交确认和重启对账没有改变；状态机缺口仍在。
 - **原报告建议：** 真实资金启用前必须建立统一 Order/Fill 状态机、幂等 client_order_id、持久化成交明细和重启对账；未确认成交必须 fail closed。现有启动器保持禁用，直到每个适配器通过沙箱验收。
 

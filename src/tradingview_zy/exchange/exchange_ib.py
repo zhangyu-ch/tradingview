@@ -21,7 +21,6 @@ class CmdEnum(Enum):
     STOCK_INFO = "ib_stock_info"
     BALANCE = "ib_balance"
     POSITIONS = "ib_positions"
-    ORDERS = "ib_orders"
 
 
 @fun.singleton
@@ -261,16 +260,7 @@ class ExchangeIB(Exchange):
         return json.loads(positions[1])
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        """
-        订单操作
-        """
-        args = {"key": self.uid(), "code": code, "type": o_type, "amount": amount}
-        rd.Robj().lpush(CmdEnum.ORDERS.value, json.dumps(args))
-
-        res = rd.Robj().brpop([args["key"]], 0)
-        if res is None:
-            return False
-        return json.loads(res[1])
+        return super().order(code, o_type, amount, args=args)
 
 
 if __name__ == "__main__":

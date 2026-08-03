@@ -19,6 +19,10 @@ from tradingview_zy.fun import (
 __tz = pytz.timezone("Asia/Shanghai")
 
 
+class LiveTradingDisabledError(RuntimeError):
+    """Raised when an unverified live-order path is invoked."""
+
+
 @dataclass
 class Tick:
     code: str
@@ -137,16 +141,15 @@ class Exchange(ABC):
         :return:
         """
 
-    @abstractmethod
+    def _raise_live_trading_disabled(self, action: str = "order"):
+        raise LiveTradingDisabledError(
+            f"live trading is disabled: {self.__class__.__name__}.{action}; "
+            "a persisted Order/Fill state machine and broker reconciliation are required"
+        )
+
     def order(self, code: str, o_type: str, amount: float, args=None):
-        """
-        下单接口
-        :param args:
-        :param code:
-        :param o_type:
-        :param amount:
-        :return:
-        """
+        """Fail closed until a verified Order/Fill state machine is available."""
+        return self._raise_live_trading_disabled("order")
 
 
 def convert_stock_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.DataFrame:

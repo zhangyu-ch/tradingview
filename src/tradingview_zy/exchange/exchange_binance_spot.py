@@ -348,10 +348,10 @@ class ExchangeBinanceSpot(Exchange):
 
     # 撤销所有挂单
     def cancel_all_order(self, code):
-        raise RuntimeWarning("交易接口未实现")
+        return self._raise_live_trading_disabled("cancel_all_order")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        raise RuntimeWarning("交易接口未实现")
+        return super().order(code, o_type, amount, args=args)
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")

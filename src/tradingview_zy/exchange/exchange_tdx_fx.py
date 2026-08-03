@@ -331,7 +331,7 @@ class ExchangeTDXFX(Exchange):
         raise Exception("交易所不支持")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        raise Exception("交易所不支持")
+        return super().order(code, o_type, amount, args=args)
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")

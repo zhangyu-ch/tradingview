@@ -152,3 +152,11 @@
 - 修复：统一会话 CSRF token + 同源校验；登录/登出轮换；前端四种提交机制自动带 token；删除改 POST。
 - 专项测试：`tests/test_hi06_csrf.py` + `tests/test_web_security.py`，14 passed、3 skipped（离线镜像缺完整 Web 依赖）；compileall 与 diff 检查通过。
 - 提交：`fix(HI-06): enforce CSRF on state-changing requests`。
+
+### 问题 13：CR-03
+- **状态：** complete（通过移除未验收实盘订单执行能力）
+- **完成时间：** 2026-08-03
+- 验证结论：多个 provider 把提交/单次查询/本地状态当最终成交，缺少统一 Order/Fill、幂等与重启对账。
+- 修复：删除 live trader；所有 order/cancel 统一 fail-closed；移除 IB 下单队列/worker；保留行情与回测。
+- 专项测试：CR-03 与相邻下线/生命周期测试共 13 passed；运行树危险下单调用扫描、compileall、diff 检查通过。
+- 提交：`fix(CR-03): disable unreconciled live trading`。

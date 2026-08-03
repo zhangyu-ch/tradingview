@@ -459,96 +459,7 @@ class ExchangeTq(Exchange):
             }
 
     def order(self, code: str, o_type: str, amount: float, args=None):
-        """
-        下单接口，默认使用盘口的买一卖一价格成交，知道所有手数成交后返回
-        """
-        if args is None:
-            args = {}
-
-        if o_type == "open_long":
-            direction = "BUY"
-            offset = "OPEN"
-        elif o_type == "open_short":
-            direction = "SELL"
-            offset = "OPEN"
-        elif o_type == "close_long":
-            direction = "SELL"
-            offset = "CLOSE"
-        elif o_type == "close_short":
-            direction = "BUY"
-            offset = "CLOSE"
-        else:
-            raise Exception("期货下单类型错误")
-
-        api = self.get_api(use_account=True)
-        if self.g_account_enable is False:
-            raise Exception("账户链接失败，暂时不可用，请稍后尝试")
-
-        # 查询持仓
-        if offset == "CLOSE":
-            pos = self.positions(code)[code]
-            if direction == "BUY":  # 平空，检查空仓
-                if pos.pos_short < amount:
-                    # 持仓手数少于要平仓的，修正为持仓数量
-                    amount = pos.pos_short
-
-                if "SHFE" in code or "INE.sc" in code:
-                    if pos.pos_short_his >= amount:
-                        offset = "CLOSE"
-                    elif pos.pos_short_today >= amount:
-                        offset = "CLOSETODAY"
-                    else:
-                        # 持仓不够，返回错误
-                        return False
-            else:
-                if pos.pos_long < amount:
-                    # 持仓手数少于要平仓的，修正为持仓数量
-                    amount = pos.pos_long
-
-                if "SHFE" in code or "INE.sc" in code:
-                    if pos.pos_long_his >= amount:
-                        offset = "CLOSE"
-                    elif pos.pos_long_today >= amount:
-                        offset = "CLOSETODAY"
-                    else:
-                        # 持仓不够，返回错误
-                        return False
-
-        order = None
-
-        amount_left = amount
-        while amount_left > 0:
-            quote = api.get_quote(code)
-            api.wait_update(time.time() + 2)
-            price = quote.ask_price1 if direction == "BUY" else quote.bid_price1
-            if price is None:
-                continue
-            order = api.insert_order(
-                code,
-                direction=direction,
-                offset=offset,
-                volume=int(amount_left),
-                limit_price=price,
-            )
-            api.wait_update(time.time() + 5)
-
-            if order.status == "FINISHED":
-                if order.is_error:
-                    print(f"下单失败，原因：{order.last_msg}")
-                    return False
-                break
-            else:
-                # 取消订单，未成交的部分继续挂单
-                self.cancel_order(order)
-                if order.is_error:
-                    print(f"下单失败，原因：{order.last_msg}")
-                    return False
-                amount_left = order.volume_left
-
-        if order is None:
-            return False
-
-        return {"id": order.order_id, "price": order.trade_price, "amount": amount}
+        return super().order(code, o_type, amount, args=args)
 
     def all_orders(self):
         """
@@ -570,38 +481,10 @@ class ExchangeTq(Exchange):
         return res_orders
 
     def cancel_all_orders(self):
-        """
-        撤销所有订单
-        """
-        api = self.get_api(use_account=True)
-        if self.g_account_enable is False:
-            raise Exception("账户链接失败，暂时不可用，请稍后尝试")
-
-        orders = api.get_order()
-        api.wait_update(time.time() + 2)
-        for _id in orders:
-            _o = orders[_id]
-            if _o.status == "ALIVE":
-                # 有效的订单，进行撤单处理
-                self.cancel_order(_o)
-
-        return True
+        return self._raise_live_trading_disabled("cancel_all_orders")
 
     def cancel_order(self, order):
-        """
-        取消订单，直到订单取消成功
-        """
-        api = self.get_api(use_account=True)
-        if self.g_account_enable is False:
-            raise Exception("账户链接失败，暂时不可用，请稍后尝试")
-
-        while True:
-            api.cancel_order(order)
-            api.wait_update(time.time() + 2)
-            if order.status == "FINISHED":
-                break
-
-        return None
+        return self._raise_live_trading_disabled("cancel_order")
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")

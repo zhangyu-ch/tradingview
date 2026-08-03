@@ -372,36 +372,7 @@ class ExchangeFutu(Exchange):
         return None
 
     def order(self, code, o_type, amount, args=None):
-        order_type_map = {"buy": TrdSide.BUY, "sell": TrdSide.SELL}
-        TTX().unlock_trade(config.FUTU_UNLOCK_PWD)  # 先解锁交易
-        ret, data = TTX().place_order(
-            price=0,
-            qty=amount,
-            code=code,
-            order_type=OrderType.MARKET,
-            trd_side=order_type_map[o_type],
-        )
-        if ret == RET_OK:
-            time.sleep(5)
-            ret, o = TTX().order_list_query(order_id=data.iloc[0]["order_id"])
-            if ret == RET_OK:
-                return {
-                    "id": o.iloc[0]["order_id"],
-                    "code": o.iloc[0]["code"],
-                    "name": o.iloc[0]["stock_name"],
-                    "type": o.iloc[0]["trd_side"],
-                    "order_type": o.iloc[0]["order_type"],
-                    "order_status": o.iloc[0]["order_status"],
-                    "price": o.iloc[0]["price"],
-                    "amount": o.iloc[0]["qty"],
-                    "dealt_amount": o.iloc[0]["dealt_qty"],
-                    "dealt_avg_price": o.iloc[0]["dealt_avg_price"],
-                }
-            print("Order Get Order Error : ", o)
-        else:
-            print("Order Error : ", data)
-
-        return False
+        return super().order(code, o_type, amount, args=args)
 
 
 if __name__ == "__main__":

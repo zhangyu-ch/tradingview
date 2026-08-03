@@ -75,3 +75,10 @@
 - 修复采用统一 `before_request`，避免逐路由漏加：所有非安全方法都要求会话 token；提供 Origin/Referer 时还必须同源或进入显式可信列表。
 - 旧前端混合使用 jQuery、fetch、原生 XHR 与 HTML form，因此单独只改 `$.ajax` 不足；`csrf.js` 对四种机制都注入同一 token。
 - 初次批量补丁因 `alert.js` 预期文本标记不完全匹配而中止；已改为分文件稳定标记和断言，不再重复脆弱的一次性替换。
+
+## CR-03 实盘订单状态机复核
+- 当前运行树同时存在多种互不兼容的“成功”定义：A 股用本地 tick 直接落账，Futu 固定等待 5 秒后查一次，Binance 直接返回 create_order，TQ 循环改单后只返回最后订单字段，IB worker 等待 isDone；都没有统一持久化状态与重启对账。
+- 仅删除启动器仍不够，因为 `Exchange.order()` 和各 provider 的撤单方法可以被外部脚本直接调用。
+- 在没有真实账户与沙箱环境时，凭空补一个表面状态枚举会制造更危险的伪安全。本轮采用能力下线：统一抛 `LiveTradingDisabledError`，并删除 live trader 和 IB 下单 worker。
+- 行情、账户只读接口、研究和回测不依赖实盘 order，因此保留；回测订单明确不等同于券商成交。
+- 首次 AST 批量替换把 CRLF 文件统一写成 LF，导致无意义大 diff；已全部恢复到 HEAD，并用保留原换行符的读写方式重新应用，最终 diff 仅包含真实改动。
