@@ -205,3 +205,10 @@
 - 修复：create_app 改用零副作用静态市场元数据，provider 只在实际请求时构造。
 - 专项测试：`tests/test_me05_lazy_web_startup.py`，3 passed。
 - 提交：`fix(ME-05): remove provider construction from app startup`。
+
+### 问题 20：MX-01
+- **状态：** complete（通过移除废弃能力）
+- **完成时间：** 2026-08-03
+- 修复：删除破裂钉钉配置/发送接口和死注释，保留飞书并补通道准入文档。
+- 专项测试：`tests/test_mx01_dingding_removed.py`，3 passed。
+- 提交：`fix(MX-01): remove broken DingTalk integration`。

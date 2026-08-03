@@ -115,7 +115,6 @@ def sync_code(code):
             print("执行 %s - %s 同步K线异常" % (code, f))
             print(traceback.format_exc())
             time.sleep(10)
-            # utils.send_dd_msg('a', '执行 %s 同步K线异常' % code)
 
     return True
 

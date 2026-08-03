@@ -1152,16 +1152,36 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（通过移除废弃能力）",
+      "problem_verified": true,
+      "problem_summary": "utils.py 的钉钉配置函数引用配置模板中不存在的 DINGDING_KEY_*，HK 分支又重复判断 market == 'a'，因此即使补配置也不可达。代码注释已说明旧 API 下架，全仓只有函数定义和两条注释掉的调用，当前实际消息通道是飞书。",
+      "fix_summary": "删除废弃的 config_get_dingding_keys/send_dd_msg、其专用加密/HTTP imports 和注释调用，避免继续暴露破裂配置契约。保留飞书接口；新增消息通道文档，规定任何新通道必须有类型化配置、显式启停、有限 HTTP timeout、状态校验、秘密脱敏与逐市场路由测试。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_mx01_dingding_removed.py`，3 项测试全部通过。",
+        "扫描 src/script/web，确认无 send_dd_msg、config_get_dingding_keys 或 DINGDING_KEY_*。",
+        "确认 send_fs_msg/config_get_feishu_keys 仍保留。",
+        "执行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（3 项专项测试通过；破裂钉钉配置与不可达 HK 分支已从运行树移除）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/utils.py",
+        "script/crontab/reboot_sync_gm_a_klines.py",
+        "script/crontab/reboot_sync_gm_futures_klines.py",
+        "docs/messaging-channels.md",
+        "tests/test_mx01_dingding_removed.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本条选择移除钉钉，不提供钉钉消息兼容层；外部私有脚本若曾调用该未声明接口，需要迁移飞书或自行实现受支持通道。",
+        "飞书 HTTP/SDK 可靠性与配置副作用在 NX-03、ME-22 中继续处理。"
+      ],
+      "commit_subject": "fix(MX-01): remove broken DingTalk integration"
     }
   },
   {

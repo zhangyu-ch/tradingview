@@ -143,7 +143,6 @@ def sync_code(code):
             print(traceback.format_exc())
             time.sleep(1)
             error_codes.append(code)
-            # utils.send_dd_msg('a', '执行 %s 同步K线异常' % code)
 
     return True
 

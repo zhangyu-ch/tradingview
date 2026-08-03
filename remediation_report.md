@@ -30,7 +30,7 @@
 |17|`ME-06`|中|File Upload|❌ 未修复|已完成|通过（4 项专项测试通过；共享文件、无界读取和上传边界根因已消除）|`fix(ME-06)`|
 |18|`ME-16`|中|Interactive Brokers|❌ 未修复|已完成|通过（4 项专项测试通过；所有 IB 客户端 RPC 均使用有限 deadline）|`fix(ME-16)`|
 |19|`ME-05`|中|Web Startup|❌ 未修复|已完成|通过（3 项专项测试通过；应用启动元数据不再实例化任何外部适配器）|`fix(ME-05)`|
-|20|`MX-01`|中|Configuration / Messaging|❌ 未修复|待处理|—|—|
+|20|`MX-01`|中|Configuration / Messaging|❌ 未修复|已完成（通过移除废弃能力）|通过（3 项专项测试通过；破裂钉钉配置与不可达 HK 分支已从运行树移除）|`fix(MX-01)`|
 |21|`MX-06`|中|Database / Operations|❌ 未修复|待处理|—|—|
 |22|`MX-02`|中|Exchange Factory|❌ 未修复|待处理|—|—|
 |23|`MX-04`|中|ExchangeDB / Scheduling|❌ 未修复|待处理|—|—|
@@ -510,16 +510,22 @@
 ### 20. MX-01 · 钉钉配置契约破裂且 HK 分支永不可达
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Configuration / Messaging
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通过移除废弃能力）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** utils.py 的钉钉配置函数引用配置模板中不存在的 DINGDING_KEY_*，HK 分支又重复判断 market == 'a'，因此即使补配置也不可达。代码注释已说明旧 API 下架，全仓只有函数定义和两条注释掉的调用，当前实际消息通道是飞书。
+- **b. 我是怎么修复的？** 删除废弃的 config_get_dingding_keys/send_dd_msg、其专用加密/HTTP imports 和注释调用，避免继续暴露破裂配置契约。保留飞书接口；新增消息通道文档，规定任何新通道必须有类型化配置、显式启停、有限 HTTP timeout、状态校验、秘密脱敏与逐市场路由测试。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_mx01_dingding_removed.py`，3 项测试全部通过。
+  - 扫描 src/script/web，确认无 send_dd_msg、config_get_dingding_keys 或 DINGDING_KEY_*。
+  - 确认 send_fs_msg/config_get_feishu_keys 仍保留。
+  - 执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（3 项专项测试通过；破裂钉钉配置与不可达 HK 分支已从运行树移除）
+- **提交：** fix(MX-01): remove broken DingTalk integration
+- **修改文件：** `src/tradingview_zy/utils.py`, `script/crontab/reboot_sync_gm_a_klines.py`, `script/crontab/reboot_sync_gm_futures_klines.py`, `docs/messaging-channels.md`, `tests/test_mx01_dingding_removed.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 本条选择移除钉钉，不提供钉钉消息兼容层；外部私有脚本若曾调用该未声明接口，需要迁移飞书或自行实现受支持通道。
+  - 飞书 HTTP/SDK 可靠性与配置副作用在 NX-03、ME-22 中继续处理。
 - **原报告最新结论：** 最新配置模板仍没有 DINGDING_KEY_*，utils.py 也未修改；配置契约和 HK 分支问题仍在。
 - **原报告建议：** 若已废弃钉钉，应删除接口和死配置分支；若继续支持，则把配置加入模板、改正 HK 判断、使用结构化配置对象并加入单元测试。
 
