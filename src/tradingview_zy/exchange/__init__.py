@@ -6,6 +6,24 @@ from tradingview_zy.exchange.exchange import Exchange
 g_exchange_obj = {}
 
 
+class UnsupportedProviderError(RuntimeError):
+    """Configured provider was intentionally removed from the runtime package."""
+
+
+_REMOVED_PROVIDERS = {
+    (Market.FUTURES, "ctp"): (
+        "CTP provider 已从运行包移除（CR-05）：原实现不满足行情、订单状态、"
+        "重连与资源释放契约。请选择 tq、tdx_futures 或 db。"
+    ),
+}
+
+
+def _reject_removed_provider(market: Market, provider: str) -> None:
+    message = _REMOVED_PROVIDERS.get((market, provider))
+    if message is not None:
+        raise UnsupportedProviderError(message)
+
+
 def get_exchange(market: Market) -> Exchange:
     """
     获取市场的交易所对象，根据config配置中设置的进行获取
@@ -57,7 +75,8 @@ def get_exchange(market: Market) -> Exchange:
             raise Exception(f"不支持的香港交易所 {config.EXCHANGE_HK}")
 
     elif market == Market.FUTURES:
-        # 期货 交易所
+        # 期货交易所；已移除的 provider 在任何惰性导入或缓存写入前 fail closed。
+        _reject_removed_provider(Market.FUTURES, config.EXCHANGE_FUTURES)
         if config.EXCHANGE_FUTURES == "tq":
             from tradingview_zy.exchange.exchange_tq import ExchangeTq
 

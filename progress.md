@@ -122,3 +122,11 @@
 - 专项测试：`tests/test_hi14_tq_lifecycle.py`，3 passed；compileall、危险模式 grep、diff 检查通过。
 - 环境限制：容器缺 `tzlocal`/`tqsdk`，未运行真实 TQ SDK 联调。
 - 提交：`fix(HI-14): make TQ worker lifecycle deterministic`。
+
+### 问题 10：CR-05
+- **状态：** complete（通过移除不支持能力）
+- **完成时间：** 2026-08-03
+- 验证结论：标准工厂未接入 CTP，但失效行情/交易实现、OpenCTP 依赖和配置声明仍在，外部可直接导入。
+- 修复：删除 CTP 运行时实现与依赖/配置；工厂在导入和缓存前明确拒绝 ctp；补不支持能力文档。
+- 专项测试：`tests/test_cr05_ctp_removed.py` + NEW-03 依赖契约，5 passed；依赖契约脚本通过。
+- 提交：`fix(CR-05): remove unsupported CTP runtime`。

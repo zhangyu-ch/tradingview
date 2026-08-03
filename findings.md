@@ -57,3 +57,9 @@
 - 参数化类上的 `@fun.singleton` 会忽略后续 `use_simulate_account` 参数，属于与线程问题耦合的实例隔离缺陷。
 - 修复采用独立 `ManagedWorker`：构造无副作用、首个订阅命令惰性启动、daemon + Event + join timeout；Queue/RLock/快照避免跨线程容器竞态，API 关闭集中化。
 - 真实导入烟雾测试先后被容器缺失 `tzlocal` 与 `tqsdk` 阻断；未继续伪造完整 SDK，因为专项测试已覆盖本地生命周期核心，真实 SDK 行为在报告中保留限制。
+
+## CR-05 CTP 能力边界复核
+- 本地标准工厂虽不选择 `ctp`，但运行包仍保留 `exchange_ctp.py` 与 `trader_ctp.py`；外部脚本可以直接导入，不能把“无标准入口”当作根因修复。
+- 静态复核确认 MarketCTP 缺少完整 Exchange 契约、历史 K 线为 pass、Tick 字段不兼容且时间调用错误；CTPTrader 有 4 组重复方法定义，后定义会覆盖前定义。
+- 项目仍把 `openctp-ctp` 作为直接依赖并暴露 CTP 配置项，这会继续向维护者传达“内置支持”的错误信号。
+- 本轮选择彻底移除不支持能力：删除运行时代码、依赖和配置声明；工厂为已移除 provider 提供明确 fail-closed 错误。历史 archive 文档保留作为历史证据，不是当前支持矩阵。

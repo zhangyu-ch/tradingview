@@ -20,7 +20,7 @@
 |7|`RV-08`|高|Web Security / Secrets|❌ 未修复|已完成（共享修复已复验）|通过（共享根因已修复，2 项独立防回归测试通过）|`test(RV-08)`|
 |8|`HI-13`|高|Binance|❌ 未修复|已完成|通过（5 项专项测试通过，合约/现货均使用严格分页器）|`fix(HI-13)`|
 |9|`HI-14`|高|TQ SDK|❌ 未修复|已完成|通过（3 项离线生命周期/源码契约测试通过；真实 TQ SDK 导入与联调受缺失依赖和账户环境阻断）|`fix(HI-14)`|
-|10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
+|10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（5 项专项/依赖回归测试通过；不安全的 CTP 能力已从运行包彻底移除并 fail closed）|`fix(CR-05)`|
 |11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
 |12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
 |13|`CR-03`|高|Live Trading|🟡 部分修复|待处理|—|—|
@@ -288,16 +288,23 @@
 ### 10. CR-05 · CTP 行情与交易代码存在多处确定性失效，但当前未接入标准工厂或内置启动脚本
 
 - **原始状态 / 严重度 / 领域：** 🛡️ 未完全修复（已阻断或缓解） / 高 / CTP
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通过移除不支持能力）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 本地工厂没有正常选择 CTP，但运行包仍包含可直接导入的 MarketCTP 与 CTPTrader。前者未实现完整 Exchange 抽象契约、构造的 Tick 字段与基础类型不匹配、历史 K 线为 pass、now_trading 调用错误；后者存在重复覆盖的方法和未经验证的订单路径。与此同时 pyproject/uv.lock 仍安装 OpenCTP，配置模板仍暴露 CTP 凭据和前置地址，形成‘看似支持、实际不可用’的危险能力。
+- **b. 我是怎么修复的？** 明确选择下线而非伪装修复：从运行包删除 exchange_ctp.py 与 trader_ctp.py；从 pyproject 和 uv.lock 移除 openctp-ctp；从配置模板移除 CTP 凭据/前置项；在交易所工厂建立 removed-provider 注册表，使 EXCHANGE_FUTURES='ctp' 在惰性导入与缓存写入前抛出 UnsupportedProviderError。新增不支持能力文档，明确恢复 CTP 必须作为经沙箱验收的新功能重新实现。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python3 -m pytest -q tests/test_cr05_ctp_removed.py tests/test_new03_dependency_contract.py`，5 项测试通过。
+  - 动态把 EXCHANGE_FUTURES 设置为 ctp，确认工厂抛出明确 UnsupportedProviderError，未导入 exchange_ctp 且未污染 g_exchange_obj。
+  - 静态确认两个 CTP 运行时文件已删除，src/script/web 不再包含 openctp_ctp、exchange_ctp 或 trader_ctp 引用。
+  - 解析 pyproject.toml 与 uv.lock，确认 OpenCTP 包、根依赖和 requires-dist 均已移除；依赖契约脚本通过。
+  - 运行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（5 项专项/依赖回归测试通过；不安全的 CTP 能力已从运行包彻底移除并 fail closed）
+- **提交：** fix(CR-05): remove unsupported CTP runtime
+- **修改文件：** `src/tradingview_zy/exchange/exchange_ctp.py（删除）`, `src/tradingview_zy/trader/trader_ctp.py（删除）`, `src/tradingview_zy/exchange/__init__.py`, `src/tradingview_zy/config.py.demo`, `pyproject.toml`, `uv.lock`, `docs/unsupported-providers.md`, `tests/test_cr05_ctp_removed.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 本次关闭方式是移除不支持能力，CTP 行情与实盘交易不再是内置功能；没有声称完成 OpenCTP 仿真或实盘验证。
+  - archive/ 下的历史架构文档保留原记录，不作为当前支持声明；当前状态以运行包、配置模板和 docs/unsupported-providers.md 为准。
 - **原报告最新结论：** CTP 行情/交易实现仍未达到可用状态，标准工厂继续 fail-closed，不会把未完成实现作为正常 provider 加载。底层文件仍保留。
 - **原报告建议：** 继续保持 fail-closed。恢复 CTP 前必须补齐抽象方法、Tick 契约、交易状态机、回报/重连/资源释放，并在仿真前置环境验证。
 
