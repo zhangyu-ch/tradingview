@@ -26,7 +26,7 @@
 |13|`CR-03`|高|Live Trading|🟡 部分修复|已完成（通过移除未验收实盘订单执行能力）|通过（13 项专项/相邻测试通过；所有内置实盘订单和撤单入口均明确 fail-closed）|`fix(CR-03)`|
 |14|`ME-24`|中|Environment|🔴 回归（重新出现）|已完成|通过（5 项专项测试通过；版本契约同源、失败退出码和状态汇总均正确）|`fix(ME-24)`|
 |15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归在本地不存在；4 项门禁测试防止未来重新过报）|`test(NEW-06)`|
-|16|`HI-01`|中|Futures Trader|❌ 未修复|待处理|—|—|
+|16|`HI-01`|中|Futures Trader|❌ 未修复|已完成（共享修复已复验）|通过（旧构造参数和错误落库类型所在模块已移除；7 项专项/共享门禁通过）|`test(HI-01)`|
 |17|`ME-06`|中|File Upload|❌ 未修复|待处理|—|—|
 |18|`ME-16`|中|Interactive Brokers|❌ 未修复|待处理|—|—|
 |19|`ME-05`|中|Web Startup|❌ 未修复|待处理|—|—|
@@ -422,16 +422,22 @@
 ### 16. HI-01 · TraderFutures 使用不存在的构造参数，实例化立即失败
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Futures Trader
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（共享修复已复验）
+- **问题是否存在：** 否
+- **a. 这个问题是什么？** HI-01 原本位于 TraderFutures：构造时传入 ExchangeTq 不存在的 use_account 参数，直接 TypeError；即使修正构造，平多落库又误用 open_long。CR-03 已将整套未验收 live trader 从运行包移除，因此本地当前不再存在或可达该错误类。
+- **b. 我是怎么修复的？** 沿用 CR-03 的安全下线，不重新引入一个仍无订单状态机的 TraderFutures。新增独立防回归测试，确认模块不存在、运行树没有 TraderFutures/trader_futures 引用，也没有 ExchangeTq(use_account=...) 旧构造模式；恢复期货实盘必须按 live-trading-disabled.md 作为新功能重新实现并验证。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_hi01_trader_futures_removed.py tests/test_cr03_live_trading_disabled.py`，7 项测试全部通过。
+  - 扫描 src/script/web，确认无 TraderFutures、trader_futures、ExchangeTq(use_account=...)。
+  - 确认 CR-03 的所有 Exchange.order 入口继续 fail-closed，恢复要求包含 client_order_id、部分成交与重启对账。
+  - 执行 git diff --check。
+- **e. 验证是否通过？** 通过（旧构造参数和错误落库类型所在模块已移除；7 项专项/共享门禁通过）
+- **提交：** test(HI-01): guard removed futures trader
+- **修改文件：** `tests/test_hi01_trader_futures_removed.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 本条通过移除未验收 TraderFutures 关闭，不代表 TQ 期货实盘交易已恢复。
+  - ExchangeTq 仍可用于行情和只读账户接口；其生命周期修复由 HI-14 覆盖。
 - **原报告最新结论：** TraderFutures 虽已传入 market，但仍调用 ExchangeTq(use_account=True)，而构造器参数是 use_simulate_account；直接实例化仍会 TypeError。
 - **原报告建议：** 统一构造参数与 order_type；若不支持该 trader，应从运行包删除并加不可达测试。
 

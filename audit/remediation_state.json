@@ -933,16 +933,31 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（共享修复已复验）",
+      "problem_verified": false,
+      "problem_summary": "HI-01 原本位于 TraderFutures：构造时传入 ExchangeTq 不存在的 use_account 参数，直接 TypeError；即使修正构造，平多落库又误用 open_long。CR-03 已将整套未验收 live trader 从运行包移除，因此本地当前不再存在或可达该错误类。",
+      "fix_summary": "沿用 CR-03 的安全下线，不重新引入一个仍无订单状态机的 TraderFutures。新增独立防回归测试，确认模块不存在、运行树没有 TraderFutures/trader_futures 引用，也没有 ExchangeTq(use_account=...) 旧构造模式；恢复期货实盘必须按 live-trading-disabled.md 作为新功能重新实现并验证。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_hi01_trader_futures_removed.py tests/test_cr03_live_trading_disabled.py`，7 项测试全部通过。",
+        "扫描 src/script/web，确认无 TraderFutures、trader_futures、ExchangeTq(use_account=...)。",
+        "确认 CR-03 的所有 Exchange.order 入口继续 fail-closed，恢复要求包含 client_order_id、部分成交与重启对账。",
+        "执行 git diff --check。"
+      ],
+      "verification_result": "通过（旧构造参数和错误落库类型所在模块已移除；7 项专项/共享门禁通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "tests/test_hi01_trader_futures_removed.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "本条通过移除未验收 TraderFutures 关闭，不代表 TQ 期货实盘交易已恢复。",
+        "ExchangeTq 仍可用于行情和只读账户接口；其生命周期修复由 HI-14 覆盖。"
+      ],
+      "commit_subject": "test(HI-01): guard removed futures trader"
     }
   },
   {

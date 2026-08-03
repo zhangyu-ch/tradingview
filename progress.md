@@ -176,3 +176,11 @@
 - 修复：新增能力边界文档和未来 registry 的 DB_CAPABILITIES AST 门禁。
 - 专项测试：`tests/test_new06_db_capability_guard.py`，4 passed。
 - 提交：`test(NEW-06): guard DB provider capability claims`。
+
+### 问题 16：HI-01
+- **状态：** complete（共享修复已复验）
+- **完成时间：** 2026-08-03
+- 验证结论：CR-03 后 TraderFutures 已不存在，旧 TypeError 与平多误记均不可达。
+- 修复：增加独立移除/危险构造防回归门禁。
+- 专项测试：HI-01 + CR-03 共 7 passed。
+- 提交：`test(HI-01): guard removed futures trader`。

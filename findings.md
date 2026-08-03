@@ -94,3 +94,8 @@
 - `ExchangeDB.all_stocks()`、`stock_owner_plate()`、`plate_stocks()` 确实仍为空/未实现，但这表示“无能力”，不是“已过报能力”。
 - 本条采用防回归处理：文档明确 DB 当前仅是 K 线/派生 tick 数据源；若以后加入 registry，测试会阻止 SECURITY_MASTER/PLATES 声明。
 - 证券目录实现与统一能力模型分别留给 NX-23、ME-10，避免在本条混入另一项架构工作。
+
+## HI-01 TraderFutures 复核
+- CR-03 已删除 `trader_futures.py`，因此 `ExchangeTq(use_account=True)` 的 TypeError 和平多写成 `open_long` 的错误均不再可达。
+- 仅记录“共享修复”还不够；新增独立扫描，防止未来从历史代码恢复 TraderFutures 时一起恢复旧构造和订单类型错误。
+- 本条不恢复 TQ 实盘；恢复必须先满足统一 Order/Fill 与重启对账准入。
