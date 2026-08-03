@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 6
-- **待处理：** 75
+- **已完成：** 7
+- **待处理：** 74
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -22,7 +22,7 @@
 |9|`HI-14`|高|TQ SDK|❌ 未修复|已完成|通过（3 项离线生命周期/源码契约测试通过；真实 TQ SDK 导入与联调受缺失依赖和账户环境阻断）|`fix(HI-14)`|
 |10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（5 项专项/依赖回归测试通过；不安全的 CTP 能力已从运行包彻底移除并 fail closed）|`fix(CR-05)`|
 |11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（3 项 CR-04 专项测试及相邻下线门禁均通过；危险 QMT 实盘适配器已从运行包移除）|`fix(CR-04)`|
-|12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
+|12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|已完成|通过（14 项可执行测试通过；所有写请求的统一 CSRF 边界和 GET 删除根因已消除）|`fix(HI-06)`|
 |13|`CR-03`|高|Live Trading|🟡 部分修复|待处理|—|—|
 |14|`ME-24`|中|Environment|🔴 回归（重新出现）|待处理|—|—|
 |15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|待处理|—|—|
@@ -333,16 +333,22 @@
 ### 12. HI-06 · 状态变更接口无 CSRF 防护，删除任务还使用 GET
 
 - **原始状态 / 严重度 / 领域：** 🛡️ 未完全修复（已阻断或缓解） / 高 / Web Security
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** Web 应用原先仅依赖登录 Cookie 和 SameSite=Lax，没有会话绑定的 CSRF token，也没有 Origin/Referer 校验；所有 POST 写接口都可在用户已登录时被跨站页面尝试调用。提醒任务删除更使用 GET，普通链接、浏览器预取或第三方页面即可触发状态变更。
+- **b. 我是怎么修复的？** 新增会话绑定、使用恒定时间比较的 CSRF token；所有非 GET/HEAD/OPTIONS/TRACE 请求统一由 Flask before_request 校验 token，并拒绝不合法或跨站 Origin/Referer。登录与登出轮换 token；登录表单显式携带隐藏 token；已认证页面输出 meta token，统一 JavaScript 适配 jQuery AJAX、fetch、XMLHttpRequest 和原生表单。将 /alert_del/<id> 及其前端调用从 GET 改为 POST，并提供可配置的严格可信 Origin 列表。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_hi06_csrf.py tests/test_web_security.py`：14 项通过，3 项因当前离线镜像缺 Flask/APScheduler/pinyin/tzlocal 而明确跳过。
+  - 专项测试覆盖安全方法、缺失/错误/旧 token、表单与请求头 token、同源与跨站 Origin/Referer、显式可信 Origin 和登录/登出 token 轮换。
+  - 静态契约检查确认 /alert_del/<id> 仅允许 POST，前端改用 POST，所有认证模板加载 CSRF meta/脚本，登录表单含隐藏字段，jQuery/fetch/XHR/原生表单均自动附加 token。
+  - 执行 `python -m compileall`、`git diff --check`，均通过。
+- **e. 验证是否通过？** 通过（14 项可执行测试通过；所有写请求的统一 CSRF 边界和 GET 删除根因已消除）
+- **提交：** fix(HI-06): enforce CSRF on state-changing requests
+- **修改文件：** `src/tradingview_zy/web_security.py`, `src/tradingview_zy/config.py.demo`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/static/js/csrf.js`, `web/tradingview_zy_chart/cl_app/static/js/alert.js`, `web/tradingview_zy_chart/cl_app/templates/dark.html`, `web/tradingview_zy_chart/cl_app/templates/login.html`, `tests/test_hi06_csrf.py`, `tests/test_web_security.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器缺少 Flask 及部分 Web 依赖，未运行真实浏览器端到端测试；浏览器覆盖由四种请求机制的静态契约测试和纯 CSRF 核心测试提供。
+  - 非浏览器客户端在持有有效会话 token 时允许省略 Origin/Referer；浏览器一旦提供任一来源头，非同源请求即拒绝。
 - **原报告最新结论：** 登录与 Cookie 已加强，但状态变更接口仍没有 CSRF token/Origin 校验，删除提醒任务继续使用 GET。
 - **原报告建议：** 引入 CSRF 中间件；所有写操作改 POST/DELETE；SameSite 只作纵深防御，不替代 token。
 

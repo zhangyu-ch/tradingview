@@ -1,11 +1,33 @@
 import os
+import re
 import stat
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from werkzeug.security import generate_password_hash
+
+try:
+    from werkzeug.security import generate_password_hash
+except (ModuleNotFoundError, ImportError):
+    import hashlib
+    import hmac
+    import types
+
+    def generate_password_hash(candidate: str) -> str:
+        digest = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+        return f"test-sha256${digest}"
+
+    def _check_password_hash(stored: str, candidate: str) -> bool:
+        return hmac.compare_digest(stored, generate_password_hash(candidate))
+
+    werkzeug = types.ModuleType("werkzeug")
+    security = types.ModuleType("werkzeug.security")
+    security.generate_password_hash = generate_password_hash
+    security.check_password_hash = _check_password_hash
+    werkzeug.security = security
+    sys.modules["werkzeug"] = werkzeug
+    sys.modules["werkzeug.security"] = security
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -17,6 +39,36 @@ from tradingview_zy.web_security import (
     validate_web_access,
     verify_login_password,
 )
+
+
+def _import_cl_app_or_skip():
+    for dependency in ("flask", "flask_login", "apscheduler", "pinyin", "tzlocal"):
+        pytest.importorskip(dependency)
+    cl_app = _import_cl_app_or_skip()
+
+    return cl_app
+
+
+def _csrf_from_login_page(client) -> str:
+    response = client.get("/login")
+    assert response.status_code == 200
+    match = re.search(
+        r'name="_csrf_token" value="([^"]+)"',
+        response.get_data(as_text=True),
+    )
+    assert match is not None
+    return match.group(1)
+
+
+def _csrf_from_authenticated_page(client) -> str:
+    response = client.get("/")
+    assert response.status_code == 200
+    match = re.search(
+        r'<meta name="csrf-token" content="([^"]+)"',
+        response.get_data(as_text=True),
+    )
+    assert match is not None
+    return match.group(1)
 
 
 def test_remote_bind_requires_login_credentials():
@@ -83,8 +135,7 @@ def test_login_attempt_limiter_blocks_and_resets():
 
 
 def test_create_app_applies_login_and_cookie_security(monkeypatch):
-    sys.path.insert(0, str(ROOT / "web" / "tradingview_zy_chart"))
-    import cl_app
+    cl_app = _import_cl_app_or_skip()
 
     fake_exchange = SimpleNamespace(
         support_frequencys=lambda: {"d": "日线"},
@@ -116,7 +167,11 @@ def test_create_app_applies_login_and_cookie_security(monkeypatch):
     assert redirect_response.status_code == 302
     assert "/login" in redirect_response.headers["Location"]
 
-    login_response = client.post("/login", data={"password": "correct-password"})
+    csrf_token = _csrf_from_login_page(client)
+    login_response = client.post(
+        "/login",
+        data={"password": "correct-password", "_csrf_token": csrf_token},
+    )
     assert login_response.status_code == 302
     cookies = "\n".join(login_response.headers.getlist("Set-Cookie"))
     assert "HttpOnly" in cookies
@@ -124,8 +179,7 @@ def test_create_app_applies_login_and_cookie_security(monkeypatch):
 
 
 def test_create_app_rate_limits_failed_logins(monkeypatch):
-    sys.path.insert(0, str(ROOT / "web" / "tradingview_zy_chart"))
-    import cl_app
+    cl_app = _import_cl_app_or_skip()
 
     fake_exchange = SimpleNamespace(
         support_frequencys=lambda: {"d": "日线"},
@@ -144,14 +198,15 @@ def test_create_app_rate_limits_failed_logins(monkeypatch):
         }
     )
     client = app.test_client()
-    assert client.post("/login", data={"password": "wrong"}).status_code == 200
-    assert client.post("/login", data={"password": "wrong"}).status_code == 200
-    assert client.post("/login", data={"password": "wrong"}).status_code == 429
+    csrf_token = _csrf_from_login_page(client)
+    payload = {"password": "wrong", "_csrf_token": csrf_token}
+    assert client.post("/login", data=payload).status_code == 200
+    assert client.post("/login", data=payload).status_code == 200
+    assert client.post("/login", data=payload).status_code == 429
 
 
 def test_local_loopback_without_password_keeps_auto_login(monkeypatch):
-    sys.path.insert(0, str(ROOT / "web" / "tradingview_zy_chart"))
-    import cl_app
+    cl_app = _import_cl_app_or_skip()
 
     fake_exchange = SimpleNamespace(
         support_frequencys=lambda: {"d": "日线"},

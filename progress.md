@@ -144,3 +144,11 @@
 - 修复：删除 QMT 实盘 trader，保留 QMT 行情；文档化恢复订单执行所需的状态机与沙箱门槛。
 - 专项测试：`tests/test_cr04_qmt_trader_removed.py` 与相邻移除门禁，6 passed。
 - 提交：`fix(CR-04): remove unsafe QMT live trader`。
+
+### 问题 12：HI-06
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：全部写请求缺少 CSRF token/来源校验，提醒删除仍使用 GET。
+- 修复：统一会话 CSRF token + 同源校验；登录/登出轮换；前端四种提交机制自动带 token；删除改 POST。
+- 专项测试：`tests/test_hi06_csrf.py` + `tests/test_web_security.py`，14 passed、3 skipped（离线镜像缺完整 Web 依赖）；compileall 与 diff 检查通过。
+- 提交：`fix(HI-06): enforce CSRF on state-changing requests`。

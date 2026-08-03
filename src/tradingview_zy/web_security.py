@@ -11,12 +11,88 @@ from collections import defaultdict, deque
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from werkzeug.security import check_password_hash
 
 SECRET_ENV = "TRADINGVIEW_ZY_WEB_SECRET_KEY"
 PASSWORD_ENV = "TRADINGVIEW_ZY_LOGIN_PASSWORD"
 PASSWORD_HASH_ENV = "TRADINGVIEW_ZY_LOGIN_PASSWORD_HASH"
+
+CSRF_SESSION_KEY = "_csrf_token"
+CSRF_HEADER = "X-CSRF-Token"
+CSRF_FORM_FIELD = "_csrf_token"
+SAFE_HTTP_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+
+
+def get_csrf_token(session_store: Any) -> str:
+    """Return a stable, session-bound CSRF token without logging or exposing secrets."""
+    token = session_store.get(CSRF_SESSION_KEY)
+    if not isinstance(token, str) or len(token) < 32:
+        token = secrets.token_urlsafe(32)
+        session_store[CSRF_SESSION_KEY] = token
+    return token
+
+
+def rotate_csrf_token(session_store: Any) -> str:
+    token = secrets.token_urlsafe(32)
+    session_store[CSRF_SESSION_KEY] = token
+    return token
+
+
+def _normalized_origin(value: str | None) -> str | None:
+    if not value or value == "null":
+        return None
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def validate_csrf_request(
+    request_obj: Any,
+    session_store: Any,
+    trusted_origins: tuple[str, ...] | list[str] | set[str] = (),
+) -> tuple[bool, str]:
+    """Validate token and same-origin evidence for every unsafe HTTP request."""
+    method = str(getattr(request_obj, "method", "GET")).upper()
+    if method in SAFE_HTTP_METHODS:
+        return True, "safe_method"
+
+    expected = get_csrf_token(session_store)
+    headers = getattr(request_obj, "headers", {})
+    submitted = headers.get(CSRF_HEADER, "")
+    if not submitted:
+        form = getattr(request_obj, "form", None)
+        if form is not None:
+            submitted = form.get(CSRF_FORM_FIELD, "")
+    if not isinstance(submitted, str) or not hmac.compare_digest(expected, submitted):
+        return False, "invalid_token"
+
+    request_origin = _normalized_origin(getattr(request_obj, "host_url", ""))
+    allowed = {request_origin} if request_origin else set()
+    allowed.update(
+        origin
+        for origin in (_normalized_origin(value) for value in trusted_origins)
+        if origin is not None
+    )
+
+    origin_header = headers.get("Origin")
+    referer_header = headers.get("Referer")
+    supplied_origin = None
+    if origin_header is not None:
+        supplied_origin = _normalized_origin(origin_header)
+        if supplied_origin is None:
+            return False, "invalid_origin"
+    elif referer_header is not None:
+        supplied_origin = _normalized_origin(referer_header)
+        if supplied_origin is None:
+            return False, "invalid_referer"
+
+    # Non-browser clients may omit Origin/Referer but still must present the session token.
+    if supplied_origin is not None and supplied_origin not in allowed:
+        return False, "cross_origin"
+    return True, "ok"
 
 
 def is_loopback_host(host: str) -> bool:

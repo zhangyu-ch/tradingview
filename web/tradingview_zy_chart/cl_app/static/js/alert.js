@@ -225,7 +225,7 @@ var Alert = (function () {
             click: function (menuData, othis) {
               if (menuData["id"] === "del") {
                 $.ajax({
-                  type: "GET",
+                  type: "POST",
                   url: "/alert_del/" + data.id,
                   dataType: "json",
                   success: function (res) {

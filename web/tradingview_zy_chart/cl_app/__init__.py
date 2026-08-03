@@ -24,7 +24,7 @@ from apscheduler.events import (
 )
 from apscheduler.executors.tornado import TornadoExecutor
 from apscheduler.schedulers.tornado import TornadoScheduler
-from flask import Flask, redirect, render_template, request, send_file
+from flask import Flask, redirect, render_template, request, send_file, session
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
 from tzlocal import get_localzone
 
@@ -50,9 +50,12 @@ from tradingview_zy.strategies.loader import (
 )
 from tradingview_zy.web_security import (
     LoginAttemptLimiter,
+    get_csrf_token,
     is_loopback_host,
     resolve_login_credentials,
     resolve_web_secret_key,
+    rotate_csrf_token,
+    validate_csrf_request,
     validate_web_access,
     verify_login_password,
 )
@@ -91,6 +94,17 @@ def create_app(test_config=None):
             "WEB_COOKIE_SECURE", getattr(config, "WEB_COOKIE_SECURE", False)
         )
     )
+    csrf_trusted_origins = security_overrides.get(
+        "WEB_CSRF_TRUSTED_ORIGINS",
+        getattr(config, "WEB_CSRF_TRUSTED_ORIGINS", ()),
+    )
+    if isinstance(csrf_trusted_origins, str):
+        csrf_trusted_origins = tuple(
+            value.strip() for value in csrf_trusted_origins.split(",") if value.strip()
+        )
+    else:
+        csrf_trusted_origins = tuple(csrf_trusted_origins or ())
+
     login_limiter = LoginAttemptLimiter(
         max_attempts=int(
             security_overrides.get(
@@ -359,6 +373,26 @@ def create_app(test_config=None):
     login_manager.init_app(app)
     login_manager.login_view = "login_opt"
 
+    @app.context_processor
+    def inject_csrf_token():
+        return {"csrf_token": lambda: get_csrf_token(session)}
+
+    @app.before_request
+    def protect_unsafe_requests():
+        valid, reason = validate_csrf_request(
+            request, session, trusted_origins=csrf_trusted_origins
+        )
+        if valid:
+            return None
+        app.logger.warning(
+            "CSRF request rejected endpoint=%s reason=%s", request.endpoint, reason
+        )
+        return {
+            "ok": False,
+            "error": "csrf_failed",
+            "msg": "请求安全校验失败，请刷新页面后重试",
+        }, 403
+
     class LoginUser(UserMixin):
         user_id = "tradingview_zy"
 
@@ -398,6 +432,7 @@ def create_app(test_config=None):
                     remember=remember_days > 0,
                     duration=datetime.timedelta(days=max(remember_days, 1)),
                 )
+                rotate_csrf_token(session)
                 return redirect("/")
 
             login_limiter.record_failure(remote_key)
@@ -409,6 +444,7 @@ def create_app(test_config=None):
     @login_required
     def logout_opt():
         logout_user()
+        rotate_csrf_token(session)
         return redirect("/login")
 
     @app.route("/")
@@ -1384,7 +1420,7 @@ def create_app(test_config=None):
         _alert_tasks.alert_save(alert_config)
         return {"ok": True}
 
-    @app.route("/alert_del/<id>")
+    @app.route("/alert_del/<id>", methods=["POST"])
     @login_required
     def alert_del(id):
         task_error = _guard_task(_alert_tasks)

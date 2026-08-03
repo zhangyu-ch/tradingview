@@ -671,16 +671,40 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "Web 应用原先仅依赖登录 Cookie 和 SameSite=Lax，没有会话绑定的 CSRF token，也没有 Origin/Referer 校验；所有 POST 写接口都可在用户已登录时被跨站页面尝试调用。提醒任务删除更使用 GET，普通链接、浏览器预取或第三方页面即可触发状态变更。",
+      "fix_summary": "新增会话绑定、使用恒定时间比较的 CSRF token；所有非 GET/HEAD/OPTIONS/TRACE 请求统一由 Flask before_request 校验 token，并拒绝不合法或跨站 Origin/Referer。登录与登出轮换 token；登录表单显式携带隐藏 token；已认证页面输出 meta token，统一 JavaScript 适配 jQuery AJAX、fetch、XMLHttpRequest 和原生表单。将 /alert_del/<id> 及其前端调用从 GET 改为 POST，并提供可配置的严格可信 Origin 列表。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_hi06_csrf.py tests/test_web_security.py`：14 项通过，3 项因当前离线镜像缺 Flask/APScheduler/pinyin/tzlocal 而明确跳过。",
+        "专项测试覆盖安全方法、缺失/错误/旧 token、表单与请求头 token、同源与跨站 Origin/Referer、显式可信 Origin 和登录/登出 token 轮换。",
+        "静态契约检查确认 /alert_del/<id> 仅允许 POST，前端改用 POST，所有认证模板加载 CSRF meta/脚本，登录表单含隐藏字段，jQuery/fetch/XHR/原生表单均自动附加 token。",
+        "执行 `python -m compileall`、`git diff --check`，均通过。"
+      ],
+      "verification_result": "通过（14 项可执行测试通过；所有写请求的统一 CSRF 边界和 GET 删除根因已消除）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/web_security.py",
+        "src/tradingview_zy/config.py.demo",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "web/tradingview_zy_chart/cl_app/static/js/csrf.js",
+        "web/tradingview_zy_chart/cl_app/static/js/alert.js",
+        "web/tradingview_zy_chart/cl_app/templates/dark.html",
+        "web/tradingview_zy_chart/cl_app/templates/login.html",
+        "tests/test_hi06_csrf.py",
+        "tests/test_web_security.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "当前容器缺少 Flask 及部分 Web 依赖，未运行真实浏览器端到端测试；浏览器覆盖由四种请求机制的静态契约测试和纯 CSRF 核心测试提供。",
+        "非浏览器客户端在持有有效会话 token 时允许省略 Origin/Referer；浏览器一旦提供任一来源头，非同源请求即拒绝。"
+      ],
+      "commit_subject": "fix(HI-06): enforce CSRF on state-changing requests"
     }
   },
   {
