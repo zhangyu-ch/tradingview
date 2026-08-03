@@ -198,3 +198,10 @@
 - 修复：统一有限 IB Redis RPC、明确 TimeoutError、响应键清理和 worker TTL。
 - 专项测试：`tests/test_me16_ib_rpc_timeout.py`，4 passed。
 - 提交：`fix(ME-16): bound IB Redis RPC waits`。
+
+### 问题 19：ME-05
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 修复：create_app 改用零副作用静态市场元数据，provider 只在实际请求时构造。
+- 专项测试：`tests/test_me05_lazy_web_startup.py`，3 passed。
+- 提交：`fix(ME-05): remove provider construction from app startup`。

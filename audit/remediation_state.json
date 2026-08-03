@@ -1095,16 +1095,33 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "create_app 在注册路由前为 8 个市场逐一调用 get_exchange().support_frequencys()/default_code()。任一可选 SDK 缺失、账号未配置、网络连接失败或构造器阻塞都会拖垮整个 Web 服务，即使用户只需要其他市场。",
+      "fix_summary": "新增零副作用 market_metadata 模块，集中提供 Web 展示所需的市场默认代码和保守周期集合；create_app 只读取该静态数据，不导入或构造任何 provider。具体 provider 继续在实际市场请求时惰性 get_exchange，使单个市场故障不会阻断应用创建。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_me05_lazy_web_startup.py`，3 项测试全部通过。",
+        "验证 8 个市场静态元数据完整且返回副本，模块不导入 exchange、SDK 或 get_exchange。",
+        "静态检查 create_app 的启动元数据区块不再调用 get_exchange。",
+        "执行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（3 项专项测试通过；应用启动元数据不再实例化任何外部适配器）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/market_metadata.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_me05_lazy_web_startup.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "静态周期集合是市场级保守元数据，不代表每个配置 provider 的全部独有周期；provider 级能力将在 ME-10/ME-03 中继续收敛。",
+        "当前离线镜像缺 Flask/APScheduler，未动态创建完整 app；启动调用图由源码契约测试验证。"
+      ],
+      "commit_subject": "fix(ME-05): remove provider construction from app startup"
     }
   },
   {

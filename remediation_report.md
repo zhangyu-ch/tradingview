@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 10
-- **待处理：** 71
+- **已完成：** 11
+- **待处理：** 70
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -29,7 +29,7 @@
 |16|`HI-01`|中|Futures Trader|❌ 未修复|已完成（共享修复已复验）|通过（旧构造参数和错误落库类型所在模块已移除；7 项专项/共享门禁通过）|`test(HI-01)`|
 |17|`ME-06`|中|File Upload|❌ 未修复|已完成|通过（4 项专项测试通过；共享文件、无界读取和上传边界根因已消除）|`fix(ME-06)`|
 |18|`ME-16`|中|Interactive Brokers|❌ 未修复|已完成|通过（4 项专项测试通过；所有 IB 客户端 RPC 均使用有限 deadline）|`fix(ME-16)`|
-|19|`ME-05`|中|Web Startup|❌ 未修复|待处理|—|—|
+|19|`ME-05`|中|Web Startup|❌ 未修复|已完成|通过（3 项专项测试通过；应用启动元数据不再实例化任何外部适配器）|`fix(ME-05)`|
 |20|`MX-01`|中|Configuration / Messaging|❌ 未修复|待处理|—|—|
 |21|`MX-06`|中|Database / Operations|❌ 未修复|待处理|—|—|
 |22|`MX-02`|中|Exchange Factory|❌ 未修复|待处理|—|—|
@@ -488,16 +488,22 @@
 ### 19. ME-05 · create_app 启动时 eager 实例化全部配置市场，单个可选适配器可拖垮整个服务
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web Startup
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** create_app 在注册路由前为 8 个市场逐一调用 get_exchange().support_frequencys()/default_code()。任一可选 SDK 缺失、账号未配置、网络连接失败或构造器阻塞都会拖垮整个 Web 服务，即使用户只需要其他市场。
+- **b. 我是怎么修复的？** 新增零副作用 market_metadata 模块，集中提供 Web 展示所需的市场默认代码和保守周期集合；create_app 只读取该静态数据，不导入或构造任何 provider。具体 provider 继续在实际市场请求时惰性 get_exchange，使单个市场故障不会阻断应用创建。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me05_lazy_web_startup.py`，3 项测试全部通过。
+  - 验证 8 个市场静态元数据完整且返回副本，模块不导入 exchange、SDK 或 get_exchange。
+  - 静态检查 create_app 的启动元数据区块不再调用 get_exchange。
+  - 执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（3 项专项测试通过；应用启动元数据不再实例化任何外部适配器）
+- **提交：** fix(ME-05): remove provider construction from app startup
+- **修改文件：** `src/tradingview_zy/market_metadata.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me05_lazy_web_startup.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 静态周期集合是市场级保守元数据，不代表每个配置 provider 的全部独有周期；provider 级能力将在 ME-10/ME-03 中继续收敛。
+  - 当前离线镜像缺 Flask/APScheduler，未动态创建完整 app；启动调用图由源码契约测试验证。
 - **原报告最新结论：** create_app() 启动阶段仍对全部市场调用 get_exchange().support_frequencys()/default_code()，单个可选 provider 失败仍可阻断整个 Web 服务。
 - **原报告建议：** 注册表提供静态元数据；provider 按请求惰性实例化；可选市场失败降级为该市场不可用。
 

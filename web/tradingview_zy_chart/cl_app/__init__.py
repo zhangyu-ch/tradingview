@@ -36,6 +36,7 @@ from tradingview_zy.db import db
 from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.footprint import SUB_FREQUENCY_MAP, TTLCache, aggregate_footprint
+from tradingview_zy.market_metadata import market_default_codes, market_frequencies
 from tradingview_zy.web_payloads import (
     datetime_to_timestamp_seconds,
     filter_klines_by_timestamp_range,
@@ -216,31 +217,9 @@ def create_app(test_config=None):
 
     resolution_maps = dict(zip(frequency_maps.values(), frequency_maps.keys()))
 
-    # 各个市场支持的时间周期
-    market_frequencys = {
-        "a": list(get_exchange(Market.A).support_frequencys().keys()),
-        "hk": list(get_exchange(Market.HK).support_frequencys().keys()),
-        "fx": list(get_exchange(Market.FX).support_frequencys().keys()),
-        "us": list(get_exchange(Market.US).support_frequencys().keys()),
-        "futures": list(get_exchange(Market.FUTURES).support_frequencys().keys()),
-        "ny_futures": list(get_exchange(Market.NY_FUTURES).support_frequencys().keys()),
-        "currency": list(get_exchange(Market.CURRENCY).support_frequencys().keys()),
-        "currency_spot": list(
-            get_exchange(Market.CURRENCY_SPOT).support_frequencys().keys()
-        ),
-    }
-
-    # 各个交易所默认的标的
-    market_default_codes = {
-        "a": get_exchange(Market.A).default_code(),
-        "hk": get_exchange(Market.HK).default_code(),
-        "fx": get_exchange(Market.FX).default_code(),
-        "us": get_exchange(Market.US).default_code(),
-        "futures": get_exchange(Market.FUTURES).default_code(),
-        "ny_futures": get_exchange(Market.NY_FUTURES).default_code(),
-        "currency": get_exchange(Market.CURRENCY).default_code(),
-        "currency_spot": get_exchange(Market.CURRENCY_SPOT).default_code(),
-    }
+    # Web 元数据来自无副作用静态注册表；provider 仅在具体请求时惰性构造。
+    market_frequencys = market_frequencies()
+    market_default_codes = market_default_codes()
 
     # 各个市场的交易时间
     market_session = {

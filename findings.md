@@ -109,3 +109,8 @@
 - `BRPOP timeout=0` 是永久等待；worker 停止后调用线程没有任何返回路径。
 - IB 请求已经有唯一 UUID 响应键，可直接作为 correlation ID；统一 RPC 同时负责有限 timeout、序列化、解码和 finally 清理。
 - 客户端清理无法删除“超时后才被 worker 创建”的键，因此 worker 在 lpush 后补 120 秒 expire，限制迟到响应残留。
+
+## ME-05 Web 启动复核
+- create_app 原先为全部市场同步构造 provider，仅为读取周期和默认代码；这把外部网络/SDK副作用放进了应用工厂。
+- Web 展示元数据可以静态描述，不需要实例化 provider；实际行情请求仍按市场惰性构造。
+- 新元数据模块不导入 exchange 或第三方 SDK，避免测试创建 app 时启动网络与线程。
