@@ -233,3 +233,10 @@
 - 修复：删除 ZB 适配器/配置密钥/支持声明；旧配置在导入和缓存前 fail-closed；补不支持 provider 文档。
 - 专项测试：`tests/test_mx02_zb_removed.py` 与相邻 provider 下线测试共 7 passed。
 - 提交：`fix(MX-02): remove unsupported ZB provider`。
+
+### 问题 23：MX-04
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 修复：ExchangeDB.now_trading 改为严格 `bool` 并明确返回 False，消除 Python/JSON/前端三态分叉。
+- 专项测试：`tests/test_mx04_exchange_db_trading_state.py`，3 passed；隔离动态调用、AST、compileall 通过。
+- 提交：`fix(MX-04): make DB trading state explicit`。

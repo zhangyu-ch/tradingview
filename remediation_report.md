@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 12
-- **待处理：** 69
+- **已完成：** 23
+- **待处理：** 58
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -33,7 +33,7 @@
 |20|`MX-01`|中|Configuration / Messaging|❌ 未修复|已完成（通过移除废弃能力）|通过（3 项专项测试通过；破裂钉钉配置与不可达 HK 分支已从运行树移除）|`fix(MX-01)`|
 |21|`MX-06`|中|Database / Operations|❌ 未修复|已完成|通过（3 项专项测试通过；直接执行文件不再触发测试业务写入）|`fix(MX-06)`|
 |22|`MX-02`|中|Exchange Factory|❌ 未修复|已完成（通过移除不支持能力）|通过（4 项 MX-02 专项测试及 3 项相邻 provider 下线测试通过；支持声明与可选工厂已一致）|`fix(MX-02)`|
-|23|`MX-04`|中|ExchangeDB / Scheduling|❌ 未修复|待处理|—|—|
+|23|`MX-04`|中|ExchangeDB / Scheduling|❌ 未修复|已完成|通过（3 项专项测试通过；DB provider 不再暴露 None/null 三态）|`fix(MX-04)`|
 |24|`MX-05`|中|Frontend|❌ 未修复|待处理|—|—|
 |25|`MX-17`|中|TDX / Performance|❌ 未修复|待处理|—|—|
 |26|`NX-08`|中|Backtesting Model|❌ 未修复|待处理|—|—|
@@ -575,16 +575,22 @@
 ### 23. MX-04 · ExchangeDB.now_trading 返回 None，Python 与前端调用方对三态结果解释不一致
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / ExchangeDB / Scheduling
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** ExchangeDB.now_trading() 只有 pass，实际返回 None。Python 监控与 history 路由用 `is False`，会把 None 当成继续运行；前端把 JSON null 通过 `!== true` 当成停止，形成同一 provider 的相反三态语义。
+- **b. 我是怎么修复的？** 把 ExchangeDB.now_trading() 改为带 bool 返回标注的明确 fail-closed `False`。DB provider 能读取存储行情，但没有权威交易所日历或实时 session feed，因此不得把未知状态伪装为正在交易；Python 调度、history 和前端现在都得到一致布尔语义。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_mx04_exchange_db_trading_state.py`，3 项测试全部通过。
+  - AST 验证 now_trading 具有 `-> bool`、唯一 `return False`，且无 pass/None 返回。
+  - 隔离编译并动态调用实际方法节点，确认结果严格为 `False` 且 `type(result) is bool`。
+  - 静态核对 alert/history/前端调用方均以 false/非 true 停止，执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（3 项专项测试通过；DB provider 不再暴露 None/null 三态）
+- **提交：** fix(MX-04): make DB trading state explicit
+- **修改文件：** `src/tradingview_zy/exchange/exchange_db.py`, `tests/test_mx04_exchange_db_trading_state.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 返回 False 是保守的未知状态策略，不等同于实现完整交易所日历；各市场节假日、午休、夜盘与 DST 由 ME-30 后续处理。
+  - DB provider 仍可随时读取历史 K 线；本变更只影响是否触发近实时轮询/监控。
 - **原报告最新结论：** ExchangeDB.now_trading() 仍为 pass，返回 None；Python 与前端对 None/null 的解释仍不统一。
 - **原报告建议：** 返回严格 bool 或显式 UnsupportedCapabilityError；调用方不得把 None 当作交易中。
 

@@ -90,7 +90,9 @@ def parse_report(path: Path) -> list[dict[str, Any]]:
 
 
 def render_markdown(ledger: list[dict[str, Any]], source_path: str) -> str:
-    completed = sum(1 for item in ledger if item["remediation"]["status"] == "已完成")
+    completed = sum(
+        1 for item in ledger if item["remediation"]["status"].startswith("已完成")
+    )
     lines = [
         "# TradingView 当前开放问题逐条修复记录",
         "",

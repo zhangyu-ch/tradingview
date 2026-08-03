@@ -128,3 +128,8 @@
 - 配置模板把 `zb` 列为可选 provider，但标准工厂没有分支；这不是“实现已注册但失败”，而是支持声明与运行契约直接矛盾。
 - 孤立 `ExchangeZB` 可被外部直接导入，并关闭 TLS 证书校验；仅从注释删掉 `zb` 仍会留下危险半成品。
 - 本轮采用完整下线：删除适配器和密钥模板，旧配置在任何导入/缓存前明确失败；这也为后续 NX-25 提供共享根因修复。
+
+## MX-04 DB trading state 复核
+- `None` 在 Python 的 `is False` 分支中会继续执行，在 JSON/JavaScript 的 `!== true` 分支中会停止，不能作为隐式“未知”状态跨语言传递。
+- DB provider 没有权威交易日历或实时 session feed；在尚未实现统一 calendar 前，明确 `False` 比把未知当开市更安全。
+- 历史 K 线读取不依赖 now_trading；本变更只让近实时 history 限流、监控和自选轮询统一 fail-closed。

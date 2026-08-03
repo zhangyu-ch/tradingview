@@ -277,8 +277,15 @@ class ExchangeDB(Exchange):
     def all_stocks(self):
         return []
 
-    def now_trading(self):
-        pass
+    def now_trading(self) -> bool:
+        """Return an explicit fail-closed live-market state.
+
+        A database-backed provider can serve stored bars and derived ticks, but it has no
+        authoritative exchange calendar or live session feed.  Returning ``False`` keeps
+        Python schedulers and the Web JSON contract aligned instead of exposing ``None``
+        as an ambiguous third state.
+        """
+        return False
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         ticks = {}
