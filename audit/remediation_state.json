@@ -2132,16 +2132,36 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "`ExchangeBaostock.all_stocks()` 把证券目录日期固定为 2022-04-18，进程运行多年也不会刷新；分钟 K 线请求没有包含 BaoStock 的 `time` 字段，而是从每天 09:30 起按返回行序人工递增并跳过午休，因此缺 bar、停牌、乱序或不完整响应会让后续时间整体漂移；会话失效错误又通过递归再次调用 `self.klines()`，没有次数、退避或总重试预算。",
+      "fix_summary": "新增独立 BaoStock 可靠性模块：校验登录结果；外部查询统一使用最多 3 次、指数退避和 8 秒总重试预算；非认证协议错误立即明确失败。证券目录先查询最近 20 天交易日历，从最新交易日开始，在数据尚未发布时有限回看更早交易日，并按上海市场自然日缓存来源版本，不再使用固定历史日期。分钟查询改为请求官方 `date,time,...` 字段，严格解析 `YYYYMMDDHHMMSSsss`（兼容 14 位秒精度）、校验 date/time 同日，并直接使用源时间；删除全部按行序重建时间和递归重登录。日/周/月线继续以 15:00 表示收盘时刻。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前直接读取实际适配器，确认固定 `day = 2022-04-18`、分钟请求字段缺少 `time`、内部 `append_time` 按行递增，以及认证错误分支 `return self.klines(...)` 三个根因均存在。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_me11_baostock_reliability.py tests/test_nx20_tdx_bounded_retry.py tests/test_remediation_report_counts.py`，11 项专项、相邻有界重试和报告测试全部通过。",
+        "使用 fake BaoStock 结果对象动态执行真实 `ExchangeBaostock`：09:35 与 10:05 两条不连续 5 分钟 bar 保持原始时间与 Asia/Shanghai 时区，未被重建为连续序列。",
+        "故障注入持续返回会话失效，确认查询严格停在 3 次、重登录 2 次且不超过总 deadline；非认证错误只调用一次并立即抛出明确协议错误。",
+        "模拟交易日历 2026-08-03 最新目录尚未发布、2026-07-31 可用，确认按 08-03→07-31 有限回退、过滤指数，并在同一市场日第二次调用零外部查询。",
+        "AST 门禁确认分钟字段包含 `time`、固定 2022 日期消失且 `klines` 内不存在递归自调用；执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。"
+      ],
+      "verification_result": "通过（11 项专项与相邻测试通过；目录日期、源分钟时间和有限重登录三项根因均关闭）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/exchange/baostock_reliability.py",
+        "src/tradingview_zy/exchange/exchange_baostock.py",
+        "tests/test_me11_baostock_reliability.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "当前容器没有安装项目锁定的 baostock 0.8.9，也未连接 BaoStock 在线服务；SDK 协议、字段、交易日回退和错误码通过与实际接口形状一致的 fake result 动态验证，真实网络联调仍需可联网环境。",
+        "BaoStock SDK 不接受每次调用的 timeout，Python 无法安全中断已经阻塞在第三方 SDK 内的一次调用；本修复保证重试次数、退避和重试总预算有界，但单次底层 socket 是否按 SDK 自身超时返回仍取决于供应商实现。"
+      ],
+      "commit_subject": "fix(ME-11): use BaoStock source timestamps and bounded retries"
     }
   },
   {

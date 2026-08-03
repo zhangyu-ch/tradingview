@@ -1,8 +1,23 @@
 from typing import Union
+
 import baostock as bs
 from tradingview_zy import fun
+from tradingview_zy.exchange.baostock_reliability import (
+    BaostockQueryError,
+    BaostockUnavailableError,
+    call_baostock_query,
+    parse_baostock_datetime,
+    recent_weekdays,
+    require_successful_login,
+)
 
 from tradingview_zy.exchange.exchange import *
+
+
+def market_date(tz) -> datetime.date:
+    """Return the current market-local date; split out for deterministic tests."""
+
+    return datetime.datetime.now(tz).date()
 
 
 @fun.singleton
@@ -12,13 +27,87 @@ class ExchangeBaostock(Exchange):
     使用 baostock API 实现 : http://baostock.com/baostock/index.php/%E9%A6%96%E9%A1%B5
     """
 
-    g_all_stocks = []
+    QUERY_MAX_ATTEMPTS = 3
+    QUERY_DEADLINE_SECONDS = 8.0
+    CATALOG_LOOKBACK_DAYS = 20
 
     def __init__(self):
-        bs.login()
+        require_successful_login(bs.login())
 
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
+        self.g_all_stocks: list[dict] = []
+        self._catalog_checked_on: datetime.date | None = None
+        self._catalog_source_day: datetime.date | None = None
+
+    def _query(self, query, *, operation: str):
+        return call_baostock_query(
+            query,
+            bs.login,
+            operation=operation,
+            max_attempts=self.QUERY_MAX_ATTEMPTS,
+            deadline_seconds=self.QUERY_DEADLINE_SECONDS,
+        )
+
+    @staticmethod
+    def _result_rows(result) -> list[list[str]]:
+        rows: list[list[str]] = []
+        while result.error_code == "0" and result.next():
+            rows.append(result.get_row_data())
+        return rows
+
+    def _catalog_days(self, as_of: datetime.date) -> list[datetime.date]:
+        """Get newest trading days, with a finite weekday fallback."""
+
+        start = as_of - datetime.timedelta(days=self.CATALOG_LOOKBACK_DAYS)
+        try:
+            result = self._query(
+                lambda: bs.query_trade_dates(
+                    start_date=start.isoformat(), end_date=as_of.isoformat()
+                ),
+                operation="query_trade_dates",
+            )
+            fields = [str(field) for field in result.fields]
+            date_index = fields.index("calendar_date") if "calendar_date" in fields else 0
+            trading_index = (
+                fields.index("is_trading_day") if "is_trading_day" in fields else 1
+            )
+            days: set[datetime.date] = set()
+            for row in self._result_rows(result):
+                if len(row) <= max(date_index, trading_index):
+                    continue
+                if str(row[trading_index]).strip() != "1":
+                    continue
+                try:
+                    candidate = datetime.date.fromisoformat(str(row[date_index]).strip())
+                except ValueError:
+                    continue
+                if candidate <= as_of:
+                    days.add(candidate)
+            if days:
+                return sorted(days, reverse=True)
+        except (AttributeError, BaostockQueryError):
+            # Older SDKs or a temporarily unavailable calendar endpoint still get
+            # a finite, auditable fallback instead of a fixed historical date.
+            pass
+
+        return recent_weekdays(as_of, lookback_days=self.CATALOG_LOOKBACK_DAYS)
+
+    @staticmethod
+    def _catalog_rows_to_stocks(result) -> list[dict]:
+        fields = [str(field) for field in result.fields]
+        code_index = fields.index("code") if "code" in fields else 0
+        name_index = fields.index("code_name") if "code_name" in fields else 2
+        stocks: list[dict] = []
+        for row in ExchangeBaostock._result_rows(result):
+            if len(row) <= max(code_index, name_index):
+                continue
+            code = str(row[code_index]).strip()
+            name = str(row[name_index]).strip()
+            if not code or code[:6] in ["sz.399", "sh.000"]:
+                continue
+            stocks.append({"code": code, "name": name or code})
+        return stocks
 
     def default_code(self):
         return "SH.000001"
@@ -36,32 +125,39 @@ class ExchangeBaostock(Exchange):
 
     def all_stocks(self):
         """
-        获取支持的所有股票列表
-        :return:
+        获取支持的所有股票列表。
+
+        目录按上海市场自然日每日刷新；先查询最近交易日，再在数据尚未
+        发布时有限回看更早交易日。成功目录带来源日期缓存，不再永久固定
+        在某个历史日期。
         """
-        if len(self.g_all_stocks) > 0:
-            return self.g_all_stocks
+        today = market_date(self.tz)
+        if self._catalog_checked_on == today and self.g_all_stocks:
+            return list(self.g_all_stocks)
 
-        # TODO 节假日兼容
-        day = "2022-04-18"
-
-        rs = bs.query_all_stock(day=day)
-        __all_stocks = []
-        while (rs.error_code == "0") & rs.next():
-            # 获取一条记录，将记录合并在一起
-            row = rs.get_row_data()
-            if row[0][:6] in ["sz.399", "sh.000"]:
+        for day in self._catalog_days(today):
+            result = self._query(
+                lambda day=day: bs.query_all_stock(day=day.isoformat()),
+                operation=f"query_all_stock[{day.isoformat()}]",
+            )
+            stocks = self._catalog_rows_to_stocks(result)
+            if not stocks:
                 continue
-            __all_stocks.append({"code": row[0], "name": row[2]})
-        self.g_all_stocks = __all_stocks
-        return self.g_all_stocks
+            self.g_all_stocks = stocks
+            self._catalog_checked_on = today
+            self._catalog_source_day = day
+            return list(self.g_all_stocks)
+
+        raise BaostockUnavailableError(
+            "BaoStock did not return a stock catalog within the bounded lookback"
+        )
 
     def now_trading(self):
         """
         返回当前是否是交易时间
         周一至周五，09:30-11:30 13:00-15:00
         """
-        now_dt = datetime.datetime.now()
+        now_dt = datetime.datetime.now(self.tz)
         if now_dt.weekday() in [5, 6]:  # 周六日不交易
             return False
         hour = now_dt.hour
@@ -81,7 +177,7 @@ class ExchangeBaostock(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> [pd.DataFrame, None]:
+    ) -> Union[pd.DataFrame, None]:
         """
         获取 Kline 线
         :param code:
@@ -91,10 +187,8 @@ class ExchangeBaostock(Exchange):
         :param args:
         :return:
         """
-        if args is None:
-            args = {}
-        if "fq" not in args.keys():
-            args["fq"] = "qfq"
+        args = dict(args or {})
+        args.setdefault("fq", "qfq")
 
         fq_map = {"qfq": "2", "hfq": "1"}
         frequency_map = {
@@ -116,91 +210,75 @@ class ExchangeBaostock(Exchange):
             "5m": 20,
         }
         if frequency not in frequency_map:
-            raise Exception("不支持的周期 : " + frequency)
+            raise ValueError("不支持的周期 : " + frequency)
+        if args["fq"] not in fq_map:
+            raise ValueError("不支持的复权方式 : " + str(args["fq"]))
 
-        #### 获取沪深A股历史K线数据 ####
-        # 详细指标参数，参见“历史行情指标参数”章节；“分钟线”参数与“日线”参数不同。
-        # 分钟线指标：date,time,code,open,high,low,close,volume,amount,adjustflag
-        # 周月线指标：date,code,open,high,low,close,volume,amount,adjustflag,turn,pctChg
+        minute_frequency = frequency in {"60m", "30m", "15m", "5m"}
+        fields = (
+            "date,time,code,open,high,low,close,volume"
+            if minute_frequency
+            else "date,code,open,high,low,close,volume"
+        )
+
         if start_date is None:
-            start_date = datetime.datetime.now() - datetime.timedelta(
+            start = market_date(self.tz) - datetime.timedelta(
                 days=default_start_day_map[frequency]
             )
-            start_date = start_date.strftime("%Y-%m-%d")
+            start_date = start.isoformat()
 
-        rs = bs.query_history_k_data_plus(
-            code,
-            "code,date,open,low,high,close,volume",
-            start_date=start_date,
-            end_date=end_date,
-            frequency=frequency_map[frequency],
-            adjustflag=fq_map[args["fq"]],
-        )
-        if rs.error_code in ["10001001", "10002007"]:
-            bs.login()
-            return self.klines(code, frequency, start_date, end_date, args)
-        if rs.error_code != "0":
-            print("query_history_k_data_plus respond error_code:" + rs.error_code)
-            print("query_history_k_data_plus respond  error_msg:" + rs.error_msg)
+        try:
+            result = self._query(
+                lambda: bs.query_history_k_data_plus(
+                    code,
+                    fields,
+                    start_date=start_date,
+                    end_date=end_date,
+                    frequency=frequency_map[frequency],
+                    adjustflag=fq_map[args["fq"]],
+                ),
+                operation=f"query_history_k_data_plus[{code},{frequency}]",
+            )
+        except BaostockQueryError as exc:
+            print(str(exc))
             return None
 
-        data_list = []
-        while (rs.error_code == "0") & rs.next():
-            # 获取一条记录，将记录合并在一起
-            data_list.append(rs.get_row_data())
-        kline = pd.DataFrame(data_list, columns=rs.fields)
-        kline["date"] = pd.to_datetime(kline["date"])
-        kline["date"] = kline["date"].apply(self.__convert_date)
-        kline["open"] = pd.to_numeric(kline["open"])
-        kline["close"] = pd.to_numeric(kline["close"])
-        kline["high"] = pd.to_numeric(kline["high"])
-        kline["low"] = pd.to_numeric(kline["low"])
-        kline["volume"] = pd.to_numeric(kline["volume"])
-        kline.fillna(0, inplace=True)
+        rows = self._result_rows(result)
+        if not rows:
+            return pd.DataFrame(
+                {
+                    "code": pd.Series(dtype="object"),
+                    "date": pd.Series(pd.DatetimeIndex([], tz=self.tz)),
+                    "open": pd.Series(dtype="float64"),
+                    "close": pd.Series(dtype="float64"),
+                    "high": pd.Series(dtype="float64"),
+                    "low": pd.Series(dtype="float64"),
+                    "volume": pd.Series(dtype="float64"),
+                }
+            )
 
-        if frequency in ["60m", "30m", "15m", "5m", "1m"]:
-            dates = kline["date"].unique()
-            new_kline = pd.DataFrame()
-            for d in dates:
-                dk = kline[kline["date"] == d]
-                self.__run_date = None
+        kline = pd.DataFrame(rows, columns=result.fields)
+        if minute_frequency and "time" not in kline.columns:
+            raise ValueError("BaoStock minute response is missing the time field")
 
-                def append_time(_d: datetime.datetime) -> datetime.datetime:
-                    if self.__run_date is None:
-                        self.__run_date = datetime.datetime.strptime(
-                            _d.strftime("%Y-%m-%d") + " 09:30:00", "%Y-%m-%d %H:%M:%S"
-                        )
-                        self.__run_date = self.__run_date + datetime.timedelta(
-                            minutes=int(frequency_map[frequency])
-                        )
-                    else:
-                        self.__run_date = self.__run_date + datetime.timedelta(
-                            minutes=int(frequency_map[frequency])
-                        )
-                        if (
-                            self.__run_date.hour == 11 and self.__run_date.minute > 30
-                        ) or (self.__run_date.hour == 12):
-                            self.__run_date = datetime.datetime.strptime(
-                                _d.strftime("%Y-%m-%d") + " 13:00:00",
-                                "%Y-%m-%d %H:%M:%S",
-                            )
-                            self.__run_date = self.__run_date + datetime.timedelta(
-                                minutes=int(frequency_map[frequency])
-                            )
-                    return self.__run_date
+        if minute_frequency:
+            parsed_dates = [
+                parse_baostock_datetime(date_value, time_value)
+                for date_value, time_value in zip(kline["date"], kline["time"])
+            ]
+        else:
+            parsed_dates = [
+                parse_baostock_datetime(date_value) for date_value in kline["date"]
+            ]
+        kline["date"] = pd.Series(
+            pd.DatetimeIndex(parsed_dates).tz_localize(self.tz), index=kline.index
+        )
 
-                dk.loc[:, "date"] = dk["date"].apply(append_time)
-                new_kline = pd.concat([new_kline, dk], ignore_index=True)
-            kline = new_kline.sort_values("date")
+        for field in ["open", "close", "high", "low", "volume"]:
+            kline[field] = pd.to_numeric(kline[field], errors="coerce").fillna(0)
 
-        kline.loc[:, "date"] = kline["date"].dt.tz_localize(self.tz)
+        kline = kline.sort_values("date", kind="stable").reset_index(drop=True)
         return kline[["code", "date", "open", "close", "high", "low", "volume"]]
-
-    @staticmethod
-    def __convert_date(dt: datetime.datetime):
-        if dt.hour == 0 and dt.minute == 0 and dt.second == 0:
-            return dt.replace(hour=15, minute=0)
-        return dt
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         """
@@ -216,13 +294,16 @@ class ExchangeBaostock(Exchange):
         :param code:
         :return:
         """
-        rs = bs.query_stock_basic(code=code)
-        data_list = []
-        while (rs.error_code == "0") & rs.next():
-            # 获取一条记录，将记录合并在一起
-            data_list.append(rs.get_row_data())
-        if data_list:
-            return {"code": data_list[0][0], "name": data_list[0][1]}
+        try:
+            result = self._query(
+                lambda: bs.query_stock_basic(code=code),
+                operation=f"query_stock_basic[{code}]",
+            )
+        except BaostockQueryError:
+            return None
+        rows = self._result_rows(result)
+        if rows:
+            return {"code": rows[0][0], "name": rows[0][1]}
         return None
 
     def stock_owner_plate(self, code: str):

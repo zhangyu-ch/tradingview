@@ -357,3 +357,12 @@
 - 修复：扩展共享 parser；8 个入口统一校验文本、market:code、周期、严格布尔、整数和时间区间；UDF 返回稳定 error，普通接口返回 422。
 - 专项与相邻测试：77 passed；Web 主文件保持 CRLF，payload 时区契约未回归。
 - 提交：`fix(RV-07): validate TradingView UDF request parameters`。
+
+### 问题 38：ME-11
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：证券目录固定 2022-04-18、分钟 bar 按行序造时间、认证错误递归调用 `klines`，三项问题均存在。
+- 修复：最近交易日历+有限数据发布回退+按市场日缓存；分钟请求直接读取并严格解析源 `time`；所有 BaoStock 查询采用最多 3 次、指数退避和总预算的有限重登录循环。
+- 专项、相邻及报告测试：11 passed；fake SDK 动态执行真实 provider，验证时间缺口、毫秒、目录回退、缓存、认证耗尽与非认证错误。
+- 当前容器没有 baostock 0.8.9 和在线服务；真实网络联调限制已记录，单次 SDK 内部阻塞也无法由调用方强制取消。
+- 提交：`fix(ME-11): use BaoStock source timestamps and bounded retries`。

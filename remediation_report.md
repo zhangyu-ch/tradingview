@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 37
-- **待处理：** 44
+- **已完成：** 38
+- **待处理：** 43
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -48,7 +48,7 @@
 |35|`RV-04`|中|Backtesting Metrics|❌ 未修复|已完成|通过（20 项专项与相邻测试通过；零值与容差内噪声计入持平，不再污染失败统计）|`fix(RV-04)`|
 |36|`RV-01`|中|Database / Watchlist|❌ 未修复|已完成|通过（7 项专项与相邻测试通过；跨市场隔离、失败回滚和连续重排均正确）|`fix(RV-01)`|
 |37|`RV-07`|中|Web API Robustness|❌ 未修复|已完成|通过（77 项专项与相邻测试通过；相关公开入口的畸形参数在外部副作用前被拒绝）|`fix(RV-07)`|
-|38|`ME-11`|中|Baostock|❌ 未修复|待处理|—|—|
+|38|`ME-11`|中|Baostock|❌ 未修复|已完成|通过（11 项专项与相邻测试通过；目录日期、源分钟时间和有限重登录三项根因均关闭）|`fix(ME-11)`|
 |39|`HI-17`|中|Scripts|❌ 未修复|待处理|—|—|
 |40|`ME-12`|中|TDX Adapters|❌ 未修复|待处理|—|—|
 |41|`ME-23`|中|Backtesting Config|❌ 未修复|待处理|—|—|
@@ -911,16 +911,24 @@
 ### 38. ME-11 · Baostock 股票列表固定在 2022-04-18，分钟时间按序号重建
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Baostock
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `ExchangeBaostock.all_stocks()` 把证券目录日期固定为 2022-04-18，进程运行多年也不会刷新；分钟 K 线请求没有包含 BaoStock 的 `time` 字段，而是从每天 09:30 起按返回行序人工递增并跳过午休，因此缺 bar、停牌、乱序或不完整响应会让后续时间整体漂移；会话失效错误又通过递归再次调用 `self.klines()`，没有次数、退避或总重试预算。
+- **b. 我是怎么修复的？** 新增独立 BaoStock 可靠性模块：校验登录结果；外部查询统一使用最多 3 次、指数退避和 8 秒总重试预算；非认证协议错误立即明确失败。证券目录先查询最近 20 天交易日历，从最新交易日开始，在数据尚未发布时有限回看更早交易日，并按上海市场自然日缓存来源版本，不再使用固定历史日期。分钟查询改为请求官方 `date,time,...` 字段，严格解析 `YYYYMMDDHHMMSSsss`（兼容 14 位秒精度）、校验 date/time 同日，并直接使用源时间；删除全部按行序重建时间和递归重登录。日/周/月线继续以 15:00 表示收盘时刻。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前直接读取实际适配器，确认固定 `day = 2022-04-18`、分钟请求字段缺少 `time`、内部 `append_time` 按行递增，以及认证错误分支 `return self.klines(...)` 三个根因均存在。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me11_baostock_reliability.py tests/test_nx20_tdx_bounded_retry.py tests/test_remediation_report_counts.py`，11 项专项、相邻有界重试和报告测试全部通过。
+  - 使用 fake BaoStock 结果对象动态执行真实 `ExchangeBaostock`：09:35 与 10:05 两条不连续 5 分钟 bar 保持原始时间与 Asia/Shanghai 时区，未被重建为连续序列。
+  - 故障注入持续返回会话失效，确认查询严格停在 3 次、重登录 2 次且不超过总 deadline；非认证错误只调用一次并立即抛出明确协议错误。
+  - 模拟交易日历 2026-08-03 最新目录尚未发布、2026-07-31 可用，确认按 08-03→07-31 有限回退、过滤指数，并在同一市场日第二次调用零外部查询。
+  - AST 门禁确认分钟字段包含 `time`、固定 2022 日期消失且 `klines` 内不存在递归自调用；执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。
+- **e. 验证是否通过？** 通过（11 项专项与相邻测试通过；目录日期、源分钟时间和有限重登录三项根因均关闭）
+- **提交：** fix(ME-11): use BaoStock source timestamps and bounded retries
+- **修改文件：** `src/tradingview_zy/exchange/baostock_reliability.py`, `src/tradingview_zy/exchange/exchange_baostock.py`, `tests/test_me11_baostock_reliability.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器没有安装项目锁定的 baostock 0.8.9，也未连接 BaoStock 在线服务；SDK 协议、字段、交易日回退和错误码通过与实际接口形状一致的 fake result 动态验证，真实网络联调仍需可联网环境。
+  - BaoStock SDK 不接受每次调用的 timeout，Python 无法安全中断已经阻塞在第三方 SDK 内的一次调用；本修复保证重试次数、退避和重试总预算有界，但单次底层 socket 是否按 SDK 自身超时返回仍取决于供应商实现。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_baostock.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 股票列表按当前交易日/可用最新日刷新并缓存版本；使用数据源原始时间；重试采用有界迭代与退避。
 

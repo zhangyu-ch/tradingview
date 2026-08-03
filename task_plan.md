@@ -105,6 +105,7 @@
 
 | RV-01 首轮重排仅给剩余位置 +1，已有标的重新置顶后留下 position 空洞 | 1 | 改为事务内 flush 删除后仅压实目标 market/group 为 1..N；专项故障注入通过 |
 | RV-01 相邻 NX-22 子进程测试缺少被归档忽略的本地 config.py | 1 | 不伪造产品配置、不将环境缺口归因于本条；本条运行真实 SQLite 专项及不依赖本地配置的相邻测试 |
+| ME-11 首轮专项测试从 `tradingview_zy.exchange` 包导入纯 helper，触发归档中缺失的本地 config.py | 1 | 改用 `spec_from_file_location` 直接加载无副作用 helper；真实 provider 动态测试再显式注入最小 config/tzlocal/baostock 协议桩 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。
