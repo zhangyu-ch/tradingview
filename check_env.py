@@ -1,74 +1,213 @@
-"""
-检查当前环境是否OK
-"""
+"""Validate the runtime environment against the project's declared contract."""
 
+from __future__ import annotations
+
+import importlib
 import os
+import socket
 import sys
-import telnetlib
+import tomllib
+from dataclasses import dataclass
+from enum import IntEnum
+from pathlib import Path
+from typing import Callable, Iterable
 
-import pymysql
-import redis
+PROJECT_ROOT = Path(__file__).resolve().parent
+PYPROJECT = PROJECT_ROOT / "pyproject.toml"
 
 
-def check_env():
-    # 检查 Python 版本
-    version = f"{sys.version_info[0]}.{sys.version_info[1]}"
-    print(f"当前Python版本：{version}")
-    allow_version = ["3.8", "3.9", "3.10", "3.11"]
-    if version not in allow_version:
-        print(f"当前Python不在支持的列表中：{allow_version}")
-        return
+class CheckStatus(IntEnum):
+    OK = 0
+    DEGRADED = 1
+    FAILED = 2
 
-    # 检查 环境变量是否设置正确
+
+@dataclass(frozen=True)
+class CheckResult:
+    name: str
+    status: CheckStatus
+    message: str
+
+
+def project_python_spec(path: Path = PYPROJECT) -> str:
+    with path.open("rb") as stream:
+        data = tomllib.load(stream)
+    spec = data.get("project", {}).get("requires-python")
+    if not isinstance(spec, str) or not spec.strip():
+        raise RuntimeError("pyproject.toml does not declare project.requires-python")
+    return spec.strip()
+
+
+def _version_tuple(value: str | Iterable[int]) -> tuple[int, ...]:
+    if isinstance(value, str):
+        parts = value.strip().split(".")
+        if not parts or not all(part.isdigit() for part in parts):
+            raise ValueError(f"invalid version: {value!r}")
+        return tuple(int(part) for part in parts)
+    return tuple(int(part) for part in value)
+
+
+def _compare_versions(left: tuple[int, ...], right: tuple[int, ...]) -> int:
+    width = max(len(left), len(right))
+    left = left + (0,) * (width - len(left))
+    right = right + (0,) * (width - len(right))
+    return (left > right) - (left < right)
+
+
+def _python_version_supported(
+    version_info: tuple[int, ...] | None = None,
+    spec: str | None = None,
+) -> bool:
+    """Evaluate the comma-separated PEP 440 bounds used by this project."""
+
+    version = _version_tuple(version_info or tuple(sys.version_info[:3]))
+    spec = project_python_spec() if spec is None else spec
+    operators: tuple[tuple[str, Callable[[int], bool]], ...] = (
+        (">=", lambda result: result >= 0),
+        ("<=", lambda result: result <= 0),
+        ("==", lambda result: result == 0),
+        ("!=", lambda result: result != 0),
+        (">", lambda result: result > 0),
+        ("<", lambda result: result < 0),
+    )
+    for raw_clause in spec.split(","):
+        clause = raw_clause.strip()
+        if not clause:
+            continue
+        for operator, predicate in operators:
+            if clause.startswith(operator):
+                target = _version_tuple(clause[len(operator) :])
+                if not predicate(_compare_versions(version, target)):
+                    return False
+                break
+        else:
+            raise ValueError(f"unsupported Python version clause: {clause!r}")
+    return True
+
+
+def _check_python() -> CheckResult:
+    spec = project_python_spec()
+    version = ".".join(str(part) for part in sys.version_info[:3])
+    if _python_version_supported(tuple(sys.version_info[:3]), spec):
+        return CheckResult("python", CheckStatus.OK, f"Python {version} satisfies {spec}")
+    return CheckResult(
+        "python",
+        CheckStatus.FAILED,
+        f"Python {version} does not satisfy project requires-python {spec}",
+    )
+
+
+def _check_project_imports() -> CheckResult:
+    src_path = str(PROJECT_ROOT / "src")
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
     try:
-        from tradingview_zy import base
-    except Exception:
-        print("无法导入 tradingview_zy 模块，环境变量未设置或设置错误")
-        print(f"当前的环境变量如下：{sys.path}")
-        print(f"需要将 PYTHONPATH 环境变量设置为 {os.getcwd()}\\src 目录")
-        return
-
-    # 检查 环境变量是否设置正确
-    try:
-        from tradingview_zy import config
-    except Exception:
-        print("无法导入 config，请在 src/tradingview_zy 目录复制 config.py.demo 为 config.py")
-        return
-
-    # 检查代理是否设置
-    if config.PROXY_HOST != "":
-        try:
-            telnetlib.Telnet(config.PROXY_HOST, config.PROXY_PORT)
-        except:
-            print("当前设置的 VPN 代理不可用，如不使用数字货币行情，可忽略")
-
-    # 检查 Redis
-    try:
-        if config.REDIS_HOST != "":
-            R = redis.Redis(
-                host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
-            )
-            R.get("check")
-    except:
-        print("Redis 连接失败，请检查是否有安装并启动 Redis 服务端，并且配置正确")
-        print("Redis 不是必须的，不使用可以忽略")
-    # 检查 MySQL
-    try:
-        if config.DB_TYPE == "mysql":
-            pymysql.connect(
-                host=config.DB_HOST,
-                port=config.DB_PORT,
-                user=config.DB_USER,
-                password=config.DB_PWD,
-                database=config.DB_DATABASE,
-            )
-    except:
-        print(
-            "MySQL 连接失败，请检查是否安装并运行 MySQL，并且检查配置的 ip、端口、用户名、密码、数据库 是否正确"
+        importlib.import_module("tradingview_zy.base")
+        importlib.import_module("tradingview_zy.config")
+    except Exception as exc:
+        return CheckResult(
+            "project",
+            CheckStatus.FAILED,
+            f"cannot import project configuration: {type(exc).__name__}: {exc}",
         )
+    return CheckResult("project", CheckStatus.OK, "project package and config import correctly")
 
-    print("环境OK")
+
+def _check_proxy(config) -> CheckResult:
+    host = str(getattr(config, "PROXY_HOST", "") or "").strip()
+    if not host:
+        return CheckResult("proxy", CheckStatus.OK, "proxy is not configured")
+    port = int(getattr(config, "PROXY_PORT", 0) or 0)
+    try:
+        with socket.create_connection((host, port), timeout=3):
+            pass
+    except OSError as exc:
+        return CheckResult(
+            "proxy",
+            CheckStatus.DEGRADED,
+            f"proxy {host}:{port} is unavailable: {exc}",
+        )
+    return CheckResult("proxy", CheckStatus.OK, f"proxy {host}:{port} is reachable")
+
+
+def _check_redis(config) -> CheckResult:
+    host = str(getattr(config, "REDIS_HOST", "") or "").strip()
+    if not host:
+        return CheckResult("redis", CheckStatus.OK, "Redis is not configured")
+    try:
+        redis = importlib.import_module("redis")
+        client = redis.Redis(
+            host=host,
+            port=int(getattr(config, "REDIS_PORT", 6379)),
+            decode_responses=True,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+        )
+        client.ping()
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
+    except Exception as exc:
+        return CheckResult(
+            "redis",
+            CheckStatus.DEGRADED,
+            f"Redis is unavailable: {type(exc).__name__}: {exc}",
+        )
+    return CheckResult("redis", CheckStatus.OK, "Redis is reachable")
+
+
+def _check_database(config) -> CheckResult:
+    if str(getattr(config, "DB_TYPE", "sqlite")).lower() != "mysql":
+        return CheckResult("database", CheckStatus.OK, "SQLite/local database mode")
+    connection = None
+    try:
+        pymysql = importlib.import_module("pymysql")
+        connection = pymysql.connect(
+            host=config.DB_HOST,
+            port=int(config.DB_PORT),
+            user=config.DB_USER,
+            password=config.DB_PWD,
+            database=config.DB_DATABASE,
+            connect_timeout=3,
+            read_timeout=3,
+            write_timeout=3,
+        )
+    except Exception as exc:
+        return CheckResult(
+            "database",
+            CheckStatus.FAILED,
+            f"configured MySQL is unavailable: {type(exc).__name__}: {exc}",
+        )
+    finally:
+        if connection is not None:
+            connection.close()
+    return CheckResult("database", CheckStatus.OK, "configured MySQL is reachable")
+
+
+def run_checks() -> list[CheckResult]:
+    results = [_check_python()]
+    if results[-1].status is CheckStatus.FAILED:
+        return results
+
+    project = _check_project_imports()
+    results.append(project)
+    if project.status is CheckStatus.FAILED:
+        return results
+
+    from tradingview_zy import config
+
+    results.extend((_check_proxy(config), _check_redis(config), _check_database(config)))
+    return results
+
+
+def check_env() -> int:
+    results = run_checks()
+    for result in results:
+        print(f"[{result.status.name}] {result.name}: {result.message}")
+    status = max((result.status for result in results), default=CheckStatus.FAILED)
+    print(f"环境检查结果：{status.name}")
+    return 0 if status in {CheckStatus.OK, CheckStatus.DEGRADED} else 1
 
 
 if __name__ == "__main__":
-    check_env()
+    raise SystemExit(check_env())

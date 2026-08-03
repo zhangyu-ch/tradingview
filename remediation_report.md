@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 7
-- **待处理：** 74
+- **已完成：** 8
+- **待处理：** 73
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -24,7 +24,7 @@
 |11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（3 项 CR-04 专项测试及相邻下线门禁均通过；危险 QMT 实盘适配器已从运行包移除）|`fix(CR-04)`|
 |12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|已完成|通过（14 项可执行测试通过；所有写请求的统一 CSRF 边界和 GET 删除根因已消除）|`fix(HI-06)`|
 |13|`CR-03`|高|Live Trading|🟡 部分修复|已完成（通过移除未验收实盘订单执行能力）|通过（13 项专项/相邻测试通过；所有内置实盘订单和撤单入口均明确 fail-closed）|`fix(CR-03)`|
-|14|`ME-24`|中|Environment|🔴 回归（重新出现）|待处理|—|—|
+|14|`ME-24`|中|Environment|🔴 回归（重新出现）|已完成|通过（5 项专项测试通过；版本契约同源、失败退出码和状态汇总均正确）|`fix(ME-24)`|
 |15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|待处理|—|—|
 |16|`HI-01`|中|Futures Trader|❌ 未修复|待处理|—|—|
 |17|`ME-06`|中|File Upload|❌ 未修复|待处理|—|—|
@@ -378,16 +378,22 @@
 ### 14. ME-24 · 环境检查与 pyproject 的 Python 约束冲突，并在失败后仍打印“环境OK”
 
 - **原始状态 / 严重度 / 领域：** 🔴 回归（重新出现） / 中 / Environment
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** check_env.py 维护独立的 Python 3.8–3.11 白名单，与 pyproject.toml 的 >=3.11,<3.12 不同源；还导入已弃用并在新 Python 移除的 telnetlib。代理、Redis、MySQL 等检查失败后只打印提示，函数最终仍无条件输出“环境OK”并返回成功，自动化无法区分必需失败和可选降级。
+- **b. 我是怎么修复的？** 重写环境检查器：从 pyproject.toml 读取唯一 requires-python 约束并同时执行上下界；用 socket.create_connection 的有限超时替代 telnetlib；依赖按配置惰性导入，网络连接设置明确超时并关闭资源；每项返回结构化 OK/DEGRADED/FAILED，配置的 MySQL或项目导入失败返回非零退出码，可选代理/Redis故障标记 DEGRADED；删除无条件“环境OK”。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me24_check_env.py`，5 项测试全部通过。
+  - 参数化验证 Python 3.10、3.11、3.12、3.13 与 pyproject 的 >=3.11,<3.12 完全一致。
+  - 以当前 Python 3.13 真实执行 check_env.py，确认退出码为 1、输出明确 requires-python 不满足且不出现“环境OK”。
+  - 验证 DEGRADED 与 FAILED 的退出码和汇总文本不同；确认不再导入 telnetlib，并执行 compileall、git diff --check。
+- **e. 验证是否通过？** 通过（5 项专项测试通过；版本契约同源、失败退出码和状态汇总均正确）
+- **提交：** fix(ME-24): align environment checks with project metadata
+- **修改文件：** `check_env.py`, `tests/test_me24_check_env.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 当前离线容器运行 Python 3.13，因此只能验证检查器正确拒绝；没有在 Python 3.11 里连接真实 Redis/MySQL/代理。
+  - 环境检查只支持项目当前使用的逗号分隔比较运算符约束；若未来使用通配符、~= 或环境 marker，需要扩展解析器或引入 packaging 作为直接依赖。
 - **原报告最新结论：** PR #15 将包元数据收紧为 Python >=3.11,<3.12，以匹配 cp311-only TA-Lib wheel；但 check_env.py 仍以“>=3.11”为判定，_python_version_supported((3,12,0)) 实测返回 True，并输出“3.11 或更高版本”。
 - **原报告建议：** 把环境检查改为同一 SpecifierSet/单一元数据来源，明确拒绝 3.12+；增加 pyproject 与 check_env 契约一致性测试。
 

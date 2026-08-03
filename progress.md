@@ -160,3 +160,11 @@
 - 修复：删除 live trader；所有 order/cancel 统一 fail-closed；移除 IB 下单队列/worker；保留行情与回测。
 - 专项测试：CR-03 与相邻下线/生命周期测试共 13 passed；运行树危险下单调用扫描、compileall、diff 检查通过。
 - 提交：`fix(CR-03): disable unreconciled live trading`。
+
+### 问题 14：ME-24
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：环境脚本与 pyproject 版本约束漂移，使用 telnetlib，失败后仍打印环境OK。
+- 修复：读取 pyproject 单一版本约束；有限 socket/Redis/MySQL 超时；结构化 OK/DEGRADED/FAILED 和可靠退出码。
+- 专项测试：`tests/test_me24_check_env.py`，5 passed；当前 Python 3.13 真实执行正确返回失败。
+- 提交：`fix(ME-24): align environment checks with project metadata`。
