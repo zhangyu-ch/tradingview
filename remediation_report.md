@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 31
-- **待处理：** 50
+- **已完成：** 32
+- **待处理：** 49
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -42,7 +42,7 @@
 |29|`NX-21`|中|Database Configuration|❌ 未修复|已完成|通过（3 项专项测试及相邻 DB 测试通过；特殊字符凭据可正确解析且默认字符串脱敏）|`fix(NX-21)`|
 |30|`NX-23`|中|ExchangeDB|❌ 未修复|已完成|通过（17 项专项、相邻、能力边界及报告测试通过；DB provider 可恢复持久化标的目录且未过报证券主数据能力）|`fix(NX-23)`|
 |31|`NX-16`|中|Web Security / Availability|❌ 未修复|已完成|通过（20 项专项及相邻测试通过；输入扇出、请求速率、provider 并发和等待时间均有明确上限）|`fix(NX-16)`|
-|32|`NX-14`|中|Web Storage|❌ 未修复|待处理|—|—|
+|32|`NX-14`|中|Web Storage|❌ 未修复|已完成|通过（37 项专项与相邻测试通过；不存在资源稳定返回 404，畸形标识在数据库访问前返回 422）|`fix(NX-14)`|
 |33|`NX-15`|中|Web Storage|❌ 未修复|待处理|—|—|
 |34|`RV-05`|中|Backtesting / Process|❌ 未修复|待处理|—|—|
 |35|`RV-04`|中|Backtesting Metrics|❌ 未修复|待处理|—|—|
@@ -773,16 +773,22 @@
 ### 32. NX-14 · 读取不存在的 chart/template 会直接解引用 None
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web Storage
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 图表和指标模板读取路由假设数据库查询必定返回对象，随后直接访问 `chart.content`、`template.name` 等属性。不存在、已删除、错误主体或畸形 chart ID 会得到 `None` 或数据库类型错误，最终表现为 500，而不是稳定的资源不存在/参数错误响应。
+- **b. 我是怎么修复的？** 新增无 Web 框架依赖的参数校验器，严格接受正整数 chart ID 和非空短文本模板名。charts 的 GET、DELETE 和已有图表更新路径统一在数据库/请求体处理前校验 ID；GET 查询为空返回 `chart_not_found`/404。study_templates 的 GET、DELETE 统一校验名称，GET 查询为空返回 `template_not_found`/404；既有列表和成功读取响应结构保持不变。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前源码确认 `db.tv_chart_get()` 与 `db.tv_chart_get_by_name()` 返回值未做 None 检查，路由立即解引用属性。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_nx14_storage_not_found.py tests/test_nx16_tick_request_limits.py tests/test_remediation_report_counts.py`，37 项专项、相邻输入边界和报告测试全部通过。
+  - 参数测试覆盖 None、bool、0、负数、小数、前导零、空白、控制字符和超长模板名；合法 ID 与模板名按规范化值返回。
+  - 源码顺序契约确认 chart ID 校验发生在数据库查询前，已有图表更新在读取表单字段前校验；chart/template 查询为空分别返回稳定 404。
+  - 验证列表与成功读取响应结构保持不变；执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。
+- **e. 验证是否通过？** 通过（37 项专项与相邻测试通过；不存在资源稳定返回 404，畸形标识在数据库访问前返回 422）
+- **提交：** fix(NX-14): return stable storage not-found responses
+- **修改文件：** `src/tradingview_zy/web_api_validation.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_nx14_storage_not_found.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 本轮以真实路由函数的 AST 隔离动态执行验证响应分支；完整 Flask/TradingView 浏览器集成仍由后续 Web API 统一契约回归覆盖。
 - **原报告最新结论：** 图表/模板读取路由没有补 None/404 处理，相关 ORM 查询未变。
 - **原报告建议：** None 返回 404/规范 UDF 错误；校验 ID 类型。
 

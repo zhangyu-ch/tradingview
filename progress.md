@@ -315,3 +315,10 @@
 - 专项及相邻测试：20 passed；覆盖解析边界、20 线程限流竞争、deadline、容量耗尽、槽位恢复和路由调用顺序。
 - 真实同步 SDK 无法被 Python 强制取消；超时调用的残留线程数量由固定槽限制。
 - 提交：`fix(NX-16): bound tick fanout and provider waits`。
+### 问题 32：NX-14
+- **状态：** complete
+- **完成时间：** 2026-08-03（会话恢复后重建）
+- 验证结论：chart/template 查询为空后直接解引用，且 chart ID 未统一校验，问题存在。
+- 修复：新增轻量参数校验器；charts GET/DELETE/update 统一正整数 ID，study_templates GET/DELETE 统一名称契约；不存在资源返回稳定 404，非法参数返回 422。
+- 专项与相邻测试：37 passed；成功响应结构和 CRLF 未回归。
+- 提交：`fix(NX-14): return stable storage not-found responses`。

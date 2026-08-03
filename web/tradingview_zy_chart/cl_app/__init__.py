@@ -66,6 +66,11 @@ from tradingview_zy.watchlist_transfer import (
     export_watchlist_text,
     parse_watchlist_stream,
 )
+from tradingview_zy.web_api_validation import (
+    WebParameterError,
+    parse_bounded_text,
+    parse_positive_int,
+)
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
@@ -935,121 +940,114 @@ def create_app(test_config=None):
     @app.route("/tv/<version>/charts", methods=["GET", "POST", "DELETE"])
     @login_required
     def tv_charts(version):
-        """
-        图表
-        """
+        """TradingView chart layout storage."""
         client_id = str(request.args.get("client"))
         user_id = str(request.args.get("user"))
+        raw_chart_id = request.args.get("chart")
 
         if request.method == "GET":
-            chart_id = request.args.get("chart")
-            if chart_id is None:
-                # 列出保存的图表列表
+            if raw_chart_id is None:
                 chart_list = db.tv_chart_list("chart", client_id, user_id)
                 return {
                     "status": "ok",
                     "data": [
                         {
-                            "timestamp": c.timestamp,
-                            "symbol": c.symbol,
-                            "resolution": c.resolution,
-                            "id": c.id,
-                            "name": c.name,
+                            "timestamp": chart.timestamp,
+                            "symbol": chart.symbol,
+                            "resolution": chart.resolution,
+                            "id": chart.id,
+                            "name": chart.name,
                         }
-                        for c in chart_list
+                        for chart in chart_list
                     ],
                 }
-            else:
-                # 获取图表信息
-                chart = db.tv_chart_get("chart", chart_id, client_id, user_id)
-                return {
-                    "status": "ok",
-                    "data": {
-                        "content": chart.content,
-                        "timestamp": chart.timestamp,
-                        "name": chart.name,
-                        "id": chart.id,
-                    },
-                }
-        elif request.method == "DELETE":
-            # 删除操作
-            chart_id = request.args.get("chart")
-            db.tv_chart_del("chart", chart_id, client_id, user_id)
+            try:
+                chart_id = parse_positive_int(raw_chart_id, field="chart")
+            except WebParameterError as exc:
+                return {"status": "error", "error": "invalid_chart_id", "message": str(exc)}, 422
+            chart = db.tv_chart_get("chart", chart_id, client_id, user_id)
+            if chart is None:
+                return {"status": "error", "error": "chart_not_found"}, 404
             return {
                 "status": "ok",
+                "data": {
+                    "content": chart.content,
+                    "timestamp": chart.timestamp,
+                    "name": chart.name,
+                    "id": chart.id,
+                },
             }
-        else:
-            # 更新与保存操作
-            name = request.form["name"]
-            content = request.form["content"]
-            symbol = request.form["symbol"]
-            resolution = request.form["resolution"]
-            chart_id = request.args.get("chart")
 
-            if chart_id is None:
-                # 保存新的图表信息
-                id = db.tv_chart_save(
-                    "chart", client_id, user_id, name, content, symbol, resolution
-                )
-                return {
-                    "status": "ok",
-                    "id": id,
-                }
-            else:
-                # 保存已有的图表信息
-                db.tv_chart_update(
-                    "chart",
-                    chart_id,
-                    client_id,
-                    user_id,
-                    name,
-                    content,
-                    symbol,
-                    resolution,
-                )
-                return {"status": "ok"}
+        if request.method == "DELETE":
+            try:
+                chart_id = parse_positive_int(raw_chart_id, field="chart")
+            except WebParameterError as exc:
+                return {"status": "error", "error": "invalid_chart_id", "message": str(exc)}, 422
+            db.tv_chart_del("chart", chart_id, client_id, user_id)
+            return {"status": "ok"}
+
+        # Validate an update identifier before reading the potentially large form body.
+        chart_id = None
+        if raw_chart_id is not None:
+            try:
+                chart_id = parse_positive_int(raw_chart_id, field="chart")
+            except WebParameterError as exc:
+                return {"status": "error", "error": "invalid_chart_id", "message": str(exc)}, 422
+        name = request.form["name"]
+        content = request.form["content"]
+        symbol = request.form["symbol"]
+        resolution = request.form["resolution"]
+        if chart_id is None:
+            saved_id = db.tv_chart_save(
+                "chart", client_id, user_id, name, content, symbol, resolution
+            )
+            return {"status": "ok", "id": saved_id}
+        db.tv_chart_update(
+            "chart", chart_id, client_id, user_id, name, content, symbol, resolution
+        )
+        return {"status": "ok"}
 
     @app.route("/tv/<version>/study_templates", methods=["GET", "POST", "DELETE"])
     @login_required
     def tv_study_templates(version):
-        """
-        图表
-        """
+        """TradingView indicator template storage."""
         client_id = str(request.args.get("client"))
         user_id = str(request.args.get("user"))
 
         if request.method == "GET":
-            template = request.args.get("template")
-            if template is None:
-                # 列出保存的图表列表
+            raw_name = request.args.get("template")
+            if raw_name is None:
                 template_list = db.tv_chart_list("template", client_id, user_id)
                 return {
                     "status": "ok",
-                    "data": [{"name": t.name} for t in template_list],
+                    "data": [{"name": template.name} for template in template_list],
                 }
-            else:
-                # 获取图表信息
-                template = db.tv_chart_get_by_name(
-                    "template", template, client_id, user_id
-                )
-                return {
-                    "status": "ok",
-                    "data": {"name": template.name, "content": template.content},
-                }
-        elif request.method == "DELETE":
-            # 删除操作
-            name = request.args.get("template")
-            db.tv_chart_del_by_name("template", name, client_id, user_id)
+            try:
+                name = parse_bounded_text(raw_name, field="template", max_chars=200)
+            except WebParameterError as exc:
+                return {"status": "error", "error": "invalid_template_name", "message": str(exc)}, 422
+            template = db.tv_chart_get_by_name("template", name, client_id, user_id)
+            if template is None:
+                return {"status": "error", "error": "template_not_found"}, 404
             return {
                 "status": "ok",
+                "data": {"name": template.name, "content": template.content},
             }
-        else:
-            name = request.form["name"]
-            content = request.form["content"]
 
-            # 保存图表信息
-            db.tv_chart_save("template", client_id, user_id, name, content, "", "")
+        if request.method == "DELETE":
+            try:
+                name = parse_bounded_text(
+                    request.args.get("template"), field="template", max_chars=200
+                )
+            except WebParameterError as exc:
+                return {"status": "error", "error": "invalid_template_name", "message": str(exc)}, 422
+            db.tv_chart_del_by_name("template", name, client_id, user_id)
             return {"status": "ok"}
+
+        name = request.form["name"]
+        content = request.form["content"]
+        db.tv_chart_save("template", client_id, user_id, name, content, "", "")
+        return {"status": "ok"}
 
     @app.route("/tv/<version>/drawings", methods=["GET", "POST"])
     @login_required

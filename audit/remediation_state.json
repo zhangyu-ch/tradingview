@@ -1813,16 +1813,34 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "图表和指标模板读取路由假设数据库查询必定返回对象，随后直接访问 `chart.content`、`template.name` 等属性。不存在、已删除、错误主体或畸形 chart ID 会得到 `None` 或数据库类型错误，最终表现为 500，而不是稳定的资源不存在/参数错误响应。",
+      "fix_summary": "新增无 Web 框架依赖的参数校验器，严格接受正整数 chart ID 和非空短文本模板名。charts 的 GET、DELETE 和已有图表更新路径统一在数据库/请求体处理前校验 ID；GET 查询为空返回 `chart_not_found`/404。study_templates 的 GET、DELETE 统一校验名称，GET 查询为空返回 `template_not_found`/404；既有列表和成功读取响应结构保持不变。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前源码确认 `db.tv_chart_get()` 与 `db.tv_chart_get_by_name()` 返回值未做 None 检查，路由立即解引用属性。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_nx14_storage_not_found.py tests/test_nx16_tick_request_limits.py tests/test_remediation_report_counts.py`，37 项专项、相邻输入边界和报告测试全部通过。",
+        "参数测试覆盖 None、bool、0、负数、小数、前导零、空白、控制字符和超长模板名；合法 ID 与模板名按规范化值返回。",
+        "源码顺序契约确认 chart ID 校验发生在数据库查询前，已有图表更新在读取表单字段前校验；chart/template 查询为空分别返回稳定 404。",
+        "验证列表与成功读取响应结构保持不变；执行 compileall、CRLF 字节计数（bare-LF=0）和 `git diff --check`。"
+      ],
+      "verification_result": "通过（37 项专项与相邻测试通过；不存在资源稳定返回 404，畸形标识在数据库访问前返回 422）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/web_api_validation.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_nx14_storage_not_found.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本轮以真实路由函数的 AST 隔离动态执行验证响应分支；完整 Flask/TradingView 浏览器集成仍由后续 Web API 统一契约回归覆盖。"
+      ],
+      "commit_subject": "fix(NX-14): return stable storage not-found responses"
     }
   },
   {
