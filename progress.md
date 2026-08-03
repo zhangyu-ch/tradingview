@@ -130,3 +130,17 @@
 - 修复：删除 CTP 运行时实现与依赖/配置；工厂在导入和缓存前明确拒绝 ctp；补不支持能力文档。
 - 专项测试：`tests/test_cr05_ctp_removed.py` + NEW-03 依赖契约，5 passed；依赖契约脚本通过。
 - 提交：`fix(CR-05): remove unsupported CTP runtime`。
+
+### 归档检查点 01（问题 001–010）
+- **状态：** verified
+- 文件：`/mnt/data/tradingview_remediation_issues_001-010.zip`
+- SHA-256：`0c0b63c18b2ecd340553bad6555904c25bbf1c20dafef74c0236e948bd60359f`
+- 验证：系统 unzip 后工作树干净；HEAD=`9b741486a84b9255cdf3ba1f53a4878ba5f8a68f`；10 个问题标签；`git fsck --full` 通过。
+
+### 问题 11：CR-04
+- **状态：** complete（通过移除不支持能力）
+- **完成时间：** 2026-08-03
+- 验证结论：无内置入口但危险 QMT 实盘类可直接导入；未定义 price、硬编码配置和真实失败模拟成功均存在。
+- 修复：删除 QMT 实盘 trader，保留 QMT 行情；文档化恢复订单执行所需的状态机与沙箱门槛。
+- 专项测试：`tests/test_cr04_qmt_trader_removed.py` 与相邻移除门禁，6 passed。
+- 提交：`fix(CR-04): remove unsafe QMT live trader`。

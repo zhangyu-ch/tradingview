@@ -14,3 +14,17 @@ Restoring CTP is a new feature, not a configuration toggle. It requires a separa
 adapter, explicit capability declaration, deterministic lifecycle, and OpenCTP simulation tests
 covering authentication, subscription, order acknowledgements, partial fills, rejection,
 cancellation, reconnect, reconciliation, and shutdown.
+
+## QMT live trading (`CR-04`)
+
+The unsafe `QMTTraderStock` live-trading adapter was removed. QMT **market data** remains a
+separate provider in `exchange_qmt.py`; this removal only affects order execution.
+
+The removed trader referenced an undefined price before sizing a buy, hard-coded a local client
+path and account number, and could silently fall back from a failed real order to a simulated
+"success" while still writing the shared order ledger. No built-in launcher or reconciled
+order/fill state machine existed.
+
+Restoring QMT order execution requires an explicit trader factory/capability, mandatory external
+configuration, client-order idempotency, broker-confirmed fills, restart reconciliation, and QMT
+sandbox tests. Real-mode failures must never be converted into simulated fills.

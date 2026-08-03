@@ -21,7 +21,7 @@
 |8|`HI-13`|高|Binance|❌ 未修复|已完成|通过（5 项专项测试通过，合约/现货均使用严格分页器）|`fix(HI-13)`|
 |9|`HI-14`|高|TQ SDK|❌ 未修复|已完成|通过（3 项离线生命周期/源码契约测试通过；真实 TQ SDK 导入与联调受缺失依赖和账户环境阻断）|`fix(HI-14)`|
 |10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（5 项专项/依赖回归测试通过；不安全的 CTP 能力已从运行包彻底移除并 fail closed）|`fix(CR-05)`|
-|11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
+|11|`CR-04`|高|QMT Trader|🛡️ 未完全修复（已阻断或缓解）|已完成（通过移除不支持能力）|通过（3 项 CR-04 专项测试及相邻下线门禁均通过；危险 QMT 实盘适配器已从运行包移除）|`fix(CR-04)`|
 |12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
 |13|`CR-03`|高|Live Trading|🟡 部分修复|待处理|—|—|
 |14|`ME-24`|中|Environment|🔴 回归（重新出现）|待处理|—|—|
@@ -311,16 +311,22 @@
 ### 11. CR-04 · QMT 交易适配器真实买入确定性引用未定义 price；当前无内置活跃启动入口
 
 - **原始状态 / 严重度 / 领域：** 🛡️ 未完全修复（已阻断或缓解） / 高 / QMT Trader
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通过移除不支持能力）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** QMTTraderStock 虽无内置启动器，但仍可从运行包直接导入。真实买入在取得报价前用未定义的 price 计算数量；QMT 路径和资金账号硬编码；订单查询未命中时 price/amount 可能未绑定；持仓上限、资金不足或真实下单失败又可能降级为模拟成交，并继续发送成功通知、修改自选和写共享订单账本。
+- **b. 我是怎么修复的？** 删除未验收的 QMT 实盘交易适配器及其自执行示例，保留独立的 QMT 行情 provider。更新不支持能力文档，明确 QMT 行情与交易能力分离；未来恢复订单执行必须通过显式能力/工厂、外部强制配置、幂等 client_order_id、券商确认成交、重启对账和 QMT 沙箱测试，真实失败不得转换为模拟成功。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python3 -m pytest -q tests/test_cr04_qmt_trader_removed.py tests/test_cr05_ctp_removed.py`，6 项测试通过。
+  - 确认 `src/tradingview_zy/trader/trader_qmt_stock.py` 已删除，src/script/web 无 QMTTraderStock、trader_qmt_stock 或 xtquant.xttrader 导入。
+  - 确认 `exchange_qmt.py` 与 ExchangeQMT 行情类仍在，未误删 QMT 市场数据能力。
+  - 检查不支持能力文档明确禁止真实失败回退为模拟成交；运行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（3 项 CR-04 专项测试及相邻下线门禁均通过；危险 QMT 实盘适配器已从运行包移除）
+- **提交：** fix(CR-04): remove unsafe QMT live trader
+- **修改文件：** `src/tradingview_zy/trader/trader_qmt_stock.py（删除）`, `docs/unsupported-providers.md`, `tests/test_cr04_qmt_trader_removed.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 本次关闭方式是移除 QMT 订单执行能力；没有声称完成 QMT 实盘或沙箱订单验证。
+  - QMT 行情适配器保留，后续将按 ME-17 单独修复其数据契约问题。
 - **原报告最新结论：** QMT 交易类的底层错误实现仍在仓库并可被直接导入；标准应用当前没有内置活跃启动入口，且统一能力模型没有把它作为可用交易执行能力暴露。
 - **原报告建议：** 不得绕过标准工厂启用该类。若恢复支持，需修正报价/数量、订单状态、真实失败不得模拟成功，并完成 QMT 沙箱集成测试；否则应真正移出运行包。
 

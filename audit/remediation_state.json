@@ -613,16 +613,34 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（通过移除不支持能力）",
+      "problem_verified": true,
+      "problem_summary": "QMTTraderStock 虽无内置启动器，但仍可从运行包直接导入。真实买入在取得报价前用未定义的 price 计算数量；QMT 路径和资金账号硬编码；订单查询未命中时 price/amount 可能未绑定；持仓上限、资金不足或真实下单失败又可能降级为模拟成交，并继续发送成功通知、修改自选和写共享订单账本。",
+      "fix_summary": "删除未验收的 QMT 实盘交易适配器及其自执行示例，保留独立的 QMT 行情 provider。更新不支持能力文档，明确 QMT 行情与交易能力分离；未来恢复订单执行必须通过显式能力/工厂、外部强制配置、幂等 client_order_id、券商确认成交、重启对账和 QMT 沙箱测试，真实失败不得转换为模拟成功。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src python3 -m pytest -q tests/test_cr04_qmt_trader_removed.py tests/test_cr05_ctp_removed.py`，6 项测试通过。",
+        "确认 `src/tradingview_zy/trader/trader_qmt_stock.py` 已删除，src/script/web 无 QMTTraderStock、trader_qmt_stock 或 xtquant.xttrader 导入。",
+        "确认 `exchange_qmt.py` 与 ExchangeQMT 行情类仍在，未误删 QMT 市场数据能力。",
+        "检查不支持能力文档明确禁止真实失败回退为模拟成交；运行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（3 项 CR-04 专项测试及相邻下线门禁均通过；危险 QMT 实盘适配器已从运行包移除）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/trader/trader_qmt_stock.py（删除）",
+        "docs/unsupported-providers.md",
+        "tests/test_cr04_qmt_trader_removed.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本次关闭方式是移除 QMT 订单执行能力；没有声称完成 QMT 实盘或沙箱订单验证。",
+        "QMT 行情适配器保留，后续将按 ME-17 单独修复其数据契约问题。"
+      ],
+      "commit_subject": "fix(CR-04): remove unsafe QMT live trader"
     }
   },
   {
