@@ -168,3 +168,11 @@
 - 修复：读取 pyproject 单一版本约束；有限 socket/Redis/MySQL 超时；结构化 OK/DEGRADED/FAILED 和可靠退出码。
 - 专项测试：`tests/test_me24_check_env.py`，5 passed；当前 Python 3.13 真实执行正确返回失败。
 - 提交：`fix(ME-24): align environment checks with project metadata`。
+
+### 问题 15：NEW-06
+- **状态：** complete（本地不存在，已加防回归）
+- **完成时间：** 2026-08-03
+- 验证结论：本地没有 MarketRegistry/Capability，确切的 DB 能力过报不存在；底层主数据/板块方法仍未实现。
+- 修复：新增能力边界文档和未来 registry 的 DB_CAPABILITIES AST 门禁。
+- 专项测试：`tests/test_new06_db_capability_guard.py`，4 passed。
+- 提交：`test(NEW-06): guard DB provider capability claims`。

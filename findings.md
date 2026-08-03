@@ -88,3 +88,9 @@
 - `telnetlib` 不是探测 TCP 端口所必需，且新 Python 已移除；改用 `socket.create_connection(..., timeout=3)` 并自动关闭。
 - 可选代理/Redis 不可用应是 DEGRADED，配置为 MySQL 后连接失败或项目配置无法导入应是 FAILED；二者不能都在结尾伪装成“环境OK”。
 - 当前容器 Python 3.13 正好形成真实失败样例：脚本返回 1，并明确指出不满足 `>=3.11,<3.12`。
+
+## NEW-06 DB provider 能力声明复核
+- 远程固定点的 `MarketRegistry` 不存在于用户上传的本地主代码；本地没有 Capability/DB_CAPABILITIES，因此不能把远程回归直接当成本地现状。
+- `ExchangeDB.all_stocks()`、`stock_owner_plate()`、`plate_stocks()` 确实仍为空/未实现，但这表示“无能力”，不是“已过报能力”。
+- 本条采用防回归处理：文档明确 DB 当前仅是 K 线/派生 tick 数据源；若以后加入 registry，测试会阻止 SECURITY_MASTER/PLATES 声明。
+- 证券目录实现与统一能力模型分别留给 NX-23、ME-10，避免在本条混入另一项架构工作。

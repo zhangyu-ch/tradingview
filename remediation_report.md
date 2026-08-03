@@ -25,7 +25,7 @@
 |12|`HI-06`|高|Web Security|🛡️ 未完全修复（已阻断或缓解）|已完成|通过（14 项可执行测试通过；所有写请求的统一 CSRF 边界和 GET 删除根因已消除）|`fix(HI-06)`|
 |13|`CR-03`|高|Live Trading|🟡 部分修复|已完成（通过移除未验收实盘订单执行能力）|通过（13 项专项/相邻测试通过；所有内置实盘订单和撤单入口均明确 fail-closed）|`fix(CR-03)`|
 |14|`ME-24`|中|Environment|🔴 回归（重新出现）|已完成|通过（5 项专项测试通过；版本契约同源、失败退出码和状态汇总均正确）|`fix(ME-24)`|
-|15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|待处理|—|—|
+|15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归在本地不存在；4 项门禁测试防止未来重新过报）|`test(NEW-06)`|
 |16|`HI-01`|中|Futures Trader|❌ 未修复|待处理|—|—|
 |17|`ME-06`|中|File Upload|❌ 未修复|待处理|—|—|
 |18|`ME-16`|中|Interactive Brokers|❌ 未修复|待处理|—|—|
@@ -400,16 +400,22 @@
 ### 15. NEW-06 · MarketRegistry 过报 DB provider 的 security_master/plates 能力
 
 - **原始状态 / 严重度 / 领域：** 🆕 新问题（未修复） / 中 / Architecture / Exchange Contract
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（本地不存在，已加防回归）
+- **问题是否存在：** 否
+- **a. 这个问题是什么？** 远程固定点中的 NEW-06 源于新增 MarketRegistry 把 DB provider 声明为 SECURITY_MASTER/PLATES，但用户上传的本地主代码中没有 market_registry.py，也没有任何 Capability/DB_CAPABILITIES 声明，因此“能力过报”这一确切回归在本地不存在。底层 ExchangeDB 的证券目录和板块方法仍为空/未实现，属于后续 NX-23 与接口能力问题。
+- **b. 我是怎么修复的？** 不凭空引入远程注册表。新增 DB provider 能力边界文档，明确当前仅可视为持久化 K 线/派生 tick 数据源，不提供证券主数据或板块能力；新增 AST 防回归门禁：确认本地没有过报注册表，确认三个底层方法仍是未实现状态，并规定未来出现 MarketRegistry 时 DB_CAPABILITIES 不得包含 SECURITY_MASTER/PLATES，除非先补行为级契约。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 全仓查找 market_registry.py、Capability、DB_CAPABILITIES、security_master/plates 声明，确认本地运行树不存在远程过报实现。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_new06_db_capability_guard.py`，4 项测试全部通过。
+  - AST 检查 ExchangeDB.all_stocks() 返回空集合、stock_owner_plate()/plate_stocks() 未实现；未来注册表出现时自动拒绝 DB 的 SECURITY_MASTER/PLATES 声明。
+  - 检查能力边界文档并执行 git diff --check。
+- **e. 验证是否通过？** 通过（确切回归在本地不存在；4 项门禁测试防止未来重新过报）
+- **提交：** test(NEW-06): guard DB provider capability claims
+- **修改文件：** `docs/provider-capabilities.md`, `tests/test_new06_db_capability_guard.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 本条没有实现 DB 证券主数据或板块查询；该根因按清单中的 NX-23 和 ME-10 后续处理。
+  - 若未来引入新的注册表文件名或动态声明机制，需要同步扩展当前 AST 门禁。
 - **原报告最新结论：** DB_CAPABILITIES 被定义为 MARKET_DATA + TICKS + SECURITY_MASTER + PLATES，并用于所有市场的 db provider；但 ExchangeDB.all_stocks() 固定返回空列表，stock_owner_plate() 和 plate_stocks() 为 pass。调用方通过 require_capability 后仍会得到空/None，而不是“能力不支持”。
 - **原报告建议：** DB provider 只声明真实实现的 MARKET_DATA/TICKS；或实现安全主数据/板块查询。为每个 Capability 增加行为级契约测试，不能只检查集合存在。
 
