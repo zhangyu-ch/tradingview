@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "market": "currency",
+  "mode": "incremental",
+  "source": {
+    "module": "tradingview_zy.exchange.exchange_binance",
+    "class": "ExchangeBinance"
+  },
+  "destination": {
+    "module": "tradingview_zy.exchange.exchange_db",
+    "class": "ExchangeDB",
+    "args": [
+      "currency"
+    ]
+  },
+  "universe": {
+    "type": "provider_all_stocks"
+  },
+  "max_pages": 100,
+  "frequencies": {
+    "w": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "d": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "4h": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "60m": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "30m": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "15m": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "10m": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "5m": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    },
+    "1m": {
+      "start_date": "2000-01-01 00:00:00",
+      "args": {
+        "use_online": true
+      },
+      "stop_rows": 1
+    }
+  }
+}

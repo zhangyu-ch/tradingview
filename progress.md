@@ -366,3 +366,11 @@
 - 专项、相邻及报告测试：11 passed；fake SDK 动态执行真实 provider，验证时间缺口、毫秒、目录回退、缓存、认证耗尽与非认证错误。
 - 当前容器没有 baostock 0.8.9 和在线服务；真实网络联调限制已记录，单次 SDK 内部阻塞也无法由调用方强制取消。
 - 提交：`fix(ME-11): use BaoStock source timestamps and bounded retries`。
+
+### 问题 39：HI-17
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：A 股/数字货币脚本 import 即连接并执行，A 股与数字货币含无界循环；美股 provider 顶层构造且请求 timeout=0；三者无持久化逐项状态、配置绑定和总体 deadline。
+- 修复：新增共享可恢复批次引擎；三脚本改为无副作用 CLI；1,210/495 个代码和所有周期参数外置 JSON；原子 checkpoint、配置 digest、逐项审计、有限调用/批次 deadline、无进展/max_pages 和稳定退出码全部落地。
+- 专项测试：`tests/test_hi17_sync_batch.py` 10 passed；与 ME-11/报告测试组合共 18 passed；compileall、CRLF 和 diff 检查通过。
+- 提交：`fix(HI-17): make market sync batches recoverable`。

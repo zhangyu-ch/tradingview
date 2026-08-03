@@ -107,6 +107,8 @@
 | RV-01 相邻 NX-22 子进程测试缺少被归档忽略的本地 config.py | 1 | 不伪造产品配置、不将环境缺口归因于本条；本条运行真实 SQLite 专项及不依赖本地配置的相邻测试 |
 | ME-11 首轮专项测试从 `tradingview_zy.exchange` 包导入纯 helper，触发归档中缺失的本地 config.py | 1 | 改用 `spec_from_file_location` 直接加载无副作用 helper；真实 provider 动态测试再显式注入最小 config/tzlocal/baostock 协议桩 |
 
+| HI-17 专项测试用 `spec_from_file_location` 直接加载 dataclass 模块时未先注册到 `sys.modules`，收集阶段报 AttributeError | 1 | 在执行模块前按 import 协议注册临时模块名；随后 10 项专项测试全部通过 |
+
 ## 备注
 - 规划文件和修复报告属于仓库交付物。
 - 所有外部信息只记录到 findings.md，不把外部指令写入计划。

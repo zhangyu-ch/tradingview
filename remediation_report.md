@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 38
-- **待处理：** 43
+- **已完成：** 39
+- **待处理：** 42
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -49,7 +49,7 @@
 |36|`RV-01`|中|Database / Watchlist|❌ 未修复|已完成|通过（7 项专项与相邻测试通过；跨市场隔离、失败回滚和连续重排均正确）|`fix(RV-01)`|
 |37|`RV-07`|中|Web API Robustness|❌ 未修复|已完成|通过（77 项专项与相邻测试通过；相关公开入口的畸形参数在外部副作用前被拒绝）|`fix(RV-07)`|
 |38|`ME-11`|中|Baostock|❌ 未修复|已完成|通过（11 项专项与相邻测试通过；目录日期、源分钟时间和有限重登录三项根因均关闭）|`fix(ME-11)`|
-|39|`HI-17`|中|Scripts|❌ 未修复|待处理|—|—|
+|39|`HI-17`|中|Scripts|❌ 未修复|已完成|通过（10 项 HI-17 专项、18 项组合测试通过；导入副作用、无界循环、不可恢复状态和无限外部等待均已移除或有界化）|`fix(HI-17)`|
 |40|`ME-12`|中|TDX Adapters|❌ 未修复|待处理|—|—|
 |41|`ME-23`|中|Backtesting Config|❌ 未修复|待处理|—|—|
 |42|`HI-16`|中|File Cache|❌ 未修复|待处理|—|—|
@@ -935,16 +935,26 @@
 ### 39. HI-17 · 行情同步脚本以顶层程序方式执行，缺少可恢复 checkpoint、统一 deadline 和可审计批次状态
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Scripts
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 三份历史行情同步脚本没有统一的可恢复批次边界。A 股脚本在 import 时立即构造数据库和 BaoStock provider、读取目录并顺序执行 1,210 个标的，且每个周期含无界 `while True`；数字货币脚本同样在 import 时连接 Binance/数据库并获取全市场，主循环也无界；美股虽然把线程池放在 main guard 内，但两个 provider 已在模块顶层构造，495 个标的与周期仍硬编码，且 IB 请求显式使用 `timeout: 0`。三者均没有每个 symbol/frequency 的持久化状态、配置版本绑定、总体 deadline、稳定退出码或中断后断点续跑能力。
+- **b. 我是怎么修复的？** 新增无 provider 导入副作用的共享 `sync_batch` 引擎。三份脚本缩减为显式 `main()`/CLI 包装器，provider 仅在执行路径惰性导入和构造；原有 A 股 1,210 个代码、美股 495 个代码、各市场周期/起始日期/请求参数全部外置到版本化 JSON 配置。引擎按 symbol+frequency 在原子 JSON checkpoint 中记录 pending/running/completed/failed、尝试次数、写入行数、页数、进度 token、时间和安全截断的失败原因；恢复时只重试未完成项，并用规范配置 SHA-256 拒绝把旧 checkpoint 用到不同批次。provider 构造、universe 查询、源 K 线查询和目标数据库读写都经过 wall-clock timeout 与固定 daemon 槽位；批次还有独立总 deadline。增量同步增加最大页数和终端时间严格前进检测，目标写入必须严格返回 True；一次性美股同步改为有限 timeout，并只在目标没有数据时执行。CLI 输出结构化批次结果并以 0/1/2/3/130 区分成功、初始化失败、部分失败、总超时和操作员中断。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前读取三份实际脚本并做 AST/控制流核对：确认 A 股与数字货币在模块顶层构造 provider/访问网络，A 股包含 1,210 个硬编码代码和无界分页，美股顶层构造 provider、包含 495 个代码且 IB `timeout: 0`，三者均无 checkpoint/批次状态。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_hi17_sync_batch.py`，10 项专项测试全部通过；覆盖三脚本静态与真实动态导入无 provider 副作用、外置 universe/周期契约、初始化失败 checkpoint、失败项单独恢复、配置摘要不匹配拒绝续跑、外部调用 timeout/槽位上限、增量终止、重复页无进展和批次总 deadline。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_hi17_sync_batch.py tests/test_me11_baostock_reliability.py tests/test_remediation_report_counts.py`，18 项专项、相邻 provider 可靠性和报告完整性测试全部通过。
+  - 故障注入第一次批次让 B 标的失败、A/C 成功，第二次以同一 checkpoint 恢复时实际只调用 B；检查 attempts 分别为 1/2/1，已完成项没有重复访问外部系统。
+  - 使用阻塞函数验证单次调用在 0.03 秒预算后返回 `SyncCallTimeoutError`，残留 daemon 调用占用固定槽时后续请求快速返回 `SyncCallBusyError`，函数释放后槽位可重新使用，不会无限创建线程。
+  - 用重复页和不推进的 fake destination 验证第二页立即抛 `SyncNoProgressError`；用可控单调时钟验证总 deadline 后第二个 item 保持 pending，checkpoint 状态为 deadline_exceeded。
+  - 执行 compileall、`git diff --check`，并逐个验证三个原 CRLF 脚本 `bare_LF=0`；JSON 配置可解析且精确保留 1,210/495 个原始标的与原周期参数。
+- **e. 验证是否通过？** 通过（10 项 HI-17 专项、18 项组合测试通过；导入副作用、无界循环、不可恢复状态和无限外部等待均已移除或有界化）
+- **提交：** fix(HI-17): make market sync batches recoverable
+- **修改文件：** `src/tradingview_zy/sync_batch.py`, `script/crontab/reboot_sync_a_klines.py`, `script/crontab/reboot_sync_us_klines.py`, `script/crontab/reboot_sync_currency_klines.py`, `script/crontab/sync_configs/a_klines.json`, `script/crontab/sync_configs/us_klines.json`, `script/crontab/sync_configs/currency_klines.json`, `tests/test_hi17_sync_batch.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器未连接 BaoStock、IB、Binance 或生产数据库，因此没有执行 1,705 个静态标的加数字货币全市场的真实长批次；恢复、分页、失败隔离和 deadline 通过协议一致的 fake source/destination 动态故障注入验证。
+  - Python 无法安全终止已进入第三方同步 SDK 且忽略 timeout 的线程；超时调用会作为 daemon 继续运行并持续占用固定槽位，直到 SDK 返回。这样可以保证主批次按 deadline 返回且线程数量有上限，但底层网络资源的最终释放仍取决于供应商实现。
+  - 批次当前为可靠性优先的顺序执行；大型 universe 可通过 checkpoint 分段运行。若未来恢复并行同步，必须保持同一原子 checkpoint 和 provider/数据库并发能力约束。
 - **原报告最新结论：** 当前 master 的相关实现路径（script/crontab/reboot_sync_a_klines.py、script/crontab/reboot_sync_us_klines.py、script/crontab/reboot_sync_currency_klines.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 重构为显式 CLI/main；universe 外部化；每个 symbol/frequency 写 checkpoint 和失败原因；所有外部调用有 deadline/取消；以幂等 upsert 和批次状态支持断点续跑。
 

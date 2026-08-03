@@ -212,3 +212,10 @@
 - BaoStock 分钟字段本身提供 `YYYYMMDDHHMMSSsss` 交易所时间。该时间是数据协议的一部分，必须直接解析；按行序从 09:30 人工生成会把缺 bar、停牌和乱序放大为整日时间漂移。
 - 时间解析严格校验 `date` 与 17 位时间中的日期一致，畸形或缺失时间明确失败，避免用“看起来连续”的伪时间掩盖上游数据质量问题。
 - 会话失效不再递归进入完整 `klines`；统一查询门最多 3 次、指数退避并受 8 秒总重试预算约束。SDK 单次调用本身没有 timeout 参数，因此只能界定重试生命周期，不能强杀已阻塞的供应商调用。
+
+## HI-17 可恢复行情同步批次复核
+- 三份旧脚本并非同一种“顶层执行”：A 股在 import 时完成 provider 构造、目录查询并直接进入 1,210 标的循环；数字货币在 import 时连接并获取全市场；美股仅线程池有 main guard，但 provider 仍在顶层构造且 495 标的/周期不可配置。统一修复必须覆盖所有这些边界，不能只补 main guard。
+- 批次恢复主键固定为 `code::frequency`；checkpoint 同时绑定规范化配置 SHA-256。这样完成项可安全跳过，而 universe、周期或 provider 配置变化不会静默复用旧进度。
+- checkpoint 每次状态转换都写临时文件、flush+fsync 后原子 replace，并尽力 fsync 父目录；上次处于 running 的 item 在恢复时转回 pending 并记录中断原因。
+- 外部同步 SDK 无法由 Python 强杀，因此 wall-clock timeout 与固定 daemon 槽位必须同时存在：前者保护批次响应时间，后者限制超时残留调用数量。
+- 增量页终止同时依靠 terminal row 数、最大页数和进度 token 去重；目标数据库写入只有严格 `True` 才记为完成，避免把 `None`/`False` 伪装成成功。
