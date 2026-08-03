@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 0
-- **待处理：** 81
+- **已完成：** 1
+- **待处理：** 80
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -11,7 +11,7 @@
 
 |序号|编号|严重度|领域|原状态|本轮状态|验证结果|提交|
 |---:|---|---|---|---|---|---|---|
-|1|`CR-02`|严重|Web Security|🟡 部分修复|待处理|—|—|
+|1|`CR-02`|严重|Web Security|🟡 部分修复|已完成|通过（3 项专项测试通过）|`fix(CR-02)`|
 |2|`NEW-02`|高|CI / Supply Chain|🆕 新问题（未修复）|待处理|—|—|
 |3|`NEW-03`|高|Dependencies / Packaging|🆕 新问题（未修复）|待处理|—|—|
 |4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|待处理|—|—|
@@ -98,16 +98,20 @@
 ### 01. CR-02 · 默认部署无有效认证，且会话签名密钥固定
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 严重 / Web Security
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 本地代码的远程免密拒绝、随机持久化会话密钥、密码哈希、限速和安全 Cookie 已存在；但 `/setting` 仍把数据库中的飞书 App Secret 作为普通文本框 value 返回给浏览器，并在提交前把整个表单打印到控制台。
+- **b. 我是怎么修复的？** 设置页 GET 不再读取或传递旧 Secret，只传递“是否已配置”的布尔值；输入框改为无预填值的 password/new-password；删除控制台表单日志；保存时采用“Secret 留空则保持旧值，非空才轮换”的纯函数；设置页与保存响应增加 no-store 缓存头。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python3 -m pytest -q tests/test_cr02_settings_secret.py`，覆盖远程免密启动拒绝、随机 Secret 持久化/权限、Secret 留空保持和轮换语义。
+  - 源码契约测试确认设置页不含 `{{ fs_app_secret }}`、不再执行 `console.log(data.field)`，且输入类型为 password。
+  - 运行 `python3 -m compileall` 和 `git diff --check` 验证修改文件可编译且无补丁格式错误。
+- **e. 验证是否通过？** 通过（3 项专项测试通过）
+- **提交：** fix(CR-02): stop echoing saved Feishu secrets
+- **修改文件：** `src/tradingview_zy/settings_security.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/templates/setting.html`, `tests/test_cr02_settings_secret.py`, `script/remediation/parse_issue_report.py`, `script/remediation/update_issue.py`, `audit/remediation_state.json`, `remediation_report.md`
+- **验证限制：**
+  - 当前容器缺少 Flask/Werkzeug 且无法联网安装，未运行真实 Flask test client；路由数据流由源码契约测试验证，纯 Secret 合并逻辑和认证/会话关键函数已动态测试。
 - **原报告最新结论：** 默认回环监听、远程免密启动拒绝、随机持久化会话密钥、密码哈希、登录限速、安全 Cookie 和登出仍在；但设置页继续把已保存的飞书 App Secret 放入普通文本框 value，并打印整个提交字段。
 - **原报告建议：** 设置页不得返回旧 Secret；删除 console.log(data.field)；敏感设置更新应使用“留空不改”语义，并考虑重认证/更严格权限。
 

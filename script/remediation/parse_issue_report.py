@@ -80,6 +80,7 @@ def parse_report(path: Path) -> list[dict[str, Any]]:
                     "verification_method": [],
                     "verification_result": "",
                     "commit": "",
+                    "commit_subject": "",
                     "files_changed": [],
                     "limitations": [],
                 },
@@ -107,6 +108,11 @@ def render_markdown(ledger: list[dict[str, Any]], source_path: str) -> str:
     ]
     for item in ledger:
         remediation = item["remediation"]
+        commit_value = remediation.get("commit") or remediation.get("commit_subject") or ""
+        commit_table = (
+            f"`{commit_value[:12]}`" if remediation.get("commit") else
+            (f"`{commit_value.split(':', 1)[0]}`" if commit_value else "—")
+        )
         lines.append(
             "|{index}|`{issue_id}`|{severity}|{domain}|{status}|{rstatus}|{vresult}|{commit}|".format(
                 index=item["index"],
@@ -116,7 +122,7 @@ def render_markdown(ledger: list[dict[str, Any]], source_path: str) -> str:
                 status=item["status"].replace("|", "\\|"),
                 rstatus=remediation["status"],
                 vresult=(remediation["verification_result"] or "—").replace("|", "\\|"),
-                commit=f"`{remediation['commit'][:12]}`" if remediation["commit"] else "—",
+                commit=commit_table,
             )
         )
 
@@ -141,7 +147,7 @@ def render_markdown(ledger: list[dict[str, Any]], source_path: str) -> str:
         lines.extend(
             [
                 f"- **e. 验证是否通过？** {remediation['verification_result'] or '待处理'}",
-                f"- **提交：** {f'`{remediation["commit"]}`' if remediation['commit'] else '待提交'}",
+                f"- **提交：** {f'`{remediation["commit"]}`' if remediation.get('commit') else (remediation.get('commit_subject') or '待提交')}",
                 f"- **修改文件：** {', '.join(f'`{p}`' for p in remediation['files_changed']) if remediation['files_changed'] else '待处理'}",
             ]
         )

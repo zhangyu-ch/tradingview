@@ -48,3 +48,11 @@
 | 目标是什么？ | 每条问题独立提交、可验证、可追溯 |
 | 我学到了什么？ | 见 findings.md |
 | 我做了什么？ | 见上方记录 |
+
+### 问题 01：CR-02
+- **状态：** complete
+- **完成时间：** 2026-08-03T11:22:19+00:00
+- 验证结论：问题存在；认证/会话主体已安全，但设置页仍泄露 Secret。
+- 修复：停止回显/日志泄露，增加留空不改与 no-store。
+- 专项测试：`tests/test_cr02_settings_secret.py`，3 passed。
+- 提交：`fix(CR-02): stop echoing saved Feishu secrets`。

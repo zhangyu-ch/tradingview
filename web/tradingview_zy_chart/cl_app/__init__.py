@@ -51,6 +51,10 @@ from tradingview_zy.web_security import (
     validate_web_access,
     verify_login_password,
 )
+from tradingview_zy.settings_security import (
+    feishu_secret_is_configured,
+    merge_feishu_settings,
+)
 
 
 def create_app(test_config=None):
@@ -1490,36 +1494,40 @@ def create_app(test_config=None):
     @app.route("/setting", methods=["GET"])
     @login_required
     def setting():
-        # 查询配置
+        # Never send a stored secret back to the browser.  The page only receives a
+        # boolean so it can explain that leaving the password field blank keeps it.
         proxy = db.cache_get("req_proxy")
         fs_setting = db.cache_get("fs_keys")
         set_config = {
-            "fs_app_id": fs_setting["fs_app_id"] if fs_setting is not None else "",
-            "fs_app_secret": (
-                fs_setting["fs_app_secret"] if fs_setting is not None else ""
-            ),
-            "fs_user_id": fs_setting["fs_user_id"] if fs_setting is not None else "",
-            "proxy_host": proxy["host"] if proxy is not None else "",
-            "proxy_port": proxy["port"] if proxy is not None else "",
+            "fs_app_id": fs_setting.get("fs_app_id", "") if fs_setting else "",
+            "fs_app_secret_configured": feishu_secret_is_configured(fs_setting),
+            "fs_user_id": fs_setting.get("fs_user_id", "") if fs_setting else "",
+            "proxy_host": proxy.get("host", "") if proxy else "",
+            "proxy_port": proxy.get("port", "") if proxy else "",
         }
-        return render_template("setting.html", **set_config)
+        return (
+            render_template("setting.html", **set_config),
+            200,
+            {"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
 
     @app.route("/setting/save", methods=["POST"])
     @login_required
     def setting_save():
         proxy = {
-            "host": request.form["proxy_host"],
-            "port": request.form["proxy_port"],
+            "host": request.form.get("proxy_host", "").strip(),
+            "port": request.form.get("proxy_port", "").strip(),
         }
-        fs_keys = {
-            "fs_app_id": request.form["fs_app_id"],
-            "fs_app_secret": request.form["fs_app_secret"],
-            "fs_user_id": request.form["fs_user_id"],
-        }
+        fs_keys = merge_feishu_settings(
+            db.cache_get("fs_keys"),
+            app_id=request.form.get("fs_app_id"),
+            app_secret=request.form.get("fs_app_secret"),
+            user_id=request.form.get("fs_user_id"),
+        )
         db.cache_set("req_proxy", proxy)
         db.cache_set("fs_keys", fs_keys)
 
-        return {"ok": True}
+        return {"ok": True}, 200, {"Cache-Control": "no-store"}
 
     @app.route("/a/bkgn_list", methods=["GET"])
     @login_required
