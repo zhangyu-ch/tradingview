@@ -17,7 +17,7 @@
 |4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|已完成|通过（6 项 web payload 测试通过）|`fix(NEW-04)`|
 |5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归不在本地；3 项防回归测试通过）|`test(NEW-05)`|
 |6|`NX-20`|高|TDX Reliability|❌ 未修复|已完成|通过（3 项专项测试通过，4 个构造器均已移除无上限重连）|`fix(NX-20)`|
-|7|`RV-08`|高|Web Security / Secrets|❌ 未修复|待处理|—|—|
+|7|`RV-08`|高|Web Security / Secrets|❌ 未修复|已完成（共享修复已复验）|通过（共享根因已修复，2 项独立防回归测试通过）|`test(RV-08)`|
 |8|`HI-13`|高|Binance|❌ 未修复|待处理|—|—|
 |9|`HI-14`|高|TQ SDK|❌ 未修复|待处理|—|—|
 |10|`CR-05`|高|CTP|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
@@ -222,16 +222,21 @@
 ### 07. RV-08 · 系统设置页把已保存的飞书 App Secret 明文回显，并在控制台打印提交字段
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 高 / Web Security / Secrets
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（共享修复已复验）
+- **问题是否存在：** 否
+- **a. 这个问题是什么？** RV-08 与 CR-02 的剩余根因相同。复验当前本地 main：设置页已经不再获取/返回旧 `fs_app_secret`，Secret 输入为无预填的 password，控制台不再打印表单，保存使用留空不改语义并设置 no-store，因此原泄露在问题 01 后已不存在。
+- **b. 我是怎么修复的？** 不重复修改已安全的业务逻辑；新增独立 Secret 暴露静态门禁，检查模板预填、输入类型、浏览器日志、GET 路由返回字段、配置状态替代字段和 Cache-Control；加入 CI，并用原始脆弱模板/路由 fixture 证明门禁能捕获整条泄露链。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `python3 script/remediation/check_secret_exposure.py`，当前设置页和路由通过。
+  - 运行 `python3 -m pytest -q tests/test_rv08_secret_exposure_guard.py`，当前安全实现与原始泄露 fixture 共 2 项通过。
+  - 再次运行 CR-02 的源代码检查结论：模板无 `{{ fs_app_secret }}`、无 `console.log(data.field)`，GET 只返回 configured 布尔值。
+  - 运行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（共享根因已修复，2 项独立防回归测试通过）
+- **提交：** test(RV-08): enforce no-secret-echo settings contract
+- **修改文件：** `script/remediation/check_secret_exposure.py`, `tests/test_rv08_secret_exposure_guard.py`, `.github/workflows/repository-hygiene.yml`, `audit/remediation_state.json`, `remediation_report.md`, `progress.md`
+- **验证限制：**
+  - 当前容器未运行真实 Layui 浏览器；泄露数据流由模板/路由静态门禁和纯 Secret 合并测试覆盖。
 - **原报告最新结论：** setting.html 当前仍以 type=text 和 value="{{ fs_app_secret }}" 回显旧 Secret，并在提交回调中 console.log(data.field)。
 - **原报告建议：** 不返回旧 Secret；使用 password 输入与留空不改语义；删除日志；增加响应/DOM/控制台无 Secret 测试。
 

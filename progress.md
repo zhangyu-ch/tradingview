@@ -97,3 +97,11 @@
 - 修复：3 次尝试、12 秒总 deadline、受剩余预算约束的 SDK connect timeout、统一 ProviderUnavailableError。
 - 专项测试：`tests/test_nx20_tdx_bounded_retry.py`，3 passed。
 - 提交：`fix(NX-20): bound TDX ExHq constructor retries`。
+
+### 问题 07：RV-08
+- **状态：** complete（共享修复已复验）
+- **完成时间：** 2026-08-03T11:49:00+00:00
+- 验证结论：CR-02 后原 Secret 回显/控制台泄露已不存在。
+- 修复：新增独立 Secret 暴露扫描器、脆弱 fixture 与 CI 门禁。
+- 专项测试：`tests/test_rv08_secret_exposure_guard.py`，2 passed。
+- 提交：`test(RV-08): enforce no-secret-echo settings contract`。

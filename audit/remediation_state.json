@@ -379,16 +379,31 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（共享修复已复验）",
+      "problem_verified": false,
+      "problem_summary": "RV-08 与 CR-02 的剩余根因相同。复验当前本地 main：设置页已经不再获取/返回旧 `fs_app_secret`，Secret 输入为无预填的 password，控制台不再打印表单，保存使用留空不改语义并设置 no-store，因此原泄露在问题 01 后已不存在。",
+      "fix_summary": "不重复修改已安全的业务逻辑；新增独立 Secret 暴露静态门禁，检查模板预填、输入类型、浏览器日志、GET 路由返回字段、配置状态替代字段和 Cache-Control；加入 CI，并用原始脆弱模板/路由 fixture 证明门禁能捕获整条泄露链。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `python3 script/remediation/check_secret_exposure.py`，当前设置页和路由通过。",
+        "运行 `python3 -m pytest -q tests/test_rv08_secret_exposure_guard.py`，当前安全实现与原始泄露 fixture 共 2 项通过。",
+        "再次运行 CR-02 的源代码检查结论：模板无 `{{ fs_app_secret }}`、无 `console.log(data.field)`，GET 只返回 configured 布尔值。",
+        "运行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（共享根因已修复，2 项独立防回归测试通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "script/remediation/check_secret_exposure.py",
+        "tests/test_rv08_secret_exposure_guard.py",
+        ".github/workflows/repository-hygiene.yml",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "当前容器未运行真实 Layui 浏览器；泄露数据流由模板/路由静态门禁和纯 Secret 合并测试覆盖。"
+      ],
+      "commit_subject": "test(RV-08): enforce no-secret-echo settings contract"
     }
   },
   {
