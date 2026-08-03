@@ -240,3 +240,12 @@
 - 修复：ExchangeDB.now_trading 改为严格 `bool` 并明确返回 False，消除 Python/JSON/前端三态分叉。
 - 专项测试：`tests/test_mx04_exchange_db_trading_state.py`，3 passed；隔离动态调用、AST、compileall 通过。
 - 提交：`fix(MX-04): make DB trading state explicit`。
+
+### 问题 24：MX-05
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：两处 `setInterval(ZiXuan.stocks_update_rate(), 30000)` 确认把函数返回值当回调，轮询不会持续执行。
+- 修复：抽取可重复启动/停止的涨跌幅定时器 helper；启动前清理旧 timer，立即刷新一次，再传入真实函数回调。
+- 专项测试：`tests/test_mx05_rate_timer.py`，3 passed；Node fake timer 动态验证和全部内联脚本语法编译通过。
+- 首轮测试错误：2 passed、1 failed；失败来自测试脚本跨 `<script>` 标签提取，不是产品代码语法错误，已改用逐内联脚本编译。
+- 提交：`fix(MX-05): schedule watchlist rate refresh correctly`。

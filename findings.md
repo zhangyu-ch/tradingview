@@ -133,3 +133,8 @@
 - `None` 在 Python 的 `is False` 分支中会继续执行，在 JSON/JavaScript 的 `!== true` 分支中会停止，不能作为隐式“未知”状态跨语言传递。
 - DB provider 没有权威交易日历或实时 session feed；在尚未实现统一 calendar 前，明确 `False` 比把未知当开市更安全。
 - 历史 K 线读取不依赖 now_trading；本变更只让近实时 history 限流、监控和自选轮询统一 fail-closed。
+
+## MX-05 自选涨跌幅定时器复核
+- 原模板两处把 `ZiXuan.stocks_update_rate()` 的立即返回值交给 `setInterval`，因此只执行一次，定时器没有可调用回调。
+- 页面初始化与折叠面板重新打开还可能重复创建定时器；修复抽取 start/stop helper，启动前清理旧实例，先立即刷新一次，再传函数回调周期执行。
+- 首次语法测试用跨标签正则从第一个内联脚本匹配到最后一个 `</script>`，把 HTML 标签送入 Node；已改为逐个提取无 `src` 的内联脚本。

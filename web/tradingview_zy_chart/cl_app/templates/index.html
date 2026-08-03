@@ -235,9 +235,24 @@
     {% include 'sub_temp.html' %}
   </body>
   <script>
-    // 定时更新tick涨跌幅的对象
+    // 定时更新 tick 涨跌幅的对象。定时器只保存函数引用，且重复启动前先清理旧实例。
     var interval_update_rates;
     var interval_get_alert_records;
+
+    function stop_rate_update_timer() {
+      if (interval_update_rates !== undefined) {
+        clearInterval(interval_update_rates);
+        interval_update_rates = undefined;
+      }
+    }
+
+    function start_rate_update_timer() {
+      stop_rate_update_timer();
+      ZiXuan.stocks_update_rate();
+      interval_update_rates = setInterval(function () {
+        ZiXuan.stocks_update_rate();
+      }, 30000);
+    }
 
     var market_frequencys = `{{ market_frequencys| tojson }}`;
     // 解析 json 字符串
@@ -495,12 +510,9 @@
 
           if (ca_title === "自选组") {
             if (is_open) {
-              interval_update_rates = setInterval(
-                ZiXuan.stocks_update_rate(),
-                30000
-              );
+              start_rate_update_timer();
             } else {
-              clearInterval(interval_update_rates);
+              stop_rate_update_timer();
             }
           }
           if (ca_title === "监控提醒") {
@@ -653,7 +665,7 @@
       }
 
       init_web();
-      interval_update_rates = setInterval(ZiXuan.stocks_update_rate(), 30000);
+      start_rate_update_timer();
     });
   </script>
 </html>

@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 23
-- **待处理：** 58
+- **已完成：** 24
+- **待处理：** 57
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -34,7 +34,7 @@
 |21|`MX-06`|中|Database / Operations|❌ 未修复|已完成|通过（3 项专项测试通过；直接执行文件不再触发测试业务写入）|`fix(MX-06)`|
 |22|`MX-02`|中|Exchange Factory|❌ 未修复|已完成（通过移除不支持能力）|通过（4 项 MX-02 专项测试及 3 项相邻 provider 下线测试通过；支持声明与可选工厂已一致）|`fix(MX-02)`|
 |23|`MX-04`|中|ExchangeDB / Scheduling|❌ 未修复|已完成|通过（3 项专项测试通过；DB provider 不再暴露 None/null 三态）|`fix(MX-04)`|
-|24|`MX-05`|中|Frontend|❌ 未修复|待处理|—|—|
+|24|`MX-05`|中|Frontend|❌ 未修复|已完成|通过（3 项专项测试通过；定时回调、重启清理和停止语义均通过 Node 动态验证）|`fix(MX-05)`|
 |25|`MX-17`|中|TDX / Performance|❌ 未修复|待处理|—|—|
 |26|`NX-08`|中|Backtesting Model|❌ 未修复|待处理|—|—|
 |27|`NX-03`|中|Configuration / Messaging|❌ 未修复|待处理|—|—|
@@ -597,16 +597,21 @@
 ### 24. MX-05 · 自选涨跌幅轮询把函数返回值交给 setInterval
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Frontend
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** index.html 在页面初始化和自选面板展开时都调用 `setInterval(ZiXuan.stocks_update_rate(), 30000)`。这会先立即执行函数，再把其返回值（通常为 undefined/true）交给定时器，因此没有可周期调用的回调；重复展开还可能遗留多个 timer。
+- **b. 我是怎么修复的？** 新增 `start_rate_update_timer()` / `stop_rate_update_timer()`。启动时先清理旧 timer，立即刷新一次，再把真正的函数回调交给 setInterval；页面初始化和折叠面板生命周期统一使用这两个 helper，并在停止后清空句柄。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `pytest -q tests/test_mx05_rate_timer.py`，3 项专项测试全部通过。
+  - 静态断言模板中不再存在 `setInterval(ZiXuan.stocks_update_rate())` 立即调用反模式。
+  - 使用 Node fake timer 执行从真实模板提取的 start/stop helper，验证首次立即刷新、30 秒回调可执行、重复启动会清理旧 timer、停止会清空句柄。
+  - 对模板中所有无 src 的内联脚本完成 Jinja 占位替换后交给 Node `new Function` 编译，确认 JavaScript 语法有效；执行 `git diff --check`。
+- **e. 验证是否通过？** 通过（3 项专项测试通过；定时回调、重启清理和停止语义均通过 Node 动态验证）
+- **提交：** fix(MX-05): schedule watchlist rate refresh correctly
+- **修改文件：** `web/tradingview_zy_chart/cl_app/templates/index.html`, `tests/test_mx05_rate_timer.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 未启动完整 Layui/TradingView 浏览器页面；定时器核心行为已在 Node fake timer 中动态验证，完整 UI 展开/收起交互仍建议在部署环境做一次浏览器烟雾测试。
 - **原报告最新结论：** index.html 仍把 ZiXuan.stocks_update_rate() 的返回值传给 setInterval，函数立即执行而定时器没有回调。
 - **原报告建议：** 传函数引用/箭头函数，并用前端定时器测试验证周期调用。
 
