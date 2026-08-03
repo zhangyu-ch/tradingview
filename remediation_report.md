@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 29
-- **待处理：** 52
+- **已完成：** 30
+- **待处理：** 51
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -40,7 +40,7 @@
 |27|`NX-03`|中|Configuration / Messaging|❌ 未修复|已完成|通过（3 项专项测试通过；所有配置来源均返回独立映射，不再污染全局默认字典）|`fix(NX-03)`|
 |28|`NX-22`|中|Database / Diagnostics|❌ 未修复|已完成|通过（6 项专项、相邻及报告测试通过；数据库模块不再覆盖进程 warning 策略）|`fix(NX-22)`|
 |29|`NX-21`|中|Database Configuration|❌ 未修复|已完成|通过（3 项专项测试及相邻 DB 测试通过；特殊字符凭据可正确解析且默认字符串脱敏）|`fix(NX-21)`|
-|30|`NX-23`|中|ExchangeDB|❌ 未修复|待处理|—|—|
+|30|`NX-23`|中|ExchangeDB|❌ 未修复|已完成|通过（17 项专项、相邻、能力边界及报告测试通过；DB provider 可恢复持久化标的目录且未过报证券主数据能力）|`fix(NX-23)`|
 |31|`NX-16`|中|Web Security / Availability|❌ 未修复|待处理|—|—|
 |32|`NX-14`|中|Web Storage|❌ 未修复|待处理|—|—|
 |33|`NX-15`|中|Web Storage|❌ 未修复|待处理|—|—|
@@ -725,16 +725,23 @@
 ### 30. NX-23 · ExchangeDB.all_stocks() 永远为空，与“db 可作为 Web 数据源”冲突
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / ExchangeDB
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** ExchangeDB 可以读取已持久化的 K 线，但 `all_stocks()` 固定返回空列表。因此 Web 搜索、自选导入和全市场选股在 DB provider 下会把真实存在的行情数据解释成“没有任何标的”，形成静默能力冲突。
+- **b. 我是怎么修复的？** 新增只读数据库目录发现器：通过 SQLAlchemy inspector 只枚举当前市场前缀的 K 线分区表，用反射 Table 和 DISTINCT code 安全读取、去空、去重并排序；DB 增加 `klines_codes()`，ExchangeDB.all_stocks() 将代码映射为既有 `{code, name}` 契约。同步调整 NEW-06 行为门禁：允许这种持久化代码目录，但继续禁止把它过报为含发行人名称、上市状态或板块关系的权威 security master。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前直接调用与源码检查确认 `ExchangeDB.all_stocks()` 无条件返回 `[]`，即使数据库存在 K 线记录也不会查询。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_nx23_exchange_db_catalog.py tests/test_new06_db_capability_guard.py tests/test_nx21_mysql_url.py tests/test_mx04_exchange_db_trading_state.py tests/test_nx22_db_warning_scope.py tests/test_remediation_report_counts.py`，17 项专项、相邻、能力边界和报告测试全部通过。
+  - 在内存 SQLite 中建立两个 A 股分区、一个港股分区和一个缺少 code 列的同前缀表，确认按市场隔离、忽略非 K 线表、跨分区去重并稳定排序。
+  - 在隔离子进程中使用真实项目 DB/SQLAlchemy/SQLite 路径插入 SH.600000 与 SH.600001 K 线，再实例化 ExchangeDB('a')，端到端确认 all_stocks 返回两只标的。
+  - NEW-06 门禁验证 all_stocks 只能返回 code/name=code 的持久化目录，板块方法仍未实现，未来 registry 仍不得声明 SECURITY_MASTER/PLATES；同时验证空市场拒绝、compileall 与 `git diff --check`。
+- **e. 验证是否通过？** 通过（17 项专项、相邻、能力边界及报告测试通过；DB provider 可恢复持久化标的目录且未过报证券主数据能力）
+- **提交：** fix(NX-23): discover DB-backed instrument universe
+- **修改文件：** `src/tradingview_zy/database_catalog.py`, `src/tradingview_zy/db.py`, `src/tradingview_zy/exchange/exchange_db.py`, `docs/provider-capabilities.md`, `tests/test_nx23_exchange_db_catalog.py`, `tests/test_new06_db_capability_guard.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 数据库当前只持久化 K 线 code，不含权威证券名称、上市/退市状态或板块关系；返回对象因此以 code 同时作为 name，文档和 NEW-06 门禁禁止把该行为过报为完整 SECURITY_MASTER/PLATES 能力。
+  - 未连接真实 MySQL；表枚举、标识符引用和 DISTINCT 查询使用 SQLAlchemy inspector/reflection，由 SQLite 端到端与 SQLAlchemy 跨方言契约验证。
 - **原报告最新结论：** ExchangeDB.all_stocks() 仍固定返回 []，与 db 可作为 Web provider 及新增 SECURITY_MASTER 能力声明冲突。
 - **原报告建议：** 实现证券主数据表/查询，或撤销 security_master 能力并让依赖该能力的页面明确不可用。
 

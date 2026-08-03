@@ -35,9 +35,16 @@ def test_local_tree_does_not_contain_the_reported_overclaiming_registry() -> Non
     assert not REGISTRY.exists()
 
 
-def test_db_security_master_and_plate_methods_are_not_claimed_as_implemented() -> None:
+def test_db_exposes_only_a_persisted_code_catalog_not_security_metadata() -> None:
     source = DB_PROVIDER.read_text(encoding="utf-8")
-    assert _is_unimplemented(_method_node(source, "all_stocks"))
+    all_stocks = _method_node(source, "all_stocks")
+    all_stocks_source = ast.get_source_segment(source, all_stocks) or ""
+
+    # NX-23 may expose codes already present in K-line storage, but that is not
+    # an authoritative security master: names remain the code itself and the
+    # plate metadata methods must stay explicitly unsupported.
+    assert "db.klines_codes(self.market)" in all_stocks_source
+    assert '{"code": code, "name": code}' in all_stocks_source
     assert _is_unimplemented(_method_node(source, "stock_owner_plate"))
     assert _is_unimplemented(_method_node(source, "plate_stocks"))
 
@@ -60,5 +67,5 @@ def test_future_registry_cannot_overreport_db_capabilities() -> None:
 
 def test_capability_documentation_is_explicit_about_db_limitations() -> None:
     text = (ROOT / "docs/provider-capabilities.md").read_text(encoding="utf-8")
-    assert "does **not** provide a security master" in text
+    assert "does **not** provide an authoritative security master" in text
     assert "Declaring `SECURITY_MASTER` or `PLATES`" in text

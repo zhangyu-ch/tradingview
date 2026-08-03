@@ -1699,16 +1699,38 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "ExchangeDB 可以读取已持久化的 K 线，但 `all_stocks()` 固定返回空列表。因此 Web 搜索、自选导入和全市场选股在 DB provider 下会把真实存在的行情数据解释成“没有任何标的”，形成静默能力冲突。",
+      "fix_summary": "新增只读数据库目录发现器：通过 SQLAlchemy inspector 只枚举当前市场前缀的 K 线分区表，用反射 Table 和 DISTINCT code 安全读取、去空、去重并排序；DB 增加 `klines_codes()`，ExchangeDB.all_stocks() 将代码映射为既有 `{code, name}` 契约。同步调整 NEW-06 行为门禁：允许这种持久化代码目录，但继续禁止把它过报为含发行人名称、上市状态或板块关系的权威 security master。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前直接调用与源码检查确认 `ExchangeDB.all_stocks()` 无条件返回 `[]`，即使数据库存在 K 线记录也不会查询。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_nx23_exchange_db_catalog.py tests/test_new06_db_capability_guard.py tests/test_nx21_mysql_url.py tests/test_mx04_exchange_db_trading_state.py tests/test_nx22_db_warning_scope.py tests/test_remediation_report_counts.py`，17 项专项、相邻、能力边界和报告测试全部通过。",
+        "在内存 SQLite 中建立两个 A 股分区、一个港股分区和一个缺少 code 列的同前缀表，确认按市场隔离、忽略非 K 线表、跨分区去重并稳定排序。",
+        "在隔离子进程中使用真实项目 DB/SQLAlchemy/SQLite 路径插入 SH.600000 与 SH.600001 K 线，再实例化 ExchangeDB('a')，端到端确认 all_stocks 返回两只标的。",
+        "NEW-06 门禁验证 all_stocks 只能返回 code/name=code 的持久化目录，板块方法仍未实现，未来 registry 仍不得声明 SECURITY_MASTER/PLATES；同时验证空市场拒绝、compileall 与 `git diff --check`。"
+      ],
+      "verification_result": "通过（17 项专项、相邻、能力边界及报告测试通过；DB provider 可恢复持久化标的目录且未过报证券主数据能力）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/database_catalog.py",
+        "src/tradingview_zy/db.py",
+        "src/tradingview_zy/exchange/exchange_db.py",
+        "docs/provider-capabilities.md",
+        "tests/test_nx23_exchange_db_catalog.py",
+        "tests/test_new06_db_capability_guard.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "数据库当前只持久化 K 线 code，不含权威证券名称、上市/退市状态或板块关系；返回对象因此以 code 同时作为 name，文档和 NEW-06 门禁禁止把该行为过报为完整 SECURITY_MASTER/PLATES 能力。",
+        "未连接真实 MySQL；表枚举、标识符引用和 DISTINCT 查询使用 SQLAlchemy inspector/reflection，由 SQLite 端到端与 SQLAlchemy 跨方言契约验证。"
+      ],
+      "commit_subject": "fix(NX-23): discover DB-backed instrument universe"
     }
   },
   {

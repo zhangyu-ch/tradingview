@@ -24,6 +24,7 @@ from sqlalchemy.pool import QueuePool
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
+from tradingview_zy.database_catalog import list_market_kline_codes
 
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
@@ -372,6 +373,10 @@ class DB(object):
         self.__cache_tables[table_name] = TableByKlines
         Base.metadata.create_all(self.engine)
         return TableByKlines
+
+    def klines_codes(self, market: str) -> List[str]:
+        """Return the distinct instrument codes already stored for a market."""
+        return list_market_kline_codes(self.engine, market)
 
     def klines_query(
         self,

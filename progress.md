@@ -291,3 +291,19 @@
 - 修复：新增 `build_mysql_url()`，使用 SQLAlchemy `URL.create` 结构化构造并由默认渲染隐藏密码。
 - 专项测试：`tests/test_nx21_mysql_url.py`，3 passed；特殊字符完整 round-trip、默认脱敏和构造器无 f-string DSN 均通过。
 - 提交：`fix(NX-21): build MySQL URLs without credential interpolation`。
+
+### 问题 30：NX-23
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 验证结论：ExchangeDB 可读取持久化 K 线，但 all_stocks 固定为空，导致 DB provider 的搜索、导入和全市场选股静默失效。
+- 修复：按市场枚举 K 线分区并读取 DISTINCT code；映射到既有 `{code, name}` 目录契约，同时明确该目录不是权威 security master。
+- 专项、相邻、能力边界与报告测试：17 passed；内存已有表发现、真实项目 SQLite 插入→ExchangeDB 端到端路径和 NEW-06 防过报门禁均通过。
+- 首轮组合回归暴露 NEW-06 旧门禁把“持久化代码目录”误等同于“权威证券主数据”；已调整为允许 code/name=code 的兼容目录，同时继续禁止板块能力与 `SECURITY_MASTER`/`PLATES` 过报。
+- 提交：`fix(NX-23): discover DB-backed instrument universe`。
+
+
+### 归档检查点 03（问题 021–030）
+- **状态：** verified
+- 文件：`/mnt/data/tradingview_remediation_issues_021-030.zip`
+- 校验和：见同名 `.sha256` sidecar。
+- 验证：使用系统 `unzip` 重新解压后工作树干净；问题 021–030 标签逐一存在；`git fsck --full` 通过。

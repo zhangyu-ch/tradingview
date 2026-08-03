@@ -274,8 +274,17 @@ class ExchangeDB(Exchange):
         else:
             return convert_stock_kline_frequency(klines, to_f)
 
-    def all_stocks(self):
-        return []
+    def all_stocks(self) -> List[Dict[str, str]]:
+        """Return the persisted instrument universe for this market.
+
+        The database stores K-line codes but no authoritative security names, so
+        the code is also used as the display name.  This is still preferable to
+        silently advertising an empty universe when stored market data exists.
+        """
+        return [
+            {"code": code, "name": code}
+            for code in db.klines_codes(self.market)
+        ]
 
     def now_trading(self) -> bool:
         """Return an explicit fail-closed live-market state.
