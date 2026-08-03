@@ -191,3 +191,10 @@
 - 修复：导出使用 BytesIO；导入流式限额解析，增加请求体/行数/行长度/UTF-8/.txt 校验。
 - 专项测试：`tests/test_me06_watchlist_transfer.py`，4 passed。
 - 提交：`fix(ME-06): isolate and bound watchlist transfers`。
+
+### 问题 18：ME-16
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 修复：统一有限 IB Redis RPC、明确 TimeoutError、响应键清理和 worker TTL。
+- 专项测试：`tests/test_me16_ib_rpc_timeout.py`，4 passed。
+- 提交：`fix(ME-16): bound IB Redis RPC waits`。

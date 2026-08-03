@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 9
-- **待处理：** 72
+- **已完成：** 10
+- **待处理：** 71
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -28,7 +28,7 @@
 |15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归在本地不存在；4 项门禁测试防止未来重新过报）|`test(NEW-06)`|
 |16|`HI-01`|中|Futures Trader|❌ 未修复|已完成（共享修复已复验）|通过（旧构造参数和错误落库类型所在模块已移除；7 项专项/共享门禁通过）|`test(HI-01)`|
 |17|`ME-06`|中|File Upload|❌ 未修复|已完成|通过（4 项专项测试通过；共享文件、无界读取和上传边界根因已消除）|`fix(ME-06)`|
-|18|`ME-16`|中|Interactive Brokers|❌ 未修复|待处理|—|—|
+|18|`ME-16`|中|Interactive Brokers|❌ 未修复|已完成|通过（4 项专项测试通过；所有 IB 客户端 RPC 均使用有限 deadline）|`fix(ME-16)`|
 |19|`ME-05`|中|Web Startup|❌ 未修复|待处理|—|—|
 |20|`MX-01`|中|Configuration / Messaging|❌ 未修复|待处理|—|—|
 |21|`MX-06`|中|Database / Operations|❌ 未修复|待处理|—|—|
@@ -466,16 +466,22 @@
 ### 18. ME-16 · IB Redis 请求使用 BRPOP timeout=0，可无限阻塞调用线程
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Interactive Brokers
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** ExchangeIB.ticks() 使用 Redis BRPOP timeout=0；IB worker 消失、消息丢失或响应未写回时，Web/同步调用线程永久阻塞。历史订单路径也曾使用无限等待，虽已随 CR-03 下线，但行情 RPC 仍需统一有限 deadline 和响应键清理。
+- **b. 我是怎么修复的？** 新增 correlation-keyed `redis_rpc`：只接受正数 timeout，向命令队列写入后以向上取整的有限秒数 BRPOP；超时抛 `IBRequestTimeout`，成功/失败都清理响应键，并在请求前清除潜在陈旧响应。ExchangeIB 的 search/klines/ticks/stock_info/balance/positions 全部统一走该 RPC；worker 为迟到响应设置 120 秒 TTL。默认 deadline 通过 IB_RPC_TIMEOUT_SECONDS 配置。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me16_ib_rpc_timeout.py`，4 项测试全部通过。
+  - Fake Redis 故障注入验证无响应在有限 timeout 后抛明确 TimeoutError，队列前后均清理 correlation key。
+  - 成功响应验证 JSON 解码与清理；0/负 timeout 在入队前拒绝。
+  - 静态检查 ExchangeIB 不再含 timeout=0/BRPOP 0，worker 对响应键设置 TTL；执行 compileall、git diff --check。
+- **e. 验证是否通过？** 通过（4 项专项测试通过；所有 IB 客户端 RPC 均使用有限 deadline）
+- **提交：** fix(ME-16): bound IB Redis RPC waits
+- **修改文件：** `src/tradingview_zy/exchange/ib_rpc.py`, `src/tradingview_zy/exchange/exchange_ib.py`, `script/crontab/script_ib_tasks.py`, `src/tradingview_zy/config.py.demo`, `tests/test_me16_ib_rpc_timeout.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 未连接真实 Redis/IB worker；使用行为等价 Fake Redis 验证 deadline、清理和解码。
+  - worker 在客户端超时后仍可能完成外部 IB 请求，但迟到响应键有 TTL，不会永久泄漏；主动取消 IB API 调用需要独立 worker 协议扩展。
 - **原报告最新结论：** ExchangeIB.ticks() 仍 BRPOP timeout=0，order 路径也存在 0 超时；调用线程可永久阻塞。
 - **原报告建议：** 统一有限 deadline、取消/清理响应键、明确 TimeoutError，并覆盖 Redis 无响应测试。
 

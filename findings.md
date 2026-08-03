@@ -104,3 +104,8 @@
 - 固定 `zx.txt` 同时服务导入和导出，任何并发请求都可能覆盖或提前删除另一请求的文件。
 - 导出无需落盘，改用 `BytesIO`；导入也无需保存，可直接对上传二进制流逐行解析。
 - 限额分为 Flask 请求体上限、导入行数和单行字节；UTF-8 与扩展名异常返回明确 4xx。
+
+## ME-16 IB Redis RPC 复核
+- `BRPOP timeout=0` 是永久等待；worker 停止后调用线程没有任何返回路径。
+- IB 请求已经有唯一 UUID 响应键，可直接作为 correlation ID；统一 RPC 同时负责有限 timeout、序列化、解码和 finally 清理。
+- 客户端清理无法删除“超时后才被 worker 创建”的键，因此 worker 在 lpush 后补 120 秒 expire，限制迟到响应残留。

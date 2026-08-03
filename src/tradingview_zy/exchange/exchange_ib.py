@@ -8,8 +8,9 @@ import pandas as pd
 import pytz
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 
-from tradingview_zy import fun, rd
+from tradingview_zy import config, fun, rd
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_us_kline_frequency
+from tradingview_zy.exchange.ib_rpc import redis_rpc
 
 ib_res_hkey = "ib_data_results"
 
@@ -30,10 +31,23 @@ class ExchangeIB(Exchange):
 
         # 缓存，避免重复调用接口
         self.cache = {}
+        self.rpc_timeout = float(
+            getattr(config, "IB_RPC_TIMEOUT_SECONDS", 30)
+        )
 
     @staticmethod
     def uid():
         return f"{ib_res_hkey}_{str(uuid.uuid4())}"
+
+    def _rpc(self, command: CmdEnum, payload: dict, timeout: float | None = None):
+        payload = dict(payload)
+        payload.setdefault("key", self.uid())
+        return redis_rpc(
+            rd.Robj(),
+            command.value,
+            payload,
+            self.rpc_timeout if timeout is None else float(timeout),
+        )
 
     def default_code(self) -> str:
         return "AAPL"
@@ -65,12 +79,7 @@ class ExchangeIB(Exchange):
         if f"search_stock_{search}" in self.cache.keys():
             return self.cache[f"search_stock_{search}"]
 
-        args = {"key": self.uid(), "search": search}
-        rd.Robj().lpush(CmdEnum.SEARCH_STOCKS.value, json.dumps(args))
-        res = rd.Robj().brpop([args["key"]], 30)
-        if res is None:
-            return []
-        res = json.loads(res[1])
+        res = self._rpc(CmdEnum.SEARCH_STOCKS, {"search": search})
         self.cache[f"search_stock_{search}"] = res
         return res
 
@@ -140,18 +149,16 @@ class ExchangeIB(Exchange):
         )
         timeout = 60 if "timeout" not in args.keys() else args["timeout"]
 
-        args = {
-            "key": self.uid(),
-            "code": code,
-            "durationStr": duration,
-            "barSizeSetting": frequency_map[frequency],
-            "timeout": timeout,
-        }
-        rd.Robj().lpush(CmdEnum.KLINES.value, json.dumps(args))
-        bars = rd.Robj().brpop([args["key"]], timeout)
-        if bars is None or len(bars) == 0:
-            return None
-        bars: dict = json.loads(bars[1])
+        bars = self._rpc(
+            CmdEnum.KLINES,
+            {
+                "code": code,
+                "durationStr": duration,
+                "barSizeSetting": frequency_map[frequency],
+                "timeout": timeout,
+            },
+            timeout=timeout,
+        )
         klines_df = pd.DataFrame(bars)
         if len(klines_df) > 0:
             klines_df["date"] = pd.to_datetime(klines_df["date"]).dt.tz_localize(
@@ -176,13 +183,7 @@ class ExchangeIB(Exchange):
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         ticks = {}
-        args = {"key": self.uid(), "codes": codes}
-        rd.Robj().lpush(CmdEnum.TICKS.value, json.dumps(args))
-
-        tks = rd.Robj().brpop([args["key"]], timeout=0)
-        if tks is None:
-            return {}
-        tks: dict = json.loads(tks[1])
+        tks = self._rpc(CmdEnum.TICKS, {"codes": codes})
         for tk in tks:
             if tk is None:
                 continue
@@ -203,12 +204,7 @@ class ExchangeIB(Exchange):
         if f"stock_info_{code}" in self.cache.keys():
             return self.cache[f"stock_info_{code}"]
 
-        args = {"key": self.uid(), "code": code}
-        rd.Robj().lpush(CmdEnum.STOCK_INFO.value, json.dumps(args))
-        res = rd.Robj().brpop([args["key"]], timeout=30)
-        if res is None:
-            return None
-        res = json.loads(res[1])
+        res = self._rpc(CmdEnum.STOCK_INFO, {"code": code})
         self.cache[f"stock_info_{code}"] = res
         return res
 
@@ -225,8 +221,7 @@ class ExchangeIB(Exchange):
     )
     def balance(self):
         # 获取当前资产
-        args = {"key": self.uid()}
-        rd.Robj().lpush(CmdEnum.BALANCE.value, json.dumps(args))
+        balance = self._rpc(CmdEnum.BALANCE, {})
 
         # Demo
         # {
@@ -239,10 +234,7 @@ class ExchangeIB(Exchange):
         # 'LookAheadMaintMarginReq': 81.91, 'MaintMarginReq': 81.91, 'NetLiquidation': 1000784.36,
         # 'SMA': 1000650.51, 'TotalCashValue': 999724.39
         # }
-        balance = rd.Robj().brpop(args["key"], timeout=30)
-        if balance is None:
-            return None
-        return json.loads(balance[1])
+        return balance
 
     def positions(self, code: str = ""):
         """
@@ -251,13 +243,7 @@ class ExchangeIB(Exchange):
         DEMO:
         [{'code': 'NVDA', 'account': 'DU6941075', 'avgCost': 273.93, 'position': 1.0}]
         """
-        args = {"key": self.uid(), "code": code}
-        rd.Robj().lpush(CmdEnum.POSITIONS.value, json.dumps(args))
-
-        positions = rd.Robj().brpop(args["key"], timeout=30)
-        if positions is None:
-            return None
-        return json.loads(positions[1])
+        return self._rpc(CmdEnum.POSITIONS, {"code": code})
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)

@@ -1036,16 +1036,35 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "ExchangeIB.ticks() 使用 Redis BRPOP timeout=0；IB worker 消失、消息丢失或响应未写回时，Web/同步调用线程永久阻塞。历史订单路径也曾使用无限等待，虽已随 CR-03 下线，但行情 RPC 仍需统一有限 deadline 和响应键清理。",
+      "fix_summary": "新增 correlation-keyed `redis_rpc`：只接受正数 timeout，向命令队列写入后以向上取整的有限秒数 BRPOP；超时抛 `IBRequestTimeout`，成功/失败都清理响应键，并在请求前清除潜在陈旧响应。ExchangeIB 的 search/klines/ticks/stock_info/balance/positions 全部统一走该 RPC；worker 为迟到响应设置 120 秒 TTL。默认 deadline 通过 IB_RPC_TIMEOUT_SECONDS 配置。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_me16_ib_rpc_timeout.py`，4 项测试全部通过。",
+        "Fake Redis 故障注入验证无响应在有限 timeout 后抛明确 TimeoutError，队列前后均清理 correlation key。",
+        "成功响应验证 JSON 解码与清理；0/负 timeout 在入队前拒绝。",
+        "静态检查 ExchangeIB 不再含 timeout=0/BRPOP 0，worker 对响应键设置 TTL；执行 compileall、git diff --check。"
+      ],
+      "verification_result": "通过（4 项专项测试通过；所有 IB 客户端 RPC 均使用有限 deadline）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/exchange/ib_rpc.py",
+        "src/tradingview_zy/exchange/exchange_ib.py",
+        "script/crontab/script_ib_tasks.py",
+        "src/tradingview_zy/config.py.demo",
+        "tests/test_me16_ib_rpc_timeout.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "未连接真实 Redis/IB worker；使用行为等价 Fake Redis 验证 deadline、清理和解码。",
+        "worker 在客户端超时后仍可能完成外部 IB 请求，但迟到响应键有 TTL，不会永久泄漏；主动取消 IB API 调用需要独立 worker 协议扩展。"
+      ],
+      "commit_subject": "fix(ME-16): bound IB Redis RPC waits"
     }
   },
   {

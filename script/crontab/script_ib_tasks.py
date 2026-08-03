@@ -322,6 +322,7 @@ def run_tasks(client_id: int):
                 res = positions(args["code"])
 
             rd.Robj().lpush(args["key"], json.dumps(res))
+            rd.Robj().expire(args["key"], 120)
             log.info(
                 f"{client_id} Task CMD {cmd} [ {info} ] run times : {time.time() - s_time}"
             )
