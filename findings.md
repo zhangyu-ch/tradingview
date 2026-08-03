@@ -39,3 +39,10 @@
 
 ---
 *每执行2次查看/浏览器/搜索操作后更新此文件*
+
+## NEW-03 依赖契约复核
+- 本地 `pyproject.toml` 重新把 `chardet>=5.2.0` 声明为直接依赖，并未约束 `websockets`；本地 `uv.lock` 因而锁定 `chardet 7.1.0` 与 `websockets 16.0`。
+- 本地 `requirements.txt` 又维护一套宽松依赖清单，构成第二个人工维护入口。
+- 远程固定点的 `pyproject.toml` 已采用 `requires-python = ">=3.11,<3.12"`、移除直接 `chardet`、增加 `websockets>=13.1,<14`；远程锁文件对应 `websockets 13.1` 且无 `chardet` 根依赖。
+- 本地 TA-Lib 供应方式仅包含 CPython 3.11 轮子；在声明支持 3.12+ 时，离线 `uv lock` 会明确报出不可满足，说明 Python 上界也是同一依赖契约的一部分。
+- GitHub 代码搜索接口首次调用参数格式错误，修正后未返回锁文件片段；改用 `fetch_blob` 成功读取完整远程锁文件，不再重复搜索。

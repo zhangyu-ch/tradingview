@@ -64,3 +64,12 @@
 - 修复：新增只读仓库卫生门禁和恶意 fixture 防回归测试。
 - 专项测试：`tests/test_new02_repository_hygiene.py`，3 passed。
 - 提交：`fix(NEW-02): add repository hygiene gate`。
+
+### 问题 03：NEW-03
+- **状态：** complete
+- **完成时间：** 2026-08-03T11:30:00+00:00
+- 验证结论：问题存在；本地依赖入口漂移并锁到 chardet 7.1.0 / websockets 16.0，Python 声明也超出本地轮子支持范围。
+- 修复：pyproject 成为唯一依赖源，requirements 仅转发；锁定 Python 3.11 与 websockets 13.1，移除 chardet；增加依赖契约门禁。
+- 专项测试：`tests/test_new03_dependency_contract.py`，2 passed；依赖契约脚本通过。
+- 环境限制：离线容器没有 Python 3.11，`uv lock --check --offline` 无法启动目标解释器。
+- 提交：`fix(NEW-03): unify dependency sources and compatibility bounds`。

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  reject-remediation-transport:
+  repository-contracts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,3 +18,5 @@ jobs:
           python-version: "3.11"
       - name: Reject temporary patch transport and force-push workflows
         run: python script/remediation/check_repository_hygiene.py
+      - name: Verify dependency sources and lock compatibility
+        run: python script/remediation/check_dependency_contract.py

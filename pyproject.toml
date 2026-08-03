@@ -3,14 +3,13 @@ name = "tradingview_zy"
 version = "1.0.0"
 description = "TradingView market data, monitoring, backtesting, and trading tools"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "akshare>=1.16.98",
     "alpaca-py>=0.40.1",
     "apscheduler>=3.11.0",
     "baostock>=0.8.9",
     "ccxt==4.4.88",
-    "chardet>=5.2.0",
     "dbutils>=3.1.1",
     "dtaidistance>=2.3.13",
     "flask>=3.1.1",
@@ -20,6 +19,7 @@ dependencies = [
     "ib-insync>=0.9.86",
     "ipywidgets>=8.1.7",
     "lark-oapi>=1.4.17",
+    "websockets>=13.1,<14",
     "matplotlib>=3.10.3",
     "mytt>=2.9.3",
     "numpy==1.26.4",

@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 1
-- **待处理：** 80
+- **已完成：** 2
+- **待处理：** 79
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -13,7 +13,7 @@
 |---:|---|---|---|---|---|---|---|
 |1|`CR-02`|严重|Web Security|🟡 部分修复|已完成|通过（3 项专项测试通过）|`fix(CR-02)`|
 |2|`NEW-02`|高|CI / Supply Chain|🆕 新问题（未修复）|已完成（本地已不存在，已加防回归）|通过（本地风险不存在，3 项防回归测试通过）|`fix(NEW-02)`|
-|3|`NEW-03`|高|Dependencies / Packaging|🆕 新问题（未修复）|待处理|—|—|
+|3|`NEW-03`|高|Dependencies / Packaging|🆕 新问题（未修复）|已完成|通过（2 项专项测试与静态依赖契约检查通过）|`fix(NEW-03)`|
 |4|`NEW-04`|高|Web / Market Data|🆕 新问题（未修复）|待处理|—|—|
 |5|`NEW-05`|高|Backtesting / Accounting|🆕 新问题（未修复）|待处理|—|—|
 |6|`NX-20`|高|TDX Reliability|❌ 未修复|待处理|—|—|
@@ -138,16 +138,21 @@
 ### 03. NEW-03 · requirements.txt 与 pyproject/uv.lock 漂移，可重新解析出已知不兼容依赖
 
 - **原始状态 / 严重度 / 领域：** 🆕 新问题（未修复） / 高 / Dependencies / Packaging
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 本地代码同时维护 `requirements.txt` 与 `pyproject.toml` 两套直接依赖清单；本地 `pyproject.toml` 重新加入了 `chardet`、没有限制 `websockets`，`uv.lock` 实际锁到 chardet 7.1.0 与 websockets 16.0；Python 约束还错误覆盖 3.12+，但仓库仅提供 CPython 3.11 的 TA-Lib 轮子。
+- **b. 我是怎么修复的？** 把 `pyproject.toml` 设为唯一人工维护依赖源；`requirements.txt` 改为 `-e .` 兼容转发；Python 约束收紧为 3.11；删除直接 chardet，增加 `websockets>=13.1,<14`；同步锁文件到 websockets 13.1 并移除 chardet；新增依赖契约检查器、恶意漂移 fixture 和 CI 门禁。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `python3 script/remediation/check_dependency_contract.py`，校验 pyproject、requirements 与 uv.lock 的 Python、直接依赖、根包 metadata 和关键锁定版本一致。
+  - 运行 `python3 -m pytest -q tests/test_new03_dependency_contract.py`，当前仓库和故意漂移的临时项目共 2 项测试通过。
+  - 使用 `tomllib` 直接解析锁文件，确认不存在 chardet 包/根依赖，websockets 锁定为 13.1，根 metadata 保留 `>=13.1,<14`。
+  - 运行 `python3 -m compileall` 与 `git diff --check`。
+- **e. 验证是否通过？** 通过（2 项专项测试与静态依赖契约检查通过）
+- **提交：** fix(NEW-03): unify dependency sources and compatibility bounds
+- **修改文件：** `pyproject.toml`, `requirements.txt`, `uv.lock`, `script/remediation/check_dependency_contract.py`, `tests/test_new03_dependency_contract.py`, `.github/workflows/repository-hygiene.yml`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 容器只有 Python 3.13 且离线，`uv lock --check --offline` 在选择项目要求的 Python 3.11 解释器前即停止；锁文件结构、项目 metadata 和关键版本已由独立 TOML 契约测试验证，CI 在 Python 3.11 上继续执行同一检查。
 - **原报告最新结论：** pyproject 已删除 chardet 并固定 websockets>=13.1,<14；requirements.txt 仍直接列出无上界 chardet 和 lark-oapi，且没有 websockets 兼容约束。使用 requirements 安装可再次解析到 chardet 7.x / websockets 16.x，重现本次 CI 中已出现过的 Requests/Lark 导入告警或失败。
 - **原报告建议：** 将 pyproject+uv.lock 设为唯一依赖源；若必须发布 requirements，则从 lock 自动生成并在 CI 校验无漂移。
 

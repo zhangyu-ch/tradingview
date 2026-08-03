@@ -157,16 +157,35 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "本地代码同时维护 `requirements.txt` 与 `pyproject.toml` 两套直接依赖清单；本地 `pyproject.toml` 重新加入了 `chardet`、没有限制 `websockets`，`uv.lock` 实际锁到 chardet 7.1.0 与 websockets 16.0；Python 约束还错误覆盖 3.12+，但仓库仅提供 CPython 3.11 的 TA-Lib 轮子。",
+      "fix_summary": "把 `pyproject.toml` 设为唯一人工维护依赖源；`requirements.txt` 改为 `-e .` 兼容转发；Python 约束收紧为 3.11；删除直接 chardet，增加 `websockets>=13.1,<14`；同步锁文件到 websockets 13.1 并移除 chardet；新增依赖契约检查器、恶意漂移 fixture 和 CI 门禁。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `python3 script/remediation/check_dependency_contract.py`，校验 pyproject、requirements 与 uv.lock 的 Python、直接依赖、根包 metadata 和关键锁定版本一致。",
+        "运行 `python3 -m pytest -q tests/test_new03_dependency_contract.py`，当前仓库和故意漂移的临时项目共 2 项测试通过。",
+        "使用 `tomllib` 直接解析锁文件，确认不存在 chardet 包/根依赖，websockets 锁定为 13.1，根 metadata 保留 `>=13.1,<14`。",
+        "运行 `python3 -m compileall` 与 `git diff --check`。"
+      ],
+      "verification_result": "通过（2 项专项测试与静态依赖契约检查通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "pyproject.toml",
+        "requirements.txt",
+        "uv.lock",
+        "script/remediation/check_dependency_contract.py",
+        "tests/test_new03_dependency_contract.py",
+        ".github/workflows/repository-hygiene.yml",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "容器只有 Python 3.13 且离线，`uv lock --check --offline` 在选择项目要求的 Python 3.11 解释器前即停止；锁文件结构、项目 metadata 和关键版本已由独立 TOML 契约测试验证，CI 在 Python 3.11 上继续执行同一检查。"
+      ],
+      "commit_subject": "fix(NEW-03): unify dependency sources and compatibility bounds"
     }
   },
   {
