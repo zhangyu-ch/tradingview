@@ -4,6 +4,7 @@ import os
 import time
 import traceback
 import importlib
+from io import BytesIO
 
 import pinyin
 import pytz
@@ -59,6 +60,11 @@ from tradingview_zy.web_security import (
     validate_web_access,
     verify_login_password,
 )
+from tradingview_zy.watchlist_transfer import (
+    WatchlistTransferError,
+    export_watchlist_text,
+    parse_watchlist_stream,
+)
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
@@ -104,6 +110,24 @@ def create_app(test_config=None):
         )
     else:
         csrf_trusted_origins = tuple(csrf_trusted_origins or ())
+
+    max_upload_bytes = int(
+        security_overrides.get(
+            "WEB_MAX_UPLOAD_BYTES", getattr(config, "WEB_MAX_UPLOAD_BYTES", 1_048_576)
+        )
+    )
+    max_watchlist_lines = int(
+        security_overrides.get(
+            "WEB_MAX_WATCHLIST_IMPORT_LINES",
+            getattr(config, "WEB_MAX_WATCHLIST_IMPORT_LINES", 5_000),
+        )
+    )
+    max_watchlist_line_bytes = int(
+        security_overrides.get(
+            "WEB_MAX_WATCHLIST_LINE_BYTES",
+            getattr(config, "WEB_MAX_WATCHLIST_LINE_BYTES", 512),
+        )
+    )
 
     login_limiter = LoginAttemptLimiter(
         max_attempts=int(
@@ -363,6 +387,7 @@ def create_app(test_config=None):
         REMEMBER_COOKIE_HTTPONLY=True,
         REMEMBER_COOKIE_SAMESITE="Lax",
         REMEMBER_COOKIE_SECURE=cookie_secure,
+        MAX_CONTENT_LENGTH=max_upload_bytes,
     )
     app.logger.addFilter(
         lambda record: "/static/" not in record.getMessage().lower()
@@ -1143,77 +1168,51 @@ def create_app(test_config=None):
     @app.route("/zixuan_opt_export", methods=["GET"])
     @login_required
     def opt_zixuan_export():
-        """
-        导出自选组
-        """
+        """导出自选组；响应使用请求私有内存流，不写共享临时文件。"""
         market = request.args.get("market")
         zx_group = request.args.get("zx_group")
         zx = ZiXuan(market)
-        stock_list = zx.zx_stocks(zx_group)
-        output = ""
-        for s in stock_list:
-            output += f"{s['code']},{s['name']}\n"
-        try:
-            down_file = get_data_path() / "zx.txt"
-            down_file.write_text(output, encoding="utf-8")
-            return send_file(
-                down_file, as_attachment=True, download_name=f"zixuan_{zx_group}.txt"
-            )
-        finally:
-            try:
-                os.remove(down_file)
-            except Exception:
-                pass
+        output = export_watchlist_text(zx.zx_stocks(zx_group)).encode("utf-8")
+        return send_file(
+            BytesIO(output),
+            mimetype="text/plain; charset=utf-8",
+            as_attachment=True,
+            download_name="zixuan_export.txt",
+            max_age=0,
+        )
 
     @app.route("/zixuan_opt_import", methods=["POST"])
     @login_required
     def opt_zixuan_import():
-        """
-        导入自选
-        """
-        market = request.form["market"]
-        zx_group = request.form["zx_group"]
-        file = request.files["file"]
-        import_file = get_data_path() / "zx.txt"
-        file.save(import_file)
-        zx = ZiXuan(market)
-        ex = get_exchange(Market(market))
-        import_nums = 0
-        market_all_stocks = ex.all_stocks()
-        market_all_codes = [s["code"] for s in market_all_stocks]
-        with open(import_file, "r", encoding="utf-8") as fp:
-            for line in fp.readlines():
-                try:
-                    import_infos = line.strip().split(",")
-                    if len(import_infos) >= 2:
-                        code = import_infos[0].strip()
-                        name = import_infos[1].strip()
-                    else:
-                        code = import_infos[0].strip()
-                        name = None
-
-                    # 股票代码兼容性处理
-                    if market == "a":
-                        code = code.replace("SHSE.", "SH.").replace("SZSE.", "SZ.")
-
-                    if code not in market_all_codes:
-                        same_codes = [_c for _c in market_all_codes if code in _c]
-                        if len(same_codes) == 1:
-                            code = same_codes[0]
-                        else:
-                            continue
-
-                    zx.add_stock(zx_group, code, name)
-                    import_nums += 1
-                except Exception as e:
-                    print(line, e)
-
+        """导入经过大小、编码、行数与字段边界校验的 UTF-8 文本。"""
+        market = request.form.get("market", "")
+        zx_group = request.form.get("zx_group", "").strip()
+        upload = request.files.get("file")
+        if upload is None or not upload.filename:
+            return {"ok": False, "msg": "请选择导入文件"}, 400
+        if not upload.filename.lower().endswith(".txt"):
+            return {"ok": False, "msg": "只允许上传 .txt 文件"}, 422
+        if not zx_group or len(zx_group) > 100:
+            return {"ok": False, "msg": "自选组名称无效"}, 422
         try:
-            os.remove(import_file)
-        except Exception:
-            pass
+            ex = get_exchange(Market(market))
+            market_all_stocks = ex.all_stocks()
+            entries = parse_watchlist_stream(
+                upload.stream,
+                market=market,
+                available_codes=(stock["code"] for stock in market_all_stocks),
+                max_bytes=max_upload_bytes,
+                max_lines=max_watchlist_lines,
+                max_line_bytes=max_watchlist_line_bytes,
+            )
+        except (ValueError, KeyError, WatchlistTransferError) as exc:
+            status_code = getattr(exc, "status_code", 422)
+            return {"ok": False, "msg": str(exc) or "导入文件无效"}, status_code
 
-        return {"ok": True, "msg": f"成功导入 {import_nums} 条记录"}
+        zx = ZiXuan(market)
+        for entry in entries:
+            zx.add_stock(zx_group, entry.code, entry.name)
+        return {"ok": True, "msg": f"成功导入 {len(entries)} 条记录"}
 
     # 设置股票的自选组
     @app.route("/set_stock_zixuan", methods=["POST"])

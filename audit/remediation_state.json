@@ -983,16 +983,34 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "自选导出与导入都使用 DATA_PATH/zx.txt；并发请求会相互覆盖或删除同一文件。上传直接 file.save()，再 readlines() 全量读入，没有请求体、字节、行数、单行长度、扩展名或编码限制。",
+      "fix_summary": "导出改为请求私有 BytesIO，不再写磁盘临时文件；导入直接从上传二进制流逐行解析，限制总字节、行数、单行字节、UTF-8 编码和 .txt 扩展名，去重并校验代码。Flask 设置 MAX_CONTENT_LENGTH，所有限额可通过 WEB_* 配置调整，错误返回稳定 400/413/422。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q tests/test_me06_watchlist_transfer.py`，4 项测试全部通过。",
+        "并发执行 20 次导出，结果一致且不创建共享 zx.txt；覆盖 BOM、A 股别名、重复与未知代码。",
+        "故障测试覆盖总大小、最大行数、最大单行和非法 UTF-8；静态检查路由不再含 file.save/readlines/zx.txt。",
+        "执行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（4 项专项测试通过；共享文件、无界读取和上传边界根因已消除）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/watchlist_transfer.py",
+        "src/tradingview_zy/config.py.demo",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_me06_watchlist_transfer.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md"
+      ],
+      "limitations": [
+        "当前未运行真实 Flask multipart/浏览器上传；解析器与路由源码契约已离线验证。",
+        "逐条 zx.add_stock 仍不是批量事务；本条只处理并发文件隔离和上传资源边界。"
+      ],
+      "commit_subject": "fix(ME-06): isolate and bound watchlist transfers"
     }
   },
   {

@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 8
-- **待处理：** 73
+- **已完成：** 9
+- **待处理：** 72
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -27,7 +27,7 @@
 |14|`ME-24`|中|Environment|🔴 回归（重新出现）|已完成|通过（5 项专项测试通过；版本契约同源、失败退出码和状态汇总均正确）|`fix(ME-24)`|
 |15|`NEW-06`|中|Architecture / Exchange Contract|🆕 新问题（未修复）|已完成（本地不存在，已加防回归）|通过（确切回归在本地不存在；4 项门禁测试防止未来重新过报）|`test(NEW-06)`|
 |16|`HI-01`|中|Futures Trader|❌ 未修复|已完成（共享修复已复验）|通过（旧构造参数和错误落库类型所在模块已移除；7 项专项/共享门禁通过）|`test(HI-01)`|
-|17|`ME-06`|中|File Upload|❌ 未修复|待处理|—|—|
+|17|`ME-06`|中|File Upload|❌ 未修复|已完成|通过（4 项专项测试通过；共享文件、无界读取和上传边界根因已消除）|`fix(ME-06)`|
 |18|`ME-16`|中|Interactive Brokers|❌ 未修复|待处理|—|—|
 |19|`ME-05`|中|Web Startup|❌ 未修复|待处理|—|—|
 |20|`MX-01`|中|Configuration / Messaging|❌ 未修复|待处理|—|—|
@@ -444,16 +444,22 @@
 ### 17. ME-06 · 自选导入和导出共用固定 zx.txt，缺少并发隔离与上传限制
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / File Upload
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 自选导出与导入都使用 DATA_PATH/zx.txt；并发请求会相互覆盖或删除同一文件。上传直接 file.save()，再 readlines() 全量读入，没有请求体、字节、行数、单行长度、扩展名或编码限制。
+- **b. 我是怎么修复的？** 导出改为请求私有 BytesIO，不再写磁盘临时文件；导入直接从上传二进制流逐行解析，限制总字节、行数、单行字节、UTF-8 编码和 .txt 扩展名，去重并校验代码。Flask 设置 MAX_CONTENT_LENGTH，所有限额可通过 WEB_* 配置调整，错误返回稳定 400/413/422。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me06_watchlist_transfer.py`，4 项测试全部通过。
+  - 并发执行 20 次导出，结果一致且不创建共享 zx.txt；覆盖 BOM、A 股别名、重复与未知代码。
+  - 故障测试覆盖总大小、最大行数、最大单行和非法 UTF-8；静态检查路由不再含 file.save/readlines/zx.txt。
+  - 执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（4 项专项测试通过；共享文件、无界读取和上传边界根因已消除）
+- **提交：** fix(ME-06): isolate and bound watchlist transfers
+- **修改文件：** `src/tradingview_zy/watchlist_transfer.py`, `src/tradingview_zy/config.py.demo`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me06_watchlist_transfer.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`
+- **验证限制：**
+  - 当前未运行真实 Flask multipart/浏览器上传；解析器与路由源码契约已离线验证。
+  - 逐条 zx.add_stock 仍不是批量事务；本条只处理并发文件隔离和上传资源边界。
 - **原报告最新结论：** 自选导出和导入仍共用 data/zx.txt；上传直接 file.save()，没有请求体/文件大小、并发隔离和流式限制。
 - **原报告建议：** 每请求临时文件或内存流；MAX_CONTENT_LENGTH；扩展名/编码/行数验证；finally 清理。
 

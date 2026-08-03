@@ -184,3 +184,10 @@
 - 修复：增加独立移除/危险构造防回归门禁。
 - 专项测试：HI-01 + CR-03 共 7 passed。
 - 提交：`test(HI-01): guard removed futures trader`。
+
+### 问题 17：ME-06
+- **状态：** complete
+- **完成时间：** 2026-08-03
+- 修复：导出使用 BytesIO；导入流式限额解析，增加请求体/行数/行长度/UTF-8/.txt 校验。
+- 专项测试：`tests/test_me06_watchlist_transfer.py`，4 passed。
+- 提交：`fix(ME-06): isolate and bound watchlist transfers`。
