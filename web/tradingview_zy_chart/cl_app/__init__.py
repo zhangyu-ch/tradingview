@@ -1380,11 +1380,7 @@ def create_app(test_config=None):
         frequencys = request.form["frequencys"]
         src_zx_group = request.form["src_zx_group"]
         target_zx_group = request.form.get("target_zx_group", "").strip()
-        opt_type = request.form["opt_type"]
-
         frequencys = frequencys.split(",")
-        opt_type = opt_type.split(",")
-
         if task_name not in _xuangu_tasks.xuangu_task_config_list().keys():
             return {"ok": False, "msg": "选股任务不存在"}
 
@@ -1398,7 +1394,7 @@ def create_app(test_config=None):
             }
 
         run_res = _xuangu_tasks.run_xuangu(
-            market, task_name, frequencys, opt_type, src_zx_group, target_zx_group
+            market, task_name, frequencys, src_zx_group, target_zx_group
         )
 
         return {

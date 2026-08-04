@@ -426,3 +426,12 @@
 - 当前容器缺 Flask、Flask-Login、APScheduler、pinyin、tzlocal；未启动真实长驻进程，限制已写入 a–e 报告。
 - 独立 CLI 首次使用 package import 会先执行 Flask app 包；已改为直接惰性导入 `cl_app` 目录中的 runtime，避免无关 Web 依赖。
 - 提交：`fix(ME-26): move scheduler out of Flask factory`。
+
+
+### 问题 45：ME-19（恢复重建）
+- **状态：** complete
+- 验证结论：目标组选股结果通过 clear + 多次独立 add 提交，任一中途失败会留下空组/半组；opt_type 全链路传递但未消费；同名跨市场任务共享内存键，问题存在。
+- 修复：新增完整快照预校验与单事务 `zx_replace_group_stocks`；任务在全部频率成功后只替换一次，重复代码稳定合并；失败不更新内存，键改为 `(market, task_name)`；删除无效果 opt_type 契约。
+- 专项及相邻测试：7 项 ME-19、35 项组合通过；SQLite 第二条 INSERT 触发器失败验证旧快照完整回滚，成功路径 position=0..N-1，HK 同名组不变。
+- 限制：未连接真实 MySQL；临时 running_tasks 仍为进程内状态；跨频率 memo 使用最后一个信号。
+- 提交：`fix(ME-19): atomically replace selection results`。

@@ -53,17 +53,6 @@
             </div>
         </div>
         <div class="layui-form-item">
-            <label class="layui-form-label">选股方向</label>
-            <div class="layui-input-block" title="选股方向">
-                <label for="opt_type">
-                    <input type="checkbox" class="form-control" name="opt_type" value="long" title="做多"
-                        checked="checked" lay-filter="opt_type" />
-                    <input type="checkbox" class="form-control" name="opt_type" value="short" title="做空"
-                        lay-filter="opt_type" />
-                </label>
-            </div>
-        </div>
-        <div class="layui-form-item">
             <label class="layui-form-label">行情周期</label>
             <div class="layui-input-block" title="行情周期">
                 <label for="frequency">
@@ -108,7 +97,7 @@
 
     <blockquote class="layui-elem-quote">
         <p>第一次执行选股，获取数据并计算会比较耗时，后续在次执行，在有计算缓存的基础上，时间会快很多</p>
-        <p>选股前，目标自选组会被清空</p>
+        <p>全部周期计算成功后，目标自选组会以单个事务替换；失败时保留上一版结果</p>
         <p>沪深选股：运行代码为 SZ.00, SZ.30, SH.60, SH.68 开头的股票代码</p>
         <p>期货选股：运行代码为 L8 结尾的主连代码</p>
     </blockquote>
@@ -155,11 +144,6 @@
                         layer.msg('运行周期必须选择一个');
                         return false;
                     }
-                    if (run_config['opt_type'] === '') {
-                        layer.msg('选股方向必须选择一个');
-                        return false;
-                    }
-
                     console.log(run_config);
                     $.ajax({
                         type: "POST",

@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 44
-- **待处理：** 37
+- **已完成：** 45
+- **待处理：** 36
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -55,7 +55,7 @@
 |42|`HI-16`|中|File Cache|❌ 未修复|已完成|通过（9 项 HI-16 专项、44 项相邻组合通过；原子失败、损坏隔离、暂时 I/O、旧 pickle 不执行、真实交易器安全状态和除权 CSV 路径均已验证）|`fix(HI-16): `|
 |43|`ME-17`|中|QMT Market Data|❌ 未修复|已完成|通过（8 项 ME-17 专项、55 项相邻组合通过；范围、下载隔离、空/畸形数据、实例状态与 Tick 边界均已动态验证）|`fix(ME-17): `|
 |44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|已完成|通过（9 项 ME-26 专项、23 项可执行相邻组合通过；factory 零调度副作用、leader 唯一性、reconcile、状态快照和 CLI 退出码均已验证）|`fix(ME-26): `|
-|45|`ME-19`|中|Selection Tasks|❌ 未修复|待处理|—|—|
+|45|`ME-19`|中|Selection Tasks|❌ 未修复|已完成|通过（7 项 ME-19 专项、35 项相邻组合通过；第 N 条写入失败回滚、完整快照替换、零写入失败路径、跨市场状态隔离和 opt_type 删除均已验证）|`fix(ME-19): `|
 |46|`ME-18`|中|Strategy Runners|❌ 未修复|待处理|—|—|
 |47|`ME-14`|中|TDX US|❌ 未修复|待处理|—|—|
 |48|`ME-30`|中|Trading Calendar|❌ 未修复|待处理|—|—|
@@ -1096,16 +1096,27 @@
 ### 45. ME-19 · 选股结果替换不是事务，写入中途失败会留下半成品；opt_type 参数未生效
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Selection Tasks
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 选股任务会先计算所有频率结果，再调用 `clear_zx_stocks()` 清空目标组，并逐条 `add_stock()`；清空和每次插入各自提交，第 N 条写入失败时上一版已被删除，只留下空组或半组。`opt_type` 从浏览器一直传到 `_run_xuangu_job()`，但从未参与策略或结果过滤，“做多/做空”选择只是误导 UI。`running_tasks` 仅以 task_name 为键，同名 A/HK 等跨市场任务会覆盖彼此结果。
+- **b. 我是怎么修复的？** 在 DB 边界新增 `zx_replace_group_stocks()`：先完整校验和去重快照，再在单个 `Session.begin()` 中删除目标 market/group 并按稳定 position 插入全部结果，每行 flush 使触发器/约束错误发生在事务内，任何失败都回滚到旧完整组。`ZiXuan.replace_stocks()` 公开该原子操作，XuanguTasks 只有在所有频率成功后才调用一次；跨频率同一代码按首次出现顺序保留、内容使用最后一个信号，避免重复行。只有 DB 替换成功后才更新内存结果，键改为 `(market, task_name)`。当前 `StrategySignal` 没有方向字段，不能可靠解释 long/short，因此按原报告允许的关闭方式删除 `opt_type` 的模板控件、JavaScript 校验、Web 参数和 Python 方法参数，让策略本身决定发出哪些信号，不再提供无效果的选项。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前读取 `xuangu_tasks.py`、`zixuan.py` 和 `db.py`，确认 clear 与逐条 add 各自提交、`opt_type` 只传递不消费、`running_tasks[task_name]` 会跨市场覆盖。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me19_selection_task_atomicity.py`，7 项专项通过。
+  - SQLite 故障注入 trigger 令第二条 INSERT 抛错，确认目标组旧两行及顺序完整保留；成功替换则一次提交新快照，并确认 HK 同名组完全不变。
+  - 在进入事务前注入重复代码与畸形快照，确认校验失败时旧组没有被删除；成功结果 position 严格为 0..N-1，重复代码保持首次位置并采用最后内容。
+  - 任务协议桩覆盖两个频率同代码、第二频率策略异常、目标替换失败和同名跨市场任务；确认替换只调用一次、策略失败零写入、旧内存结果不被覆盖、市场键隔离。
+  - 检查函数签名、Web 路由和模板，确认 `opt_type` 已从浏览器与 Python 契约删除，而不是继续接受后忽略。
+  - 运行 ME-19、RV-01、ME-06、ME-26、HI-06、ME-05 和选股/监控相邻组合，共 35 passed；执行 compileall、`git diff --check` 和 6 个历史文件 CRLF 门禁。
+- **e. 验证是否通过？** 通过（7 项 ME-19 专项、35 项相邻组合通过；第 N 条写入失败回滚、完整快照替换、零写入失败路径、跨市场状态隔离和 opt_type 删除均已验证）
+- **提交：** `fix(ME-19): atomically replace selection results`
+- **修改文件：** `src/tradingview_zy/db.py`, `src/tradingview_zy/zixuan.py`, `web/tradingview_zy_chart/cl_app/xuangu_tasks.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/templates/xuangu_list.html`, `tests/test_selection_monitoring.py`, `tests/test_me19_selection_task_atomicity.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 原子事务故障注入在 SQLite 上动态执行；MySQL 路径同样使用 SQLAlchemy `Session.begin()`，但当前容器没有真实 MySQL 双后端联调。部署数据库必须使用支持事务的存储引擎。
+  - `opt_type` 被有意删除，因为当前通用 `StrategySignal` 没有可验证的 long/short 领域字段。旧客户端即使继续提交额外字段也会被 Web 忽略；需要方向筛选时应先在后续策略协议治理中增加显式、可校验的方向类型。
+  - `running_tasks` 仍是一次性选股执行进程的内存快照，本条修复了复合身份覆盖但没有把临时结果持久化或跨进程共享；持久结果由目标自选组的事务快照承担。
+  - 跨频率同代码被合并为一行，memo 使用最后一个频率信号；若产品需要保留每个频率的独立命中，应设计独立结果表，而不是在自选组中制造重复代码。
 - **原报告最新结论：** xuangu_tasks.py 只改策略加载；清空目标组后逐条写入、opt_type 未消费和任务状态键问题仍在。
 - **原报告建议：** 写入 staging 并在单事务成功后替换；真正使用 opt_type 或删除；running_tasks 使用 (market,task_name)。
 

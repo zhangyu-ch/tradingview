@@ -257,3 +257,11 @@
 - scheduler runtime 的 APScheduler 与 AlertTasks 导入均保持惰性。CLI 直接从 `cl_app` 文件目录导入 runtime，避免 Python 先执行含 Flask/pinyin 的 `cl_app/__init__.py`。
 - 任务配置采用默认 30 秒、强制收敛至 5–3600 秒的周期 reconcile；这是多 worker 唯一执行与配置即时生效之间的明确最终一致性边界。
 - `/jobs` 的状态只允许 id/name/update_dt/next_run_dt/state 五个字段，按 id 稳定排序；缺失、畸形或读取异常一律返回空列表，不在 Web 进程补启动 scheduler。
+
+
+## ME-19 选股快照事务与无效方向参数复核（恢复重建）
+- 选股计算本身先完成再清空并不等于原子替换；旧 `clear_zx_stocks` 和逐条 `add_stock` 各自提交，第 N 条数据库失败仍会破坏上一版完整结果。
+- 新 DB 边界先在事务外完整校验 market/group/code/name/memo/color 和列长度，再用一个 `Session.begin()` 执行 delete + 全量 insert；每行 flush 让触发器或约束错误在该事务中暴露并整体回滚。
+- 多频率同代码以首次出现位置为稳定顺序，最后一个信号更新名称与 memo；这适合自选组的一代码一行模型，并避免重复位置。
+- 任务只有在全部频率计算及可选 DB 替换成功后才更新内存状态，键由 task_name 改为 `(market, task_name)`；策略或写库失败不会覆盖上一轮内存结果。
+- 当前 StrategySignal 没有方向领域字段，`opt_type` 无法被正确消费。删除 UI、路由和 Python 参数比继续接受后忽略更诚实；需要方向筛选时应先扩展后续策略协议。

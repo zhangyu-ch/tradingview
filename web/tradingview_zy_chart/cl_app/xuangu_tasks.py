@@ -15,7 +15,22 @@ class XuanguTasks(object):
     def xuangu_task_config_list(self):
         return getattr(config, "XUANGU_STRATEGIES", {})
 
-    def _run_xuangu_job(self, market, task_name, frequencys, opt_type, zx_group, target_zx_group):
+    @staticmethod
+    def _watchlist_snapshot(results):
+        order = []
+        by_code = {}
+        for event in results:
+            code = str(event.code)
+            if code not in by_code:
+                order.append(code)
+            by_code[code] = {
+                "code": code,
+                "name": str(event.name),
+                "memo": str(event.message),
+            }
+        return [by_code[code] for code in order]
+
+    def _run_xuangu_job(self, market, task_name, frequencys, zx_group, target_zx_group):
         registry = self.xuangu_task_config_list()
         strategy = load_registered_strategy(registry, task_name)
         ex = get_exchange(Market(market))
@@ -36,14 +51,18 @@ class XuanguTasks(object):
         results = []
         for frequency in frequencys:
             results.extend(runner.run(market, stocks, frequency))
+
         if target_zx_group:
-            zx.clear_zx_stocks(target_zx_group)
-            for event in results:
-                zx.add_stock(target_zx_group, event.code, event.name, memo=event.message)
-        self.running_tasks[task_name] = results
+            snapshot = self._watchlist_snapshot(results)
+            if zx.replace_stocks(target_zx_group, snapshot) is not True:
+                raise RuntimeError(f"target watchlist group is unavailable: {target_zx_group}")
+
+        # Only publish the in-memory result after every strategy run and the optional
+        # database replacement have completed successfully.
+        self.running_tasks[(market, task_name)] = results
         return True
 
-    def run_xuangu(self, market, task_name, frequencys, opt_type, zx_group, target_zx_group=None):
+    def run_xuangu(self, market, task_name, frequencys, zx_group, target_zx_group=None):
         """执行选股。"""
         if task_name not in self.xuangu_task_config_list().keys():
             return False
@@ -58,7 +77,7 @@ class XuanguTasks(object):
 
         if self.scheduler is None:
             return self._run_xuangu_job(
-                market, task_name, frequencys, opt_type, zx_group, target_zx_group
+                market, task_name, frequencys, zx_group, target_zx_group
             )
 
         task_config = self.xuangu_task_config_list()[task_name]
@@ -71,7 +90,6 @@ class XuanguTasks(object):
                 market,
                 task_name,
                 frequencys,
-                opt_type,
                 zx_group,
                 target_zx_group,
             ),

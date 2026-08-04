@@ -336,10 +336,15 @@ class FakeZiXuan:
         self.market = market
         self.cleared_groups = []
         self.added_stocks = []
+        self.replaced_snapshots = []
         FakeZiXuan.instances.append(self)
 
     def zx_stocks(self, zx_group):
         return [{"code": "SH.000001", "name": "上证指数"}]
+
+    def replace_stocks(self, zx_group, snapshot):
+        self.replaced_snapshots.append((zx_group, snapshot))
+        return True
 
     def clear_zx_stocks(self, zx_group):
         self.cleared_groups.append(zx_group)
@@ -376,13 +381,12 @@ def test_xuangu_task_add_without_target_group_passes_empty_target(monkeypatch):
         def xuangu_task_config_list(self):
             return {"task1": {"frequency_num": 1}}
 
-        def run_xuangu(self, market, task_name, frequencys, opt_type, src_zx_group, target_zx_group):
+        def run_xuangu(self, market, task_name, frequencys, src_zx_group, target_zx_group):
             calls.append(
                 {
                     "market": market,
                     "task_name": task_name,
                     "frequencys": frequencys,
-                    "opt_type": opt_type,
                     "src_zx_group": src_zx_group,
                     "target_zx_group": target_zx_group,
                 }
@@ -407,7 +411,6 @@ def test_xuangu_task_add_without_target_group_passes_empty_target(monkeypatch):
         "task_name": "task1",
         "frequencys": "d",
         "src_zx_group": "source",
-        "opt_type": "long",
     }
     for target_value, expected_target in [(None, ""), ("   ", ""), ("target", "target")]:
         form = base_form.copy()
@@ -553,17 +556,17 @@ def test_xuangu_task_without_target_group_only_updates_running_results(monkeypat
             }
         ),
     )
-    monkeypatch.setattr(xuangu_tasks, "load_strategy", lambda path, **kwargs: XuanguTaskStrategy())
+    monkeypatch.setattr(xuangu_tasks, "load_registered_strategy", lambda registry, task_name: XuanguTaskStrategy())
     monkeypatch.setattr(xuangu_tasks, "get_exchange", lambda market: FakeExchange())
     monkeypatch.setattr(xuangu_tasks, "ZiXuan", FakeZiXuan)
 
     tasks = xuangu_tasks.XuanguTasks(None)
-    assert tasks.run_xuangu("a", "task1", ["d"], ["long"], "source") is True
+    assert tasks.run_xuangu("a", "task1", ["d"], "source") is True
 
     zx = FakeZiXuan.instances[0]
     assert zx.cleared_groups == []
     assert zx.added_stocks == []
-    assert tasks.running_tasks["task1"][0].code == "SH.000001"
+    assert tasks.running_tasks[("a", "task1")][0].code == "SH.000001"
 
 
 def test_xuangu_task_writes_results_to_target_zx_group(monkeypatch):
@@ -579,14 +582,18 @@ def test_xuangu_task_writes_results_to_target_zx_group(monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(xuangu_tasks, "load_strategy", lambda path, **kwargs: XuanguTaskStrategy())
+    monkeypatch.setattr(xuangu_tasks, "load_registered_strategy", lambda registry, task_name: XuanguTaskStrategy())
     monkeypatch.setattr(xuangu_tasks, "get_exchange", lambda market: FakeExchange())
     monkeypatch.setattr(xuangu_tasks, "ZiXuan", FakeZiXuan)
 
     tasks = xuangu_tasks.XuanguTasks(None)
-    assert tasks.run_xuangu("a", "task1", ["d"], ["long"], "source", "target") is True
+    assert tasks.run_xuangu("a", "task1", ["d"], "source", "target") is True
 
     zx = FakeZiXuan.instances[0]
-    assert zx.cleared_groups == ["target"]
-    assert zx.added_stocks == [("target", "SH.000001", "上证指数", "selected by task")]
-    assert tasks.running_tasks["task1"][0].code == "SH.000001"
+    assert zx.cleared_groups == []
+    assert zx.added_stocks == []
+    assert zx.replaced_snapshots == [(
+        "target",
+        [{"code": "SH.000001", "name": "上证指数", "memo": "selected by task"}],
+    )]
+    assert tasks.running_tasks[("a", "task1")][0].code == "SH.000001"

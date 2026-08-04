@@ -102,6 +102,12 @@ class ZiXuan(object):
         )
         return True
 
+    def replace_stocks(self, zx_group: str, stocks) -> bool:
+        """Replace a group atomically after the complete result set is available."""
+        if zx_group not in self.zx_names:
+            return False
+        return db.zx_replace_group_stocks(self.market_type, zx_group, stocks)
+
     def del_stock(self, zx_group, code):
         """
         删除自选中的代码

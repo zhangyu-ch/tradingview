@@ -2589,16 +2589,43 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
-      "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "选股任务会先计算所有频率结果，再调用 `clear_zx_stocks()` 清空目标组，并逐条 `add_stock()`；清空和每次插入各自提交，第 N 条写入失败时上一版已被删除，只留下空组或半组。`opt_type` 从浏览器一直传到 `_run_xuangu_job()`，但从未参与策略或结果过滤，“做多/做空”选择只是误导 UI。`running_tasks` 仅以 task_name 为键，同名 A/HK 等跨市场任务会覆盖彼此结果。",
+      "fix_summary": "在 DB 边界新增 `zx_replace_group_stocks()`：先完整校验和去重快照，再在单个 `Session.begin()` 中删除目标 market/group 并按稳定 position 插入全部结果，每行 flush 使触发器/约束错误发生在事务内，任何失败都回滚到旧完整组。`ZiXuan.replace_stocks()` 公开该原子操作，XuanguTasks 只有在所有频率成功后才调用一次；跨频率同一代码按首次出现顺序保留、内容使用最后一个信号，避免重复行。只有 DB 替换成功后才更新内存结果，键改为 `(market, task_name)`。当前 `StrategySignal` 没有方向字段，不能可靠解释 long/short，因此按原报告允许的关闭方式删除 `opt_type` 的模板控件、JavaScript 校验、Web 参数和 Python 方法参数，让策略本身决定发出哪些信号，不再提供无效果的选项。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前读取 `xuangu_tasks.py`、`zixuan.py` 和 `db.py`，确认 clear 与逐条 add 各自提交、`opt_type` 只传递不消费、`running_tasks[task_name]` 会跨市场覆盖。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_me19_selection_task_atomicity.py`，7 项专项通过。",
+        "SQLite 故障注入 trigger 令第二条 INSERT 抛错，确认目标组旧两行及顺序完整保留；成功替换则一次提交新快照，并确认 HK 同名组完全不变。",
+        "在进入事务前注入重复代码与畸形快照，确认校验失败时旧组没有被删除；成功结果 position 严格为 0..N-1，重复代码保持首次位置并采用最后内容。",
+        "任务协议桩覆盖两个频率同代码、第二频率策略异常、目标替换失败和同名跨市场任务；确认替换只调用一次、策略失败零写入、旧内存结果不被覆盖、市场键隔离。",
+        "检查函数签名、Web 路由和模板，确认 `opt_type` 已从浏览器与 Python 契约删除，而不是继续接受后忽略。",
+        "运行 ME-19、RV-01、ME-06、ME-26、HI-06、ME-05 和选股/监控相邻组合，共 35 passed；执行 compileall、`git diff --check` 和 6 个历史文件 CRLF 门禁。"
+      ],
+      "verification_result": "通过（7 项 ME-19 专项、35 项相邻组合通过；第 N 条写入失败回滚、完整快照替换、零写入失败路径、跨市场状态隔离和 opt_type 删除均已验证）",
+      "commit": "fix(ME-19): atomically replace selection results",
+      "files_changed": [
+        "src/tradingview_zy/db.py",
+        "src/tradingview_zy/zixuan.py",
+        "web/tradingview_zy_chart/cl_app/xuangu_tasks.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "web/tradingview_zy_chart/cl_app/templates/xuangu_list.html",
+        "tests/test_selection_monitoring.py",
+        "tests/test_me19_selection_task_atomicity.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "原子事务故障注入在 SQLite 上动态执行；MySQL 路径同样使用 SQLAlchemy `Session.begin()`，但当前容器没有真实 MySQL 双后端联调。部署数据库必须使用支持事务的存储引擎。",
+        "`opt_type` 被有意删除，因为当前通用 `StrategySignal` 没有可验证的 long/short 领域字段。旧客户端即使继续提交额外字段也会被 Web 忽略；需要方向筛选时应先在后续策略协议治理中增加显式、可校验的方向类型。",
+        "`running_tasks` 仍是一次性选股执行进程的内存快照，本条修复了复合身份覆盖但没有把临时结果持久化或跨进程共享；持久结果由目标自选组的事务快照承担。",
+        "跨频率同代码被合并为一行，memo 使用最后一个频率信号；若产品需要保留每个频率的独立命中，应设计独立结果表，而不是在自选组中制造重复代码。"
+      ],
+      "commit_subject": "fix(ME-19): atomically replace selection results"
     }
   },
   {

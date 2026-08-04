@@ -1,7 +1,7 @@
 import datetime
 import json
 import time
-from typing import List, Union
+from typing import List, Mapping, Union
 
 import numpy as np
 import pandas as pd
@@ -273,6 +273,68 @@ def build_mysql_url(
         database=database,
         query={"charset": "utf8mb4"},
     )
+
+
+def _watchlist_text(value, *, field: str, max_length: int, allow_empty: bool = False) -> str:
+    if value is None:
+        value = ""
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string")
+    value = value.strip()
+    if not allow_empty and not value:
+        raise ValueError(f"{field} must be non-empty")
+    if len(value) > max_length:
+        raise ValueError(f"{field} exceeds {max_length} characters")
+    return value
+
+
+def normalize_watchlist_snapshot(stocks) -> list[dict[str, str]]:
+    """Validate a complete watchlist snapshot before any existing rows are deleted.
+
+    Duplicate codes keep their first position while the most recent signal updates
+    the displayed name, memo and color.  This matches multi-frequency selection
+    semantics without creating duplicate watchlist rows.
+    """
+
+    if not isinstance(stocks, (list, tuple)):
+        raise TypeError("stocks must be a list or tuple")
+
+    order: list[str] = []
+    by_code: dict[str, dict[str, str]] = {}
+    for index, raw in enumerate(stocks):
+        if not isinstance(raw, Mapping):
+            raise TypeError(f"stocks[{index}] must be a mapping")
+        code = _watchlist_text(
+            raw.get("code"), field=f"stocks[{index}].code", max_length=20
+        )
+        raw_name = raw.get("name")
+        if raw_name is None or (isinstance(raw_name, str) and not raw_name.strip()):
+            raw_name = code
+        name = _watchlist_text(
+            raw_name, field=f"stocks[{index}].name", max_length=100
+        )
+        memo = _watchlist_text(
+            raw.get("memo", ""),
+            field=f"stocks[{index}].memo",
+            max_length=100,
+            allow_empty=True,
+        )
+        color = _watchlist_text(
+            raw.get("color", ""),
+            field=f"stocks[{index}].color",
+            max_length=20,
+            allow_empty=True,
+        )
+        if code not in by_code:
+            order.append(code)
+        by_code[code] = {
+            "code": code,
+            "name": name,
+            "memo": memo,
+            "color": color,
+        }
+
+    return [by_code[code] for code in order]
 
 
 @fun.singleton
@@ -656,6 +718,38 @@ class DB(object):
                     add_datetime=datetime.datetime.now(),
                 )
             )
+
+        return True
+
+    def zx_replace_group_stocks(self, market: str, zx_group: str, stocks) -> bool:
+        """Atomically replace one market/group with a validated full snapshot."""
+
+        market = _watchlist_text(market, field="market", max_length=20)
+        zx_group = _watchlist_text(zx_group, field="zx_group", max_length=20)
+        snapshot = normalize_watchlist_snapshot(stocks)
+        now = datetime.datetime.now()
+
+        with self.Session.begin() as session:
+            session.query(TableByZixuan).filter(
+                TableByZixuan.market == market,
+                TableByZixuan.zx_group == zx_group,
+            ).delete(synchronize_session=False)
+            for position, stock in enumerate(snapshot):
+                session.add(
+                    TableByZixuan(
+                        market=market,
+                        zx_group=zx_group,
+                        stock_code=stock["code"],
+                        stock_name=stock["name"],
+                        stock_color=stock["color"],
+                        position=position,
+                        stock_memo=stock["memo"],
+                        add_datetime=now,
+                    )
+                )
+                # Surface constraints/triggers inside this transaction so any failure
+                # rolls back both the delete and every preceding insert.
+                session.flush()
 
         return True
 
