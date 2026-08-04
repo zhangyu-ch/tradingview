@@ -297,3 +297,11 @@
 
 - CME 官方 2026 Globex 页面确认常规与假日时段按产品表发布，并注明 holiday schedule 可能变化、通常在节日前约两周最终确定；因此本地纽约期货日历只编码明确周界/维护窗并对列出的节假日保守 fail-closed，不把不完整假日表伪装成权威逐产品日历。
 - `/ticks` 的既有 JSON 只有一个 `now_trading`；为不破坏前端，本轮对请求代码做逐品种判断后以 `any(...)` 聚合。监控任务则真正按代码过滤闭市标的，畸形记录保留给 ME-18 结构化 target failure。
+
+
+## ME-22 消息、时间与 singleton 工具复核（恢复重建）
+- 锁定依赖 `lark-oapi==1.5.3` 的官方 `ClientBuilder` 已提供 `.timeout(float)`，`CreateMessageRequestBody` 也提供 `uuid`；因此无需在 SDK 外再创建无法取消的工作线程，可以直接给每次 HTTP attempt 设置上限，并用同一 UUID 安全重试。
+- 消息创建不是天然可重试操作；只有在一次逻辑调用内固定 UUID，且只对 transport 异常、429/5xx 重试，才能同时控制重复消息和不可恢复业务错误放大。
+- `time.localtime/mktime` 和 naive `datetime.timestamp/astimezone` 都会读取宿主机本地时区；共享时间工具必须把 wall-clock 所属时区作为显式输入，epoch 转换只接受 aware datetime。
+- zoneinfo 直接 `replace(tzinfo=...)` 对普通时刻可用，但 DST 缺口/重叠需要 round-trip 校验；本轮对 nonexistent 直接拒绝，对 ambiguous 要求显式 fold。
+- singleton 双重检查必须在构造完成后才写入共享状态；否则构造异常可能留下半初始化对象。进程间唯一性不是 singleton 能解决的，应继续使用 ME-26 的 leader lock 等专用机制。

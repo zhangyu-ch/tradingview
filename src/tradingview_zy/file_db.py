@@ -472,7 +472,9 @@ class FileCacheDB:
         return True
 
     def clear_tdx_old_klines(self, market: str) -> bool:
-        del_lt_times = fun.datetime_to_int(datetime.datetime.now()) - (15 * 24 * 60 * 60)
+        del_lt_times = fun.datetime_to_int(
+            datetime.datetime.now(datetime.timezone.utc)
+        ) - (15 * 24 * 60 * 60)
         market_path = self.klines_path / _safe_basename(str(market))
         for filename in market_path.glob("*.csv"):
             try:

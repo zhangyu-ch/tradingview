@@ -599,11 +599,13 @@ class ExchangeTDX(Exchange):
         if xdxr_path.is_dir() is False:
             xdxr_path.mkdir()
         xdxr_file = xdxr_path / f"new_xdxr_{market}_{project_code}.csv"
-        now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
+        now_day = fun.now_dt("%Y-%m-%d", tz="Asia/Shanghai")
         need_update = False  # 判断是否需要更新
         if (
             xdxr_file.is_file() is False
-            or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d") != now_day
+            or fun.timeint_to_str(
+                int(xdxr_file.stat().st_mtime), "%Y-%m-%d", tz="Asia/Shanghai"
+            ) != now_day
         ):
             need_update = True
         if need_update:

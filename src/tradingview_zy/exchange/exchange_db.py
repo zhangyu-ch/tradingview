@@ -2,12 +2,11 @@ import datetime
 from typing import Dict, List, Union
 
 import pandas as pd
-import pytz
-from tzlocal import get_localzone
 
 from tradingview_zy import fun
 from tradingview_zy.base import Market
 from tradingview_zy.db import db
+from tradingview_zy.web_payloads import market_timezone
 from tradingview_zy.exchange.exchange import (
     Exchange,
     Tick,
@@ -31,12 +30,8 @@ class ExchangeDB(Exchange):
         self.exchange = None
         self.online_ex = None
 
-        # 设置时区
-        self.tz = pytz.timezone("Asia/Shanghai")
-        if self.market == "us":
-            self.tz = pytz.timezone("US/Eastern")
-        if self.market in ["currency", "currency_spot"]:
-            self.tz = pytz.timezone(str(get_localzone()))
+        # 市场时间边界必须显式且与宿主机时区无关。
+        self.tz = market_timezone(self.market)
 
     def default_code(self):
         if self.market == Market.A.value:
@@ -201,9 +196,9 @@ class ExchangeDB(Exchange):
         if start_date is not None and end_date is not None and "limit" not in args:
             limit = None
         if start_date is not None:
-            start_date = fun.str_to_datetime(start_date)
+            start_date = fun.str_to_datetime(start_date, tz=self.tz)
         if end_date is not None:
-            end_date = fun.str_to_datetime(end_date)
+            end_date = fun.str_to_datetime(end_date, tz=self.tz)
         klines = db.klines_query(
             self.market, code, frequency, start_date, end_date, limit, order
         )

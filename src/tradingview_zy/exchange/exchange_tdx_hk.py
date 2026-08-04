@@ -328,10 +328,12 @@ class ExchangeTDXHK(Exchange):
             if xdxr_path.is_dir() is False:
                 xdxr_path.mkdir()
             xdxr_file = xdxr_path / f"hk_qfq_factor_{code.replace('.', '_')}.csv"
-            now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
+            now_day = fun.now_dt("%Y-%m-%d", tz="Asia/Shanghai")
             if (
                 xdxr_file.is_file() is False
-                or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d")
+                or fun.timeint_to_str(
+                int(xdxr_file.stat().st_mtime), "%Y-%m-%d", tz="Asia/Shanghai"
+            )
                 != now_day
             ):
                 qfq_factor_df = ak.stock_hk_daily(

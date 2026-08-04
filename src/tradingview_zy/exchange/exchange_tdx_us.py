@@ -298,10 +298,12 @@ class ExchangeTDXUS(Exchange):
             if xdxr_path.is_dir() is False:
                 xdxr_path.mkdir()
             xdxr_file = xdxr_path / f"us_qfq_factor_{code}.csv"
-            now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
+            now_day = fun.now_dt("%Y-%m-%d", tz=self.tz)
             if (
                 xdxr_file.is_file() is False
-                or fun.timeint_to_str(int(xdxr_file.stat().st_mtime), "%Y-%m-%d")
+                or fun.timeint_to_str(
+                    int(xdxr_file.stat().st_mtime), "%Y-%m-%d", tz=self.tz
+                )
                 != now_day
             ):
                 qfq_factor_df = ak.stock_us_daily(symbol=code, adjust="qfq-factor")

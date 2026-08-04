@@ -25,6 +25,7 @@ from tradingview_zy.web_payloads import (
     filter_klines_by_timestamp_range,
     klines_to_tv_history,
     normalize_klines_for_market,
+    market_timezone as resolve_market_timezone,
 )
 from tradingview_zy.zixuan import ZiXuan
 from tradingview_zy.strategies.loader import (
@@ -712,7 +713,9 @@ def create_app(test_config=None):
         marks = []
         orders = db.order_query_by_code(market, code)
         for index, order in enumerate(orders):
-            timestamp = fun.datetime_to_int(order["datetime"])
+            timestamp = fun.datetime_to_int(
+                order["datetime"], assume_tz=resolve_market_timezone(market)
+            )
             if from_timestamp <= timestamp <= to_timestamp:
                 is_buy = order["type"] in ["buy", "open_long", "close_short"]
                 marks.append({
@@ -776,7 +779,7 @@ def create_app(test_config=None):
         """
         服务器时间
         """
-        return fun.datetime_to_int(datetime.datetime.now())
+        return fun.datetime_to_int(datetime.datetime.now(datetime.timezone.utc))
 
     @app.route("/tv/<version>/charts", methods=["GET", "POST", "DELETE"])
     @login_required

@@ -112,16 +112,16 @@ class ExchangePolygon(Exchange):
 
         try:
             if end_date is None:
-                end_date = datetime.datetime.now()
+                end_date = datetime.datetime.now(tz=self.tz)
                 end_date = end_date + dt.timedelta(days=1)
                 end_date = fun.str_to_datetime(
-                    fun.datetime_to_str(end_date, "%Y-%m-%d"), "%Y-%m-%d"
+                    fun.datetime_to_str(end_date, "%Y-%m-%d"), "%Y-%m-%d", tz=self.tz
                 )
             else:
                 if len(end_date) == 10:
-                    end_date = fun.str_to_datetime(end_date, "%Y-%m-%d")
+                    end_date = fun.str_to_datetime(end_date, "%Y-%m-%d", tz=self.tz)
                 else:
-                    end_date = fun.str_to_datetime(end_date)
+                    end_date = fun.str_to_datetime(end_date, tz=self.tz)
             if start_date is None:
                 if frequency == "1m":
                     start_date = end_date - dt.timedelta(days=15)
@@ -141,9 +141,9 @@ class ExchangePolygon(Exchange):
                     start_date = end_date - dt.timedelta(days=15000)
             else:
                 if len(end_date) == 10:
-                    start_date = fun.str_to_datetime(start_date, "%Y-%m-%d")
+                    start_date = fun.str_to_datetime(start_date, "%Y-%m-%d", tz=self.tz)
                 else:
-                    start_date = fun.str_to_datetime(start_date)
+                    start_date = fun.str_to_datetime(start_date, tz=self.tz)
 
             resp = self.client.get_aggs(
                 code.upper(),
@@ -158,8 +158,8 @@ class ExchangePolygon(Exchange):
                 klines_df.append(
                     {
                         "code": code.upper(),
-                        "date": fun.timeint_to_datetime(r.timestamp / 1000).astimezone(
-                            self.tz
+                        "date": fun.timeint_to_datetime(
+                            r.timestamp / 1000, tz=self.tz
                         ),
                         "open": r.open,
                         "close": r.close,

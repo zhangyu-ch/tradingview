@@ -487,3 +487,13 @@
 - 环境限制：完整 `test_selection_monitoring.py` 为 6 passed、9 项被缺失 pinyin/tzlocal 在业务断言前阻断；更广收集另受归档外 config.py 缺失阻断。
 - compileall、JSON、diff 和 19 个 CRLF 文件 bare-LF=0 门禁通过。
 - 提交：`fix(ME-30): unify instrument-aware market sessions`。
+
+
+### 问题 49：ME-22
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：飞书发送没有 timeout/真实失败返回、时间函数依赖主机 localtime/mktime、singleton 并发首次构造无锁，问题存在。
+- 修复：lark SDK per-attempt timeout + 同一 UUID 有限幂等重试 + 错误脱敏/严格布尔；zoneinfo/aware datetime/DST fail-closed；RLock 双重检查 singleton 与成功后发布。
+- 专项及相邻验证：13 项 ME-22、51 项直接组合、326 项可运行仓库回归通过，3 skipped；compileall、JSON、diff 和 CRLF 门禁通过。
+- 真实飞书未联调；当前容器无 lark-oapi，使用 v1.5.3 官方 builder/UUID 契约与 fake SDK 故障注入。
+- 提交：`fix(ME-22): harden messaging time and singleton utilities`。

@@ -101,20 +101,20 @@ class ExchangeAlpaca(Exchange):
         timeframe = frequency_map[frequency]
         try:
             if end_date is None:
-                end_date = datetime.datetime.now()
+                end_date = datetime.datetime.now(tz=self.tz)
                 end_date = (
                     end_date + dt.timedelta(days=1)
                     if self.is_vip
                     else end_date - dt.timedelta(days=1)
                 )
                 end_date = fun.str_to_datetime(
-                    fun.datetime_to_str(end_date, "%Y-%m-%d"), "%Y-%m-%d"
+                    fun.datetime_to_str(end_date, "%Y-%m-%d"), "%Y-%m-%d", tz=self.tz
                 )
             else:
                 if len(end_date) == 10:
-                    end_date = fun.str_to_datetime(end_date, "%Y-%m-%d")
+                    end_date = fun.str_to_datetime(end_date, "%Y-%m-%d", tz=self.tz)
                 else:
-                    end_date = fun.str_to_datetime(end_date)
+                    end_date = fun.str_to_datetime(end_date, tz=self.tz)
             if start_date is None:
                 if frequency == "1m":
                     start_date = end_date - dt.timedelta(days=15)
@@ -134,9 +134,9 @@ class ExchangeAlpaca(Exchange):
                     start_date = end_date - dt.timedelta(days=15000)
             else:
                 if len(end_date) == 10:
-                    start_date = fun.str_to_datetime(start_date, "%Y-%m-%d")
+                    start_date = fun.str_to_datetime(start_date, "%Y-%m-%d", tz=self.tz)
                 else:
-                    start_date = fun.str_to_datetime(start_date)
+                    start_date = fun.str_to_datetime(start_date, tz=self.tz)
             req = StockBarsRequest(
                 symbol_or_symbols=code.upper(),
                 timeframe=timeframe,
@@ -204,7 +204,7 @@ class ExchangeAlpaca(Exchange):
     @staticmethod
     def __convert_date(_dt):
         _dt = fun.datetime_to_str(_dt, "%Y-%m-%d")
-        return fun.str_to_datetime(_dt, "%Y-%m-%d")
+        return fun.str_to_datetime(_dt, "%Y-%m-%d", tz="America/New_York")
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")

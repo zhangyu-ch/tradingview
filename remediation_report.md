@@ -58,8 +58,8 @@
 |45|`ME-19`|中|Selection Tasks|❌ 未修复|已完成|通过（7 项 ME-19 专项、35 项相邻组合通过；第 N 条写入失败回滚、完整快照替换、零写入失败路径、跨市场状态隔离和 opt_type 删除均已验证）|`fix(ME-19): `|
 |46|`ME-18`|中|Strategy Runners|❌ 未修复|已完成|通过（13 项 ME-18 专项、52 项相邻组合通过；逐标的隔离、输入协议、命中/未命中/失败三态、选股零替换失败路径和监控部分成功可观测性均已验证）|`fix(ME-18): `|
 |47|`ME-14`|中|TDX US|❌ 未修复|已完成|通过（17 项 ME-14 专项、40 项 TDX/前端相邻组合通过；DST、LMT、跨午夜交易日、trade/amount 映射、payload 故障注入和 CRLF 门禁均已验证）|`fix(ME-14): `|
-|48|`ME-30`|中|Trading Calendar|❌ 未修复|待处理|—|—|
-|49|`ME-22`|中|Utilities|❌ 未修复|待处理|—|—|
+|48|`ME-30`|中|Trading Calendar|❌ 未修复|已完成|通过（22 项专项、152 项相邻组合通过；日历、品种 session、DST 与调用方传码已验证）|`fix(ME-30)`|
+|49|`ME-22`|中|Utilities|❌ 未修复|已完成|通过（13 项专项、51 项直接组合、326 项可运行仓库回归通过；3 skipped）|`fix(ME-22)`|
 |50|`ME-02`|中|Web UDF|❌ 未修复|待处理|—|—|
 |51|`NX-10`|中|Database Schema|❌ 未修复|待处理|—|—|
 |52|`RV-06`|中|Web Storage / Availability|❌ 未修复|待处理|—|—|
@@ -1204,16 +1204,26 @@
 ### 49. ME-22 · 消息 HTTP、时间和 singleton 工具缺少可靠错误、时区和并发语义
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Utilities
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `send_fs_msg()` 没有为 lark SDK 配置请求 timeout，SDK 业务失败或异常最终仍返回 `True`，也没有有限重试和幂等键；`fun.py` 通过 `time.localtime/mktime` 和 naive `astimezone()` 隐式采用宿主机时区，同一输入在不同服务器会得到不同 epoch；`singleton` 在并发首次调用时没有锁，可能构造并发布多个昂贵连接对象。
+- **b. 我是怎么修复的？** 飞书 client 显式配置每次请求 timeout，并在 request body 写入每次逻辑发送唯一、重试间复用的 UUID；异常、HTTP 429/5xx 采用最多 3 次的有限指数退避，业务 4xx 不重试，只有确认成功才返回 `True`，所有失败返回 `False` 且日志脱敏。新增纯标准库重试策略模块。时间工具删除 `tzlocal/localtime/mktime`，使用 `zoneinfo`；Unix 边界要求 aware datetime，naive 值必须传 `assume_tz`，纽约 DST 歧义/不存在时间明确失败；相关 DB/Web/TDX/Alpaca/Polygon 调用补市场时区。singleton 使用 `RLock` 双重检查，构造成功后才发布，并提供 `reset_instance()`。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q -W error tests/test_me22_utility_contracts.py`，13 项专项测试全部通过。
+  - 24 worker 并发 72 次首次访问只构造一个 singleton；首次构造抛错不会缓存，reset 后会创建新实例。
+  - 验证 Unix 零点在 Shanghai/UTC 的确定性转换、naive epoch 拒绝/显式本地化，以及纽约 DST nonexistent、ambiguous 与 fold 两分支。
+  - 使用协议等价 fake lark SDK 验证 per-attempt timeout、同一 UUID 跨 503/429 重试复用、400 不重试、异常耗尽返回 `False`、secret 不进入日志。
+  - ME-22/NX-03/MX-01/ME-30/ME-14/ME-16/MX-04 组合 51 passed；排除已知环境/基线收集阻断的仓库回归 326 passed、3 skipped。
+  - 执行 `compileall`、`python -m json.tool`、`git diff --check` 和 CRLF 字节检查。
+- **e. 验证是否通过？** 通过（13 项专项、51 项直接相邻组合、326 项可运行仓库回归通过；3 skipped；消息错误语义、有限重试/幂等、显式时区/DST 与线程安全 singleton 均已故障注入）
+- **提交：** `fix(ME-22): harden messaging time and singleton utilities`
+- **修改文件：** `src/tradingview_zy/messaging_reliability.py`, `src/tradingview_zy/utils.py`, `src/tradingview_zy/fun.py`, `src/tradingview_zy/config.py.demo`, `src/tradingview_zy/file_db.py`, `src/tradingview_zy/exchange/exchange_db.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/exchange_tdx.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_us.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me22_utility_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器没有 lark-oapi/真实飞书凭据，未发送真实消息；fake SDK 按锁定 v1.5.3 builder/response 契约执行，timeout 与 UUID 能力已对照官方源码。
+  - lark SDK 暴露单个 per-request timeout，而不是独立 connect/read 数值；默认 3 次、最多 5 次使总等待仍然有界。
+  - singleton 是进程内线程安全语义；多进程唯一性仍需专用 leader lock 或外部协调。
+  - 时间字符串默认明确解释为 Asia/Shanghai；其他市场必须显式传时区，DST 歧义不会被自动猜测。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/utils.py、src/tradingview_zy/fun.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 统一 HTTP client，设置连接/读取 deadline、状态检查、重试和幂等；所有时间边界要求 aware datetime；单例改为依赖注入或线程安全初始化。
 

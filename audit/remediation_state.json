@@ -2883,16 +2883,50 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "消息发送、时间转换与 singleton 三个共享工具边界均存在确定性缺口：send_fs_msg 未设置 SDK timeout，失败仍返回 True，没有有限重试或幂等键；fun.py 的 localtime/mktime/naive astimezone 使同一输入依赖宿主机时区；singleton 的首次构造没有锁，并发可发布多个实例。",
+      "fix_summary": "飞书调用使用 lark-oapi 1.5.3 官方 ClientBuilder.timeout，并为同一逻辑发送生成/复用 message UUID；只对异常、HTTP 429 和 5xx 进行有限指数退避，业务拒绝不重试，未配置/失败返回 False，日志对 app_id/app_secret/user_id 脱敏。新增纯标准库重试策略模块。时间工具移除 tzlocal 与 localtime/mktime，统一 zoneinfo 和显式时区；Unix 转换要求 aware datetime，naive 值必须提供 assume_tz，DST 歧义/不存在时间 fail-closed。singleton 改为 RLock 双重检查，构造成功后才发布，并提供显式 reset_instance 生命周期钩子。DB、Web、TDX US/A/HK、Alpaca 与 Polygon 的相关时间边界同步改为市场时区。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src pytest -q -W error tests/test_me22_utility_contracts.py`，13 项专项测试全部通过。",
+        "并发 24 worker/72 次首次访问仅构造一个 singleton；首次构造异常不缓存，reset 后可重新构造。",
+        "验证上海/UTC Unix 零点、naive epoch 拒绝、显式 assume_tz、纽约 DST nonexistent/ambiguous/fold 和无 mktime/localtime。",
+        "使用协议等价 fake lark SDK 验证 timeout=0.5、同一 UUID 跨 503/429 重试复用、400 不重试、异常耗尽返回 False 和 secret 日志脱敏。",
+        "运行 ME-22、NX-03、MX-01、ME-30、ME-14、ME-16、MX-04 组合测试，51 passed。",
+        "排除已知缺失 config.py、pinyin、empyrical 与 footprint 收集阻断的仓库回归，326 passed、3 skipped。",
+        "执行 compileall、JSON、git diff --check 与 CRLF 字节门禁。"
+      ],
+      "verification_result": "通过（13 项 ME-22 专项、51 项直接相邻组合、326 项可运行仓库回归通过；3 skipped；消息失败语义、有限重试/幂等、显式时区/DST 和并发 singleton 均已故障注入）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/messaging_reliability.py",
+        "src/tradingview_zy/utils.py",
+        "src/tradingview_zy/fun.py",
+        "src/tradingview_zy/config.py.demo",
+        "src/tradingview_zy/file_db.py",
+        "src/tradingview_zy/exchange/exchange_db.py",
+        "src/tradingview_zy/exchange/exchange_alpaca.py",
+        "src/tradingview_zy/exchange/exchange_polygon.py",
+        "src/tradingview_zy/exchange/exchange_tdx.py",
+        "src/tradingview_zy/exchange/exchange_tdx_hk.py",
+        "src/tradingview_zy/exchange/exchange_tdx_us.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_me22_utility_contracts.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "当前容器未安装 lark-oapi，未向真实飞书租户发送消息；协议测试严格模拟 v1.5.3 的 builder/response 结构，timeout 与 UUID 能力另由官方仓库源码核对。",
+        "SDK timeout 是每次 HTTP attempt 的统一上限，不提供独立 connect/read 数值；最多 5 次、默认 3 次使总等待有界。",
+        "只有 transport 异常、429 和 5xx 使用同一 UUID 重试；业务 4xx/SDK 拒绝不自动重试，避免扩大不可恢复请求。",
+        "singleton 只保证单进程线程安全；多进程资源唯一性必须由专用 leader lock/外部服务管理。",
+        "默认字符串时区明确为 Asia/Shanghai；US/UTC 等外部调用方必须传入自己的市场时区，未知或 DST 歧义不能依赖宿主机猜测。"
+      ],
+      "commit_subject": "fix(ME-22): harden messaging time and singleton utilities"
     }
   },
   {
