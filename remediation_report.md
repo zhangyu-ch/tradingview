@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 62
-- **待处理：** 19
+- **已完成：** 63
+- **待处理：** 18
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -73,7 +73,7 @@
 |60|`ME-27`|中|Secrets|🟡 部分修复|已完成|通过（105 项聚焦、82 项 provider 严格矩阵、495 项可运行仓库回归通过，5 项条件跳过；Secret 引用、权限、轮换、迁移、脱敏及 fail-closed 故障注入均符合预期）|`fix(ME-27)`|
 |61|`ME-04`|中|Web Payload|🟡 部分修复|已完成（统一 K 线 payload 边界）|通过（29 项严格 payload 测试、92 项直接相邻及 525 项可运行仓库回归通过；schema、时区、排序、重复、身份和稳定错误边界均已关闭）|`fix(ME-04)`|
 |62|`ME-01`|中|Web Storage|🟡 部分修复|已完成（存储授权绑定登录会话）|通过（4 项授权专项、60 项严格相邻及 515 项当前可运行仓库回归通过；请求伪造 user 不再影响任何存储查询或写入）|`fix(ME-01)`|
-|63|`ME-03`|低|Web UDF|❌ 未修复|待处理|—|—|
+|63|`ME-03`|低|Web UDF|❌ 未修复|已完成（UDF 周期并集动态覆盖全部市场）|通过（独有纽约期货周期故障注入、真实路由 AST 及 17 项元数据/注册表相邻测试通过）|`fix(ME-03)`|
 |64|`MX-11`|低|Configuration|❌ 未修复|待处理|—|—|
 |65|`MX-07`|低|Frontend|❌ 未修复|待处理|—|—|
 |66|`MX-10`|低|Frontend|❌ 未修复|待处理|—|—|
@@ -1570,16 +1570,22 @@
 ### 63. ME-03 · /tv/config 的周期并集遗漏 ny_futures；当前默认适配器无独有周期，属于潜在能力漂移
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Web UDF
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（UDF 周期并集动态覆盖全部市场）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** market_frequencys 已包含 ny_futures，但 /tv/config 通过逐项硬编码七个市场构造 supported_resolutions，唯一遗漏 ny_futures。当前默认纽约期货周期与国内期货重合，所以普通样例没有暴露错误；一旦该市场增加独有周期，全局 UDF 能力会静默漂移。
+- **b. 我是怎么修复的？** 在无副作用 market_metadata 中新增 all_market_frequencies()，遍历当前市场映射中的全部 values 生成并集；/tv/config 改为调用该函数，不再维护手写市场列表。由 frequency_maps 的既有顺序生成 TradingView resolution，未来新增市场或市场独有周期会自动进入全局配置。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 新增 tests/test_me03_udf_resolution_union.py，向 ny_futures 注入独有 10s 周期并确认动态并集包含该值，同时确认实际 metadata 每个市场的周期均被覆盖。
+  - AST 检查真实 tv_config 路由调用 all_market_frequencies(market_frequencys)，且不再出现任何硬编码 market_frequencys[market] 并集。
+  - 运行 ME-03 与 ME-05 无副作用元数据测试，结果 5 passed（-W error）；在临时复制受控 config.py.demo 的隔离环境运行 ME-10/NEW-06 注册表与能力测试，结果 12 passed（-W error）。
+  - 执行 py_compile、compileall、git diff --check，并确认 cl_app/__init__.py 继续保持纯 CRLF。
+- **e. 验证是否通过？** 通过（独有纽约期货周期故障注入、真实路由 AST 及 17 项元数据/注册表相邻测试通过）
+- **提交：** fix(ME-03): derive UDF resolutions from all markets
+- **修改文件：** `src/tradingview_zy/market_metadata.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me03_udf_resolution_union.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前默认 ny_futures 与 futures 没有独有周期；关闭证明使用注入的独有周期固定未来漂移边界。
+  - market_metadata 仍是静态 Web 元数据模块而不是 MarketRegistry 的同一 dataclass；跨模块集中化属于后续 LO-05，不在本条提前重构。
 - **原报告最新结论：** market_frequencys 已包含 ny_futures，但 /tv/config 构造全局 supported_resolutions 时仍没有把该市场加入并集。
 - **原报告建议：** 由 MarketRegistry 生成 UDF 配置，或至少把 ny_futures 纳入并集并增加“任一市场独有周期”回归测试。
 

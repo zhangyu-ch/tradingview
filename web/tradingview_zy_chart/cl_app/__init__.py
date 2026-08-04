@@ -26,7 +26,11 @@ from tradingview_zy.db import db
 from tradingview_zy.exchange import get_exchange
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.footprint import SUB_FREQUENCY_MAP, TTLCache, aggregate_footprint
-from tradingview_zy.market_metadata import market_default_codes, market_frequencies
+from tradingview_zy.market_metadata import (
+    all_market_frequencies,
+    market_default_codes,
+    market_frequencies,
+)
 from tradingview_zy.web_payloads import (
     KlinePayloadError,
     datetime_to_timestamp_seconds,
@@ -519,15 +523,7 @@ def create_app(test_config=None):
         """
         配置项
         """
-        frequencys = list(
-            set(market_frequencys["a"])
-            | set(market_frequencys["hk"])
-            | set(market_frequencys["fx"])
-            | set(market_frequencys["us"])
-            | set(market_frequencys["futures"])
-            | set(market_frequencys["currency"])
-            | set(market_frequencys["currency_spot"])
-        )
+        frequencys = all_market_frequencies(market_frequencys)
         supportedResolutions = [v for k, v in frequency_maps.items() if k in frequencys]
         return {
             "supports_search": True,

@@ -412,3 +412,8 @@
 - 新 owner 应由 `flask_login.current_user.get_id()` 派生；请求中的 `user` 只作 TradingView 协议格式校验，绝不能传给数据库 CRUD。
 - 旧 owner 迁移只能接受显式 allowlist，并在同一事务内处理 chart/template/drawing 与 quota owner；未知 owner 保留，避免把其他主体数据错误归并。
 - 迁移碰到同名/同键冲突时应确定性保留最新记录，随后幂等重跑不得继续改变数据。
+
+
+## ME-03 UDF 周期并集
+- 全局 UDF 能力必须遍历元数据实际键集合；手写市场并集即使当前输出相同，也会在新增市场或独有周期时静默漂移。
+- 稳定按注册顺序去重比 set 直接转换更可复现，避免响应顺序随运行环境变化。

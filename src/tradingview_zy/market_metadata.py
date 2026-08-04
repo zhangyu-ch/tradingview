@@ -28,3 +28,19 @@ def market_default_codes() -> dict[str, str]:
 
 def market_frequencies() -> dict[str, list[str]]:
     return {market: list(metadata["frequencies"]) for market, metadata in _MARKET_WEB_METADATA.items()}
+
+def all_market_frequencies(
+    markets: dict[str, list[str]] | None = None,
+) -> list[str]:
+    """Return the stable union of every registered Web market frequency."""
+
+    source = market_frequencies() if markets is None else markets
+    result: list[str] = []
+    seen: set[str] = set()
+    for frequencies in source.values():
+        for frequency in frequencies:
+            if frequency in seen:
+                continue
+            seen.add(frequency)
+            result.append(frequency)
+    return result

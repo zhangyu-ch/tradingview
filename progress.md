@@ -646,3 +646,11 @@
 - 过程修正：NX-15 旧 AST 测试未关闭源码文件导致 warnings-as-errors 失败，改为 `Path.read_text()` 后同一组合 43 passed。
 - 编译、JSON、diff 与三个历史 CRLF 文件 bare-LF=0 门禁通过。
 - 待提交主题：`fix(ME-01): bind TradingView storage to sessions`。
+- ME-03 相邻测试首次引用已不存在的旧测试文件，随后 ME-10 在缺归档外 config.py 时收集阻断；已改为当前实际测试文件并采用临时 demo 配置，不重复失败命令。
+
+### 问题 63：ME-03（恢复重建）
+- **状态：** complete
+- 验证结论：`/tv/config` 手写七个市场并集，遗漏 `ny_futures`；当前周期碰巧重合但未来独有周期会漂移。
+- 修复：新增 `all_market_frequencies()`，按元数据当前全部市场稳定去重；真实路由不再硬编码市场键。
+- 验证：注入 ny_futures 独有 `10s`、AST 检查真实 tv_config、5 项元数据测试及 12 项注册表/能力相邻测试全部通过。
+- 待提交主题：`fix(ME-03): derive UDF resolutions from all markets`。
