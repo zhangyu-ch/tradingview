@@ -305,3 +305,11 @@
 - `time.localtime/mktime` 和 naive `datetime.timestamp/astimezone` 都会读取宿主机本地时区；共享时间工具必须把 wall-clock 所属时区作为显式输入，epoch 转换只接受 aware datetime。
 - zoneinfo 直接 `replace(tzinfo=...)` 对普通时刻可用，但 DST 缺口/重叠需要 round-trip 校验；本轮对 nonexistent 直接拒绝，对 ambiguous 要求显式 fold。
 - singleton 双重检查必须在构造完成后才写入共享状态；否则构造异常可能留下半初始化对象。进程间唯一性不是 singleton 能解决的，应继续使用 ME-26 的 leader lock 等专用机制。
+
+
+## ME-02 history follow-up 状态边界复核（恢复重建）
+- 原计数器的真实节奏不是固定“每七次一轮”：新 key 的第 1–6 次为 ok，第 7 次 no_data 并把 counter 设为 0；因为 key 仍存在，后续第 13、19…次也会抑制。并发回归必须按该原控制流而不是直觉周期断言。
+- UI 请求节奏状态应使用 monotonic clock；墙钟跳变不能决定短窗口。过期回收与 LRU 淘汰必须和计数位于同一锁内，否则“线程安全 dict”仍会在组合操作上竞态。
+- 状态主键至少包括认证身份、来源地址、市场、代码和周期。只用 symbol/resolution 会让不同浏览器共享并消耗同一节奏。
+- `firstDataRequest=true` 的完整历史是产品 zoom-out 契约；修复内存与并发问题时必须把 tracker 调用放在明确的 follow-up 分支，不能顺手改变返回范围。
+- 该 tracker 不是安全限流器。多 worker 各自有界即可关闭本条内存/竞态根因；跨进程频率治理应由 Redis/代理等独立基础设施承担。

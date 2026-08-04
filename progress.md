@@ -497,3 +497,21 @@
 - 专项及相邻验证：13 项 ME-22、51 项直接组合、326 项可运行仓库回归通过，3 skipped；compileall、JSON、diff 和 CRLF 门禁通过。
 - 真实飞书未联调；当前容器无 lark-oapi，使用 v1.5.3 官方 builder/UUID 契约与 fake SDK 故障注入。
 - 提交：`fix(ME-22): harden messaging time and singleton utilities`。
+
+
+### 问题 50：ME-02
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：history follow-up 状态是无界普通字典，键不含身份/IP，且读改写无锁；firstDataRequest 全量历史是既有正确契约。
+- 修复：新增线程安全 TTL/LRU 有界 tracker，使用 monotonic clock；按 user/IP/market/code/resolution 隔离，配置启动校验；首次请求完全旁路。
+- 验证：8 项 warnings-as-errors 专项、48 项 ME-02/RV-07/Web payload 组合通过；24 worker/100 次并发得到旧语义对应的 16 次抑制，无丢更新或状态增长。
+- 历史 firstDataRequest 动态测试在导入阶段被缺失 pinyin/Flask 依赖阻断；原测试不改，AST 门禁确认首次请求不进入 tracker。
+- 实现过程中首个 CRLF 补丁脚本有 Python 拼接语法错误，第二次断言错误地构造了 `{{}}`；均在写回前中止。首轮并发测试误把旧复位周期按 7 计算，复算原控制流后修正为第 7、13、19…次抑制。
+- 提交：`fix(ME-02): bound history request tracking`。
+
+
+### 问题 041–050 完整仓库归档
+- **状态：** complete
+- 已生成包含完整源码与 `.git` 的 `tradingview_remediation_issues_041-050.zip` 及 SHA-256 sidecar。
+- 使用系统 `unzip` 重新解压；工作树 clean，HEAD 与 `issue/050-ME-02` 一致，`issue/041-*` 至 `issue/050-*` 全部存在，`git fsck --full` 无损坏。
+- Python 标准库 extractall 不恢复 Unix executable mode，曾造成 mode-only 假差；最终验证使用能恢复 external_attr 的系统 unzip。

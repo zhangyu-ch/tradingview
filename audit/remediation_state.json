@@ -2952,16 +2952,40 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "/tv/history 在 Flask app factory 闭包中维护普通 __history_req_counter 字典。键仅由 symbol/resolution 组成，既不区分登录会话或来源地址，也没有 TTL、容量上限或锁；并发请求会竞态读改写，长期不同标的/周期请求会让进程内状态持续增长。firstDataRequest=true 返回全部可用历史是已有产品测试明确要求的行为，不属于本条修复对象。",
+      "fix_summary": "新增 HistoryRequestTracker：使用 OrderedDict LRU、entry TTL、严格 max_entries、RLock 和 monotonic clock，在一个原子临界区完成过期清理、计数、LRU 更新和淘汰；连续请求仍保持旧路由的前 6 次 ok、第 7 次 no_data、随后按旧计数语义继续循环。请求键扩展为 user_id、remote_addr、market、code、resolution；所有边界均可由 WEB_HISTORY_* 配置覆盖并在应用启动时校验。首次数据请求继续完全绕过 tracker，历史全量返回和 update=false 契约不变。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_me02_history_request_tracker.py`，8 项专项测试全部通过。",
+        "使用 24 个线程并发提交同一 key 的 100 次请求，得到与旧计数语义一致的 16 次 no_data、84 次 ok，状态始终只有 1 个条目。",
+        "使用手动 monotonic clock 验证 5 秒 burst reset、TTL 过期清理、严格容量上限和 LRU 淘汰顺序。",
+        "验证 user/IP/market/code/resolution 任一维度变化都会形成独立 key；空身份和地址使用稳定 fallback。",
+        "AST/源码门禁确认旧 __history_req_counter 已删除，record() 只位于 `not first_data_request` 分支，tracker 暴露在 app.extensions 便于诊断。",
+        "运行 ME-02、RV-07 与 Web payload 组合测试，48 passed；历史 firstDataRequest 动态测试在业务断言前被缺失 pinyin/Flask 运行依赖阻断，保留 AST 契约与原测试不改。",
+        "执行 py_compile/compileall、JSON、git diff --check 与 CRLF bare-LF 字节门禁。"
+      ],
+      "verification_result": "通过（8 项 ME-02 专项、48 项直接相邻组合通过；并发原子性、TTL/LRU/容量、身份隔离和 firstDataRequest 旁路均已验证）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/history_request_tracker.py",
+        "src/tradingview_zy/config.py.demo",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_me02_history_request_tracker.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "tracker 是单进程内的 UI 请求节奏状态，不是授权或跨 worker 的全局限流器；多 worker 各自维护严格有界状态。",
+        "现有 no_data cadence 原样保留，包括第 7 次抑制后按旧 counter=0 语义继续计数；本轮不改变 TradingView 客户端行为。",
+        "当前容器缺少 Flask、flask-login、pinyin、tzlocal 及本地 config.py，无法导入完整 cl_app 执行历史路由；纯 tracker、AST 路由契约和相邻 payload 参数测试已执行。",
+        "remote_addr 是 Flask 解析的对端地址；反向代理部署仍应由可信代理配置正确提供来源地址。"
+      ],
+      "commit_subject": "fix(ME-02): bound history request tracking"
     }
   },
   {

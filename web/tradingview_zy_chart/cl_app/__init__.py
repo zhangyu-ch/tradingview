@@ -62,6 +62,10 @@ from tradingview_zy.web_api_validation import (
     parse_time_range,
 )
 from tradingview_zy.scheduler_status import SchedulerStatusStore
+from tradingview_zy.history_request_tracker import (
+    HistoryRequestTracker,
+    history_request_key,
+)
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
@@ -162,6 +166,32 @@ def create_app(test_config=None):
     )
 
     scheduler_status_store = SchedulerStatusStore()
+    history_request_tracker = HistoryRequestTracker(
+        max_entries=int(
+            security_overrides.get(
+                "WEB_HISTORY_TRACKER_MAX_ENTRIES",
+                getattr(config, "WEB_HISTORY_TRACKER_MAX_ENTRIES", 4_096),
+            )
+        ),
+        entry_ttl_seconds=float(
+            security_overrides.get(
+                "WEB_HISTORY_TRACKER_TTL_SECONDS",
+                getattr(config, "WEB_HISTORY_TRACKER_TTL_SECONDS", 900),
+            )
+        ),
+        burst_window_seconds=float(
+            security_overrides.get(
+                "WEB_HISTORY_BURST_WINDOW_SECONDS",
+                getattr(config, "WEB_HISTORY_BURST_WINDOW_SECONDS", 5),
+            )
+        ),
+        max_requests_per_window=int(
+            security_overrides.get(
+                "WEB_HISTORY_MAX_REQUESTS_PER_WINDOW",
+                getattr(config, "WEB_HISTORY_MAX_REQUESTS_PER_WINDOW", 6),
+            )
+        ),
+    )
 
     # 项目中的周期与 tv 的周期对应表
     frequency_maps = {
@@ -225,9 +255,6 @@ def create_app(test_config=None):
         "currency": "crypto",
         "currency_spot": "crypto",
     }
-
-    # 记录请求次数，超过则返回 no_data
-    __history_req_counter = {}
 
     __log = fun.get_logger()
 
@@ -325,6 +352,7 @@ def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
     app.extensions["scheduler_mode"] = "external-process"
+    app.extensions["history_request_tracker"] = history_request_tracker
     if test_config:
         app.config.update(test_config)
     # Security-critical values are derived from the dedicated WEB_* settings above and
@@ -614,20 +642,18 @@ def create_app(test_config=None):
         if from_timestamp < 0 and to_timestamp < 0:
             return {"s": "no_data"}
         symbol = f"{market}:{code}"
-        counter_key = f"{symbol}_{resolution}"
         now_time = time.time()
         status = "ok"
         if not first_data_request:
-            if counter_key not in __history_req_counter:
-                __history_req_counter[counter_key] = {"counter": 0, "tm": now_time}
-            elif __history_req_counter[counter_key]["counter"] >= 5:
-                __history_req_counter[counter_key] = {"counter": 0, "tm": now_time}
-                status = "no_data"
-            elif now_time - __history_req_counter[counter_key]["tm"] <= 5:
-                __history_req_counter[counter_key]["counter"] += 1
-                __history_req_counter[counter_key]["tm"] = now_time
-            else:
-                __history_req_counter[counter_key] = {"counter": 0, "tm": now_time}
+            status = history_request_tracker.record(
+                history_request_key(
+                    user_id=session.get("_user_id"),
+                    remote_addr=request.remote_addr,
+                    market=market,
+                    code=code,
+                    resolution=resolution,
+                )
+            )
 
         ex = get_exchange(Market(market))
         if (

@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 47
-- **待处理：** 34
+- **已完成：** 50
+- **待处理：** 31
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -60,7 +60,7 @@
 |47|`ME-14`|中|TDX US|❌ 未修复|已完成|通过（17 项 ME-14 专项、40 项 TDX/前端相邻组合通过；DST、LMT、跨午夜交易日、trade/amount 映射、payload 故障注入和 CRLF 门禁均已验证）|`fix(ME-14): `|
 |48|`ME-30`|中|Trading Calendar|❌ 未修复|已完成|通过（22 项专项、152 项相邻组合通过；日历、品种 session、DST 与调用方传码已验证）|`fix(ME-30)`|
 |49|`ME-22`|中|Utilities|❌ 未修复|已完成|通过（13 项专项、51 项直接组合、326 项可运行仓库回归通过；3 skipped）|`fix(ME-22)`|
-|50|`ME-02`|中|Web UDF|❌ 未修复|待处理|—|—|
+|50|`ME-02`|中|Web UDF|❌ 未修复|已完成|通过（8 项专项、48 项直接相邻组合通过）|`fix(ME-02)`|
 |51|`NX-10`|中|Database Schema|❌ 未修复|待处理|—|—|
 |52|`RV-06`|中|Web Storage / Availability|❌ 未修复|待处理|—|—|
 |53|`ME-15`|中|Futu|❌ 未修复|待处理|—|—|
@@ -1230,16 +1230,28 @@
 ### 50. ME-02 · /tv/history 请求计数器无上限且无线程同步；首次请求返回完整历史是现有测试规定的行为
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web UDF
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `/tv/history` 在 app factory 闭包里维护普通 `__history_req_counter` 字典。键只包含 symbol/resolution，没有会话或来源地址；字典没有 TTL、容量上限或锁。长期不同键会无界增长，并发线程对 `counter/tm` 的读改写会丢更新。原清单同时明确：`firstDataRequest=true` 返回全部可用历史是已有产品测试规定的行为，不能把它误修掉。
+- **b. 我是怎么修复的？** 新增独立 `HistoryRequestTracker`：用 `OrderedDict` 实现严格有界 LRU，用 entry TTL 回收冷键，用 `RLock` 将清理、计数、LRU 更新和淘汰放在同一原子临界区，并使用 `time.monotonic()` 避免系统时钟回拨。请求键扩展为登录 user、remote IP、market、code 和 resolution。默认保持旧节奏：连续前 6 次 follow-up 返回 `ok`，第 7 次返回 `no_data` 并按旧 counter 语义复位。四项 `WEB_HISTORY_*` 配置在应用启动时校验；tracker 注册到 `app.extensions`。首次数据请求仍完全绕过 tracker，因此完整历史与 `update=false` 契约不变。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_me02_history_request_tracker.py`，8 项专项测试通过。
+  - 使用手动 monotonic clock 验证 burst quiet reset、TTL 过期删除、严格容量和 LRU 顺序；无效上限/时间配置在启动前明确失败。
+  - 使用 24 个 worker 并发记录同一 key 100 次，精确得到 16 次 `no_data` 和 84 次 `ok`，且只保留一个状态条目，证明读改写原子。
+  - 参数化验证 user/IP/market/code/resolution 五个维度完全隔离，空 user/IP 使用稳定 fallback。
+  - AST/源码门禁确认旧 `__history_req_counter` 不再存在，`record()` 只在 `not first_data_request` 分支调用，原 firstDataRequest 分支未改。
+  - 运行 `tests/test_me02_history_request_tracker.py tests/test_rv07_web_parameter_validation.py tests/test_web_payloads.py`，48 项组合测试通过。
+  - 尝试运行历史 `test_tv_history_first_request_returns_available_history_for_zoom_out`，当前容器在业务断言前因缺少 `pinyin`（并且完整 Web 运行依赖也未安装）停止；没有伪造生产 Flask 环境，保留原测试文件和 AST 旁路门禁。
+  - 执行 `py_compile/compileall`、`python -m json.tool`、`git diff --check` 以及两个历史 CRLF 文件 bare-LF=0 检查。
+- **e. 验证是否通过？** 通过（8 项专项、48 项直接相邻组合通过；并发原子性、TTL/LRU/容量、身份隔离和 firstDataRequest 旁路均已验证）
+- **提交：** `fix(ME-02): bound history request tracking`
+- **修改文件：** `src/tradingview_zy/history_request_tracker.py`, `src/tradingview_zy/config.py.demo`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me02_history_request_tracker.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - tracker 是单进程 UI 节奏状态，不是跨 worker 授权/全局限流器；每个 worker 的状态仍严格有界。
+  - 旧 `no_data` 节奏被有意保留，本轮不改变 TradingView 客户端协议。
+  - 当前容器缺少 Flask、flask-login、pinyin、tzlocal 和本地 `config.py`，完整 Web 路由无法导入；纯状态机、真实路由 AST 和相邻 payload 测试已覆盖本条根因。
+  - `request.remote_addr` 依赖部署的可信代理配置正确传递来源地址。
 - **原报告最新结论：** /tv/history 仍维护进程内 __history_req_counter 普通字典；键没有过期回收/容量上限，也没有并发同步。
 - **原报告建议：** 使用有界 TTL/LRU 或外部限流器；加入锁/原子操作；按会话/IP/标的设计稳定限流键，并覆盖并发测试。
 
