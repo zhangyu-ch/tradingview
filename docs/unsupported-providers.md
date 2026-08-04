@@ -47,3 +47,18 @@ TLS certificate verification, which made directly importing it unsafe.
 mutation. Supported built-in cryptocurrency-futures providers are `binance` and `db`. Restoring
 ZB requires a newly reviewed adapter with verified TLS, an explicit registry entry, provider
 contract tests, and maintained upstream API compatibility.
+
+### CTP front-address restoration contract (`NX-01`)
+
+Any future CTP implementation must treat market-data and trade front addresses as
+validated configuration, not as an attribute-presence fallback. Each endpoint must be
+a non-empty `tcp://host:port` value before an OpenCTP SDK object is constructed. An
+empty string must either be rejected with a configuration error or resolved through one
+single, documented default; code must not silently continue because the configuration
+attribute happens to exist.
+
+Endpoint parsing must reject missing schemes, credentials, paths, queries, fragments,
+invalid ports, and control characters. Health output may identify the environment and
+whether an endpoint is configured, but logs, exceptions, and diagnostics must not expose
+credentials or other secrets. Restoring these settings is permitted only together with
+the full CR-05 provider review and simulation acceptance tests described above.

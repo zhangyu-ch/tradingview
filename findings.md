@@ -339,3 +339,10 @@
 - fork 后继承的 socket/线程对象不能继续复用。PID 变化或 at-fork child 回调必须丢弃两个上下文并按需创建新 generation。
 - 随机执行 `unsubscribe_all()` 是隐藏的跨请求副作用；订阅容量治理应由确定性策略和可观测配额承担。
 - health 只公开 state、PID、generation、最近成功时间和异常类型；不得包含 host、账户、token 或第三方原始错误文本。
+
+
+## NX-01 已移除 CTP 的前置地址恢复契约
+- 当底层 provider 已从运行包删除时，修复其内部空值分支会错误地重新扩大能力面；正确关闭方式是证明路径不存在，并固定恢复前置条件。
+- “属性不存在”和“属性存在但为空”是不同状态；未来地址解析必须采用显式 schema，不能依赖 `getattr` 是否返回属性。
+- provider tombstone 必须在惰性 import 和缓存写入前执行，防止删除的 SDK 模块因误配置重新产生副作用。
+- 恢复地址必须在 SDK 构造前验证为非空 `tcp://host:port`；缺 scheme、凭据、路径、query、fragment、非法端口和控制字符全部拒绝。

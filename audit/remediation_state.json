@@ -3212,16 +3212,36 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（通过保持 CTP 能力移除并固定恢复契约）",
+      "problem_verified": false,
+      "problem_summary": "原条目描述的空字符串前置地址兜底错误曾存在于已删除的 CTP 实现；当前运行树中 exchange_ctp.py、trader_ctp.py、OpenCTP 依赖和全部 CTP_* 配置均已在 CR-05 删除。标准期货工厂在任何 CTP import 或缓存写入前 fail-closed，因此当前代码没有可执行的前置地址解析路径，不能再复现该后续阻断。",
+      "fix_summary": "不重新引入未验收 CTP。保留 CR-05 的运行时删除与工厂 tombstone，并把恢复要求补充为明确的前置地址协议：行情/交易地址必须是经过校验的非空 tcp://host:port；空字符串必须在 SDK 构造前被明确拒绝或通过唯一文档化默认值解析，不能只对属性是否存在做判断；危险 URL 组成全部拒绝，日志不得暴露凭据。新增 NX-01 专项门禁，禁止 CTP front 配置或消费者在未评审时重新进入运行树。",
+      "verification_performed": true,
+      "verification_method": [
+        "静态确认 exchange_ctp.py、trader_ctp.py、OpenCTP 依赖与 config.py.demo 中 CTP_* 配置均不存在。",
+        "AST 检查 get_exchange() 的 FUTURES 分支：_reject_removed_provider 位于全部支持 provider import 和缓存写入之前，且函数内没有 exchange_ctp import。",
+        "全运行树扫描 ctp_front/md_front/td_front 等名称，无任何前置地址消费者。",
+        "文档门禁确认恢复 CTP 必须校验非空 tcp://host:port，并在 SDK 构造前处理空值和危险 URL。",
+        "运行 NX-01 专项：4 passed（-W error）。",
+        "运行 NX-01 与 HI-01 移除/fail-closed 组合：7 passed。",
+        "执行 git diff --check 与 Python AST/JSON 解析。"
+      ],
+      "verification_result": "通过（当前运行时不存在该错误路径；4 项专项及 7 项移除/fail-closed 组合通过，恢复契约和防回归门禁已固定）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "commit_subject": "fix(NX-01): guard removed CTP front configuration",
+      "files_changed": [
+        "docs/unsupported-providers.md",
+        "tests/test_nx01_ctp_front_address_removed.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本条通过能力移除关闭当前根因，不代表 CTP 功能可用；恢复 CTP 仍是新功能，必须完成 CR-05 列出的行情、订单、重连、对账和资源释放验收。",
+        "未连接 OpenCTP 仿真环境，因为当前运行包有意不包含 SDK 与适配器。"
+      ]
     }
   },
   {

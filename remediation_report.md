@@ -1341,18 +1341,27 @@
 ### 54. NX-01 · CTP 空前置地址不会触发默认地址兜底；当前属于修复抽象类后的后续阻断
 
 - **原始状态 / 严重度 / 领域：** 🛡️ 未完全修复（已阻断或缓解） / 中 / CTP
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通过保持 CTP 能力移除并固定恢复契约）
+- **问题是否存在：** 否
+- **a. 这个问题是什么？** 原条目描述的空字符串前置地址兜底错误曾存在于已删除的 CTP 实现；当前运行树中 `exchange_ctp.py`、`trader_ctp.py`、OpenCTP 依赖和全部 `CTP_*` 配置均已在 CR-05 删除。标准期货工厂在任何 CTP import 或缓存写入前 fail-closed，因此当前代码没有可执行的前置地址解析路径，不能再复现该后续阻断。
+- **b. 我是怎么修复的？** 不重新引入未验收 CTP。保留 CR-05 的运行时删除与工厂 tombstone，并把恢复要求补充为明确的前置地址协议：行情/交易地址必须是经过校验的非空 `tcp://host:port`；空字符串必须在 SDK 构造前被明确拒绝或通过唯一文档化默认值解析，不能只对“属性是否存在”做判断。缺 scheme、嵌入凭据、路径/query/fragment、非法端口与控制字符全部拒绝；健康状态可以说明环境和是否已配置，但日志不得暴露凭据。新增 NX-01 专项门禁，禁止 CTP front 配置或消费者在未评审时重新进入运行树。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
-- **原报告最新结论：** CTP 的空字符串前置地址兜底逻辑没有修改，底层问题仍在。最新工厂会在导入 CTP 前直接拒绝 EXCHANGE_FUTURES="ctp"，标准路径不会触发该后续错误；这是风险封堵，不是功能修复。
-- **原报告建议：** 修复 CR-05 时仍必须把地址读取改为 getattr(..., "") or DEFAULT 或明确要求必填，并做地址 schema 校验。
+  - 静态确认 `exchange_ctp.py`、`trader_ctp.py`、OpenCTP 依赖与 `config.py.demo` 中 `CTP_*` 配置均不存在。
+  - AST 检查 `get_exchange()` 的 FUTURES 分支：`_reject_removed_provider` 位于全部支持 provider import 和首个缓存写入之前，函数内没有 `exchange_ctp` import。
+  - 全运行树扫描 `ctp_front/md_front/td_front/front_md/front_td`，无任何前置地址消费者。
+  - 文档门禁确认恢复 CTP 必须校验非空 `tcp://host:port`，并在 SDK 构造前处理空值和拒绝危险 URL 组成。
+  - 运行 `tests/test_nx01_ctp_front_address_removed.py`：4 passed（`-W error`）。
+  - 运行 NX-01 与 HI-01 移除/fail-closed 组合：7 passed。
+  - 执行 `git diff --check` 与 Python AST/JSON 解析。
+- **e. 验证是否通过？** 通过（当前运行时不存在该错误路径；4 项专项及 7 项移除/fail-closed 组合通过，恢复契约和防回归门禁已固定）
+- **提交：** `fix(NX-01): guard removed CTP front configuration`
+- **修改文件：** `docs/unsupported-providers.md`, `tests/test_nx01_ctp_front_address_removed.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 本条通过能力移除关闭当前根因，不代表 CTP 功能可用；恢复 CTP 仍是新功能，必须完成 CR-05 列出的行情、订单、重连、对账和资源释放验收。
+  - 未连接 OpenCTP 仿真环境，因为当前运行包有意不包含 SDK 与适配器。
+- **原报告最新结论：** CTP 的空字符串前置地址兜底逻辑没有修改，底层问题仍在。最新工厂会在导入 CTP 前直接拒绝 `EXCHANGE_FUTURES="ctp"`，标准路径不会触发该后续错误；这是风险封堵，不是功能修复。
+- **原报告建议：** 修复 CR-05 时仍必须把地址读取改为 `getattr(..., "") or DEFAULT` 或明确要求必填，并做地址 schema 校验。
 
 ### 55. NX-25 · 孤立 ExchangeZB 显式关闭 TLS 证书校验
 

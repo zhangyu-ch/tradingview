@@ -547,3 +547,13 @@
 - 验证：9 项 warnings-as-errors 专项和 52 项直接相邻通过；20 线程同类操作最大并发严格为 1，quote/trade 可独立并发。广泛回归中 377 项执行通过、3 skipped；其余在产品断言前被缺失 pinyin、归档外 config.py、empyrical 或既有 footprint 私有导入阻断。
 - 限制：未连接真实 Futu OpenD；单次 SDK 阻塞 deadline 与真实订阅、断线回调和服务器重启需沙箱联调。
 - 提交：`fix(ME-15): manage Futu context lifecycle`。
+
+
+### 问题 54：NX-01
+- **状态：** complete（能力保持移除）
+- **完成时间：** 2026-08-04
+- 验证结论：旧 CTP 空前置地址错误所在运行时已由 CR-05 删除；当前无 adapter、SDK 依赖或 `CTP_*` 配置，工厂在 import/cache 前拒绝，原错误路径当前不存在。
+- 修复：保持 fail-closed，不重新引入 CTP；补充恢复地址必须是校验的非空 `tcp://host:port`、空值在 SDK 构造前明确拒绝或通过唯一文档化默认值解析的规范，并增加专项门禁。
+- 验证：4 项 NX-01 专项和包含 HI-01 移除门禁的 7 项组合通过；AST 确认 tombstone 位于全部 provider import/cache 写入前。
+- 限制：能力移除不代表 CTP 可用；未连接 OpenCTP 仿真环境。
+- 提交：`fix(NX-01): guard removed CTP front configuration`。
