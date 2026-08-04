@@ -138,14 +138,14 @@ var Alert = (function () {
                 },
               },
               {
-                filed: "frequency",
+                field: "frequency",
                 title: "周期",
                 templet: function (d) {
                   return d.frequency;
                 },
               },
               {
-                filed: "interval_minutes",
+                field: "interval_minutes",
                 title: "运行间隔(分钟)",
                 sort: true,
                 templet: function (d) {
@@ -153,7 +153,7 @@ var Alert = (function () {
                 },
               },
               {
-                filed: "strategy_config",
+                field: "strategy_config",
                 title: "策略路径（注册 ID）",
                 templet: function (d) {
                   let config = parseStrategyConfig(d);
@@ -161,21 +161,21 @@ var Alert = (function () {
                 },
               },
               {
-                filed: "strategy_kwargs",
+                field: "strategy_kwargs",
                 title: "策略参数",
                 templet: function (d) {
                   return strategyKwargsText(d);
                 },
               },
               {
-                filed: "strategy_memo",
+                field: "strategy_memo",
                 title: "策略备注",
                 templet: function (d) {
                   return d.strategy_memo || "";
                 },
               },
               {
-                filed: "is_send_msg",
+                field: "is_send_msg",
                 title: "发送消息",
                 sort: true,
                 templet: function (d) {
@@ -187,7 +187,7 @@ var Alert = (function () {
                 },
               },
               {
-                filed: "is_run",
+                field: "is_run",
                 title: "启用",
                 sort: true,
                 templet: function (d) {

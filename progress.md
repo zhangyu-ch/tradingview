@@ -660,3 +660,10 @@
 - 原配置模板已由 ME-27 改成 env 引用，但复核发现 ExchangeIB docstring 仍残留具体 DU 账户；本条删除该身份样例。
 - 新增配置/worker/adapter 扫描和 Secret 动态拒绝测试；MX-11 + ME-27 共 14 passed（-W error）。
 - 待提交主题：`test(MX-11): prevent concrete IB account templates`。
+
+### 问题 65：MX-07（恢复重建）
+- **状态：** complete
+- alert.js 七个 Layui 列对象把 `field` 拼成 `filed`，排序和字段元数据失效。
+- 七处统一改为 `field`，不改变 API、标题或模板语义；字段集合、可排序列与 Node 语法均纳入测试。
+- MX-07/MX-05/HI-06 组合 12 passed（-W error），CRLF 与 diff 门禁通过。
+- 待提交主题：`fix(MX-07): correct alert table field bindings`。

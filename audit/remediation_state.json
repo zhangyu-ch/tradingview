@@ -3970,16 +3970,32 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（Layui 列字段绑定修正）",
+      "problem_verified": true,
+      "problem_summary": "alert.js 的 frequency、interval_minutes、strategy_config、strategy_kwargs、strategy_memo、is_send_msg 和 is_run 七个列对象使用不存在的 filed 键。模板函数仍能直接读取行值，所以页面可能看似有内容，但 Layui 无法建立字段元数据，排序列也没有可靠排序键。",
+      "fix_summary": "把七处 filed 统一改为 Layui 正确的 field；保留原列标题、templet 和 sort 语义，不改变 API 字段名称。新增字段集合与可排序列绑定的防回归测试。",
+      "verification_performed": true,
+      "verification_method": [
+        "静态扫描确认 alert.js 中 filed: 为 0，九个表格字段均恰好声明一次 field。",
+        "验证 interval_minutes、is_send_msg 和 is_run 的 sort:true 与各自 field 位于同一列对象。",
+        "执行 node --check 验证真实 alert.js JavaScript 语法。",
+        "运行 MX-07、MX-05 和 HI-06 前端/请求相邻测试，结果 12 passed（-W error）。"
+      ],
+      "verification_result": "通过（七处错误键全部消失，排序字段绑定、JS 语法及 12 项相邻测试通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "web/tradingview_zy_chart/cl_app/static/js/alert.js",
+        "tests/test_mx07_alert_column_fields.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "当前容器未启动真实 Layui 浏览器页面；字段 schema 与语法已验证，完整 DOM 排序交互由 ME-29 的 Chromium CI 门禁承担。"
+      ],
+      "commit_subject": "fix(MX-07): correct alert table field bindings"
     }
   },
   {

@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 64
-- **待处理：** 17
+- **已完成：** 65
+- **待处理：** 16
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -75,7 +75,7 @@
 |62|`ME-01`|中|Web Storage|🟡 部分修复|已完成（存储授权绑定登录会话）|通过（4 项授权专项、60 项严格相邻及 515 项当前可运行仓库回归通过；请求伪造 user 不再影响任何存储查询或写入）|`fix(ME-01)`|
 |63|`ME-03`|低|Web UDF|❌ 未修复|已完成（UDF 周期并集动态覆盖全部市场）|通过（独有纽约期货周期故障注入、真实路由 AST 及 17 项元数据/注册表相邻测试通过）|`fix(ME-03)`|
 |64|`MX-11`|低|Configuration|❌ 未修复|已完成（具体 IB 账户已移出模板）|通过（仓库受检运行路径不再含具体 IB 账户，3 项专项与 11 项 Secret 相邻测试固定防回归）|`test(MX-11)`|
-|65|`MX-07`|低|Frontend|❌ 未修复|待处理|—|—|
+|65|`MX-07`|低|Frontend|❌ 未修复|已完成（Layui 列字段绑定修正）|通过（七处错误键全部消失，排序字段绑定、JS 语法及 12 项相邻测试通过）|`fix(MX-07)`|
 |66|`MX-10`|低|Frontend|❌ 未修复|待处理|—|—|
 |67|`NX-09`|低|Backtesting Fees|❌ 未修复|待处理|—|—|
 |68|`NX-18`|低|Frontend|❌ 未修复|待处理|—|—|
@@ -1613,16 +1613,21 @@
 ### 65. MX-07 · alert.js 七个列定义把 field 拼成 filed，字段元数据和排序绑定失效
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Frontend
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（Layui 列字段绑定修正）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** alert.js 的 frequency、interval_minutes、strategy_config、strategy_kwargs、strategy_memo、is_send_msg 和 is_run 七个列对象使用不存在的 filed 键。模板函数仍能直接读取行值，所以页面可能看似有内容，但 Layui 无法建立字段元数据，排序列也没有可靠排序键。
+- **b. 我是怎么修复的？** 把七处 filed 统一改为 Layui 正确的 field；保留原列标题、templet 和 sort 语义，不改变 API 字段名称。新增字段集合与可排序列绑定的防回归测试。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 静态扫描确认 alert.js 中 filed: 为 0，九个表格字段均恰好声明一次 field。
+  - 验证 interval_minutes、is_send_msg 和 is_run 的 sort:true 与各自 field 位于同一列对象。
+  - 执行 node --check 验证真实 alert.js JavaScript 语法。
+  - 运行 MX-07、MX-05 和 HI-06 前端/请求相邻测试，结果 12 passed（-W error）。
+- **e. 验证是否通过？** 通过（七处错误键全部消失，排序字段绑定、JS 语法及 12 项相邻测试通过）
+- **提交：** fix(MX-07): correct alert table field bindings
+- **修改文件：** `web/tradingview_zy_chart/cl_app/static/js/alert.js`, `tests/test_mx07_alert_column_fields.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器未启动真实 Layui 浏览器页面；字段 schema 与语法已验证，完整 DOM 排序交互由 ME-29 的 Chromium CI 门禁承担。
 - **原报告最新结论：** alert.js 仅修改策略列标题等少量文本，七处 filed: 拼写仍存在。
 - **原报告建议：** 统一改为 field，并增加前端 lint/schema 测试；对可排序列在浏览器中验证排序请求/本地排序键。
 
