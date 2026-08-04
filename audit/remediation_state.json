@@ -3332,16 +3332,43 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（仓库内质量门禁；托管状态待推送后验证）",
+      "problem_verified": true,
+      "problem_summary": "本地权威仓库缺少完整项目测试、真实 MySQL、浏览器 DOM 和独立 provider 可靠性矩阵的稳定 CI 门禁；footprint 还导入已删除私有时间函数，完整收集会提前失败。",
+      "fix_summary": "新增四个稳定 GitHub Actions job、质量门禁静态检查器、隔离测试配置生成器、MySQL/Chromium 专用测试和质量门禁文档；修复 footprint 私有导入；实际执行 provider job 后修正错误的 BaoStock 测试文件名。",
+      "verification_performed": true,
+      "verification_method": [
+        "质量门禁、仓库卫生、依赖契约与 Secret 暴露检查全部通过。",
+        "ME-29/footprint 专项 18 passed、2 skipped。",
+        "provider 严格告警矩阵 82 passed。",
+        "排除当前环境缺 empyrical 的收集阻断后，仓库回归 414 passed、5 skipped；8 项因缺 pinyin 在业务断言前阻断。",
+        "py_compile、git diff --check、JSON 解析和 footprint CRLF bare-LF=0 通过。"
+      ],
+      "verification_result": "通过（18 项专项、82 项 provider 严格矩阵、414 项可运行仓库回归通过；环境阻断和专用集成 gate 已明确区分）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "commit_subject": "fix(ME-29): add executable quality gates",
+      "files_changed": [
+        ".github/workflows/tests.yml",
+        ".github/workflows/repository-hygiene.yml",
+        "docs/quality-gates.md",
+        "script/remediation/check_quality_gates.py",
+        "script/remediation/prepare_test_config.py",
+        "src/tradingview_zy/footprint.py",
+        "tests/test_me29_quality_gates.py",
+        "tests/test_me29_mysql_gate.py",
+        "tests/test_me29_browser_dom.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本地提交未推送，无法产生托管 CI 状态或自动启用 required checks。",
+        "当前容器无 MySQL/Docker/Chromium，真实集成 gate 由新增 CI job 执行。",
+        "当前 Python 3.13 环境缺 empyrical、pinyin，相关收集/集成阻断未伪装为产品通过。",
+        "离线 provider 协议桩不能替代真实账户与网络沙箱。"
+      ]
     }
   },
   {

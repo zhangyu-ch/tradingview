@@ -20,7 +20,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from tradingview_zy.web_payloads import _datetime_to_timestamp_seconds
+from tradingview_zy.web_payloads import datetime_to_timestamp_seconds
 
 # 显示频率 -> 聚合用的子频率。未列出的频率不支持足迹。
 # 子频率的选择在"分价粒度"与"历史覆盖深度"（交易所仅缓存约 5600 根）间权衡。
@@ -119,7 +119,7 @@ def aggregate_footprint(
                 is_buy=sub_close[i] >= sub_open[i],
             )
 
-        ts = _datetime_to_timestamp_seconds(display_klines.iloc[int(owner_idx)]["date"])
+        ts = datetime_to_timestamp_seconds(display_klines.iloc[int(owner_idx)]["date"])
         result[ts] = {
             "tick": tick,
             "rows": [

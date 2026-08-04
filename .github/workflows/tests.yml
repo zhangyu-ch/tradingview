@@ -1,0 +1,123 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Verify lock file and install dependencies
+        run: uv sync --locked
+      - name: Prepare isolated test configuration
+        run: python script/remediation/prepare_test_config.py
+      - name: Run complete test suite
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: uv run pytest -q
+
+  provider-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Install locked environment
+        run: uv sync --locked
+      - name: Prepare isolated test configuration
+        run: python script/remediation/prepare_test_config.py
+      - name: Run provider reliability matrix with strict warnings
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: >-
+          uv run pytest -q -W error
+          tests/test_hi13_binance_pagination.py
+          tests/test_hi14_tq_lifecycle.py
+          tests/test_me11_baostock_reliability.py
+          tests/test_me12_tdx_contracts.py
+          tests/test_me14_tdx_us_timezone.py
+          tests/test_me15_futu_context_lifecycle.py
+          tests/test_me16_ib_rpc_timeout.py
+          tests/test_me17_qmt_contracts.py
+          tests/test_mx17_tdx_node_selection.py
+          tests/test_nx20_tdx_bounded_retry.py
+          tests/test_footprint.py
+
+  mysql-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root-password
+          MYSQL_DATABASE: tradingview_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Install locked environment
+        run: uv sync --locked
+      - name: Prepare isolated test configuration
+        run: python script/remediation/prepare_test_config.py
+      - name: Run real MySQL migration and long-content contract
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          RUN_MYSQL_TESTS: "1"
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root-password
+          MYSQL_DATABASE: tradingview_test
+        run: uv run pytest -q -W error tests/test_me29_mysql_gate.py
+
+  browser-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Install locked environment
+        run: uv sync --locked
+      - name: Install Chromium
+        run: uv run playwright install --with-deps chromium
+      - name: Verify rendered settings DOM does not expose stored secrets
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          RUN_BROWSER_TESTS: "1"
+        run: uv run pytest -q -W error tests/test_me29_browser_dom.py

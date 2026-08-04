@@ -567,3 +567,12 @@
 - 验证：5 项专项和 10 项仓库卫生/Secret 安全组合通过；运行树扫描无等价 TLS 绕过。
 - 限制：静态扫描不覆盖第三方依赖内部实现；恢复 ZB 仍是新功能。
 - 提交：`fix(NX-25): guard removed ZB TLS security`。
+
+
+### 问题 56：ME-29（恢复重建）
+- **状态：** complete
+- 验证结论：当前本地历史只有仓库卫生 workflow，缺完整 pytest、provider、真实 MySQL 与浏览器 DOM 四类稳定门禁；footprint 私有导入还会阻断完整收集，问题存在。
+- 修复：新增四个只读 GitHub Actions job、质量门禁 checker、隔离配置生成器、真实 MySQL/Chromium 专用测试和分支保护文档；footprint 改用公开时间函数。
+- 首次真实执行 provider job 发现 BaoStock 测试文件名错误，已修正并重跑。
+- 验证：18 passed/2 skipped 专项；82 passed provider 严格矩阵；414 passed/5 skipped 可运行仓库回归；8 项缺 pinyin、完整收集缺 empyrical，均在产品断言前阻断。
+- 提交：`fix(ME-29): add executable quality gates`。

@@ -1391,16 +1391,27 @@
 ### 56. ME-29 · 当前提交无可见 CI 状态，测试集中在少数协议单元，核心风险无门禁
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Quality Gates
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（仓库内质量门禁；托管状态待推送后验证）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 恢复后的本地权威仓库只有仓库卫生工作流，没有运行完整项目测试的持久 GitHub Actions；真实 MySQL、浏览器 DOM 和独立 provider 可靠性矩阵也没有稳定检查名。因而 SQLite/MySQL 差异、Secret DOM 回显、适配器分页/重试/时区/线程边界以及完整 pytest 是否可收集，都可能在合并前缺少门禁。实际复核还发现 `footprint.py` 继续导入已经删除的私有时间函数，完整收集会在业务断言前失败。
+- **b. 我是怎么修复的？** 新增只读、带 job timeout 和并发取消的 `.github/workflows/tests.yml`，提供四个稳定 job：`unit-contracts` 在 Python 3.11、`uv sync --locked` 环境运行完整 pytest；`provider-contracts` 以 warnings-as-errors 执行 11 个核心适配器与 footprint 矩阵；`mysql-contracts` 使用真实 MySQL 8.0 service 验证迁移及长文本往返；`browser-contracts` 安装 Chromium 并验证 Secret 不进入渲染 DOM。新增标准库 `check_quality_gates.py`，检查触发分支、只读权限、超时、锁定安装、关键矩阵、MySQL/浏览器标记与分支保护文档，并让 repository-hygiene 在安装依赖前自举执行。新增原子生成、权限为 0600 且被 Git 忽略的隔离测试配置脚本。修复 footprint 私有导入漂移，改用公开 `datetime_to_timestamp_seconds`。首次实际执行 provider job 时发现 BaoStock 测试文件名写错，已更正为真实的 `test_me11_baostock_reliability.py`，防止“静态检查通过、CI 立即失败”的伪门禁。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `python script/remediation/check_quality_gates.py`、repository hygiene、依赖契约和 Secret 暴露检查，全部通过。
+  - 运行 ME-29/footprint 专项：18 passed、2 skipped；两个 skip 只在普通本地环境未设置 `RUN_MYSQL_TESTS`/`RUN_BROWSER_TESTS` 时生效。
+  - 真实按 workflow 列出的 provider 文件运行严格告警矩阵：82 passed。首次执行准确发现并修复了不存在的 BaoStock 测试文件名。
+  - 生成隔离 `config.py` 后运行除当前环境缺少 `empyrical` 的收集阻断外的仓库回归：414 passed、5 skipped；另外 8 项在进入业务断言前被本容器缺少 `pinyin` 阻断。完整套件直接运行则在 `test_backtesting_base_generic.py` 收集阶段因缺少 `empyrical` 中止；没有把这些环境阻断伪装成产品通过。
+  - 验证 MySQL 与浏览器专用测试在未显式启用时稳定 skip，工作流分别提供真实 MySQL service 与 Chromium 安装/执行路径。
+  - 执行 `py_compile`、`git diff --check`、JSON 解析，并确认 `footprint.py` 保持纯 CRLF（bare-LF=0）。
+- **e. 验证是否通过？** 通过（仓库内门禁契约已实现；18 项专项、82 项 provider 严格矩阵和 414 项可运行仓库回归通过；5 项按设计跳过；8 项及一次完整收集受当前容器缺失依赖阻断）
+- **提交：** `fix(ME-29): add executable quality gates`
+- **修改文件：** `.github/workflows/tests.yml`, `.github/workflows/repository-hygiene.yml`, `docs/quality-gates.md`, `script/remediation/check_quality_gates.py`, `script/remediation/prepare_test_config.py`, `src/tradingview_zy/footprint.py`, `tests/test_me29_quality_gates.py`, `tests/test_me29_mysql_gate.py`, `tests/test_me29_browser_dom.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 用户要求只做本地提交、不推送远程，所以当前本地 SHA 不可能已有 GitHub Actions 可见状态；workflow 只有在推送或 PR 后才会运行。
+  - branch protection/required checks 是 GitHub 托管设置，仓库文件只能固定检查名与部署步骤，不能替代仓库管理员启用规则。
+  - 当前容器没有 MySQL/Docker 服务，也没有可用 Chromium 安装缓存；真实 MySQL/DOM 代码与 CI service 已实现，但本地结果明确为 skipped。
+  - 离线 provider contract 使用协议桩和故障注入，不能替代真实券商、交易所、OpenD、TQ/IB/TDX 网络与账号沙箱验收。
+  - 当前 Python 3.13 环境缺 `empyrical`、`pinyin`；新增 CI 使用项目声明的 Python 3.11 和锁文件安装完整依赖，首次远程运行仍可能暴露平台依赖问题，届时必须按失败证据修复，不能绕过。
 - **原报告最新结论：** 仓库已有持久化 GitHub Actions：Python 3.11 使用 uv sync --locked 运行完整 pytest 且 warnings-as-errors，Python 3.13 单独验证依赖 warning 基线。PR #15 最终合并检查为 172 passed。浏览器、MySQL 和真实外部 SDK 仍不在门禁内。
 - **原报告建议：** 增加 MySQL、浏览器/DOM、核心 provider mock/沙箱矩阵；在仓库分支保护中把 checks 设为 required，并验证合并提交 push 检查。
 

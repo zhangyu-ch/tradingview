@@ -353,3 +353,11 @@
 - TLS 恢复契约必须同时覆盖证书链、主机名、信任库和失败策略；只删除一个 `verify=False` 参数并不足够。
 - 仓库门禁应扫描语义等价绕过，包括 `CERT_NONE`、`check_hostname=False` 和 WebSocket `sslopt`。
 - TLS 验证失败必须中止连接且不得降级；日志只能包含稳定、无秘密的错误类型。
+
+
+## ME-29 可执行质量门禁复核（恢复重建）
+- 门禁是否真实可执行不能只靠 YAML 关键字扫描；必须按 workflow 中列出的文件实际运行。此次正是执行 provider job 才发现静态 checker 未发现的错误测试文件名。
+- 单元、provider、真实数据库与真实 DOM 是不同失败域，应使用稳定独立 job 名，便于 required-check 和故障定位。
+- 当前环境缺少依赖不应促使 CI 使用 ignore/deselect；本地可明确记录阻断，托管 Python 3.11 job 必须在 `uv sync --locked` 后运行完整套件。
+- SQLite 单测不能证明 MySQL DDL/截断语义，模板文本扫描也不能证明渲染 DOM 不含 Secret；这两类风险需要真实 service/browser gate。
+- 修复已删除私有 API 的导入属于恢复“完整套件可收集”边界，不应通过跳过测试掩盖。

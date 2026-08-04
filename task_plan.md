@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 7（第 55 条 NX-25 已重建并验证，下一条为第 56 条 ME-29）
+阶段 7（第 56 条 ME-29 已重建并验证，下一条为第 57 条 ME-10）
 
 ## 各阶段
 
@@ -60,7 +60,7 @@
 - [x] 53. ME-15
 - [x] 54. NX-01
 - [x] 55. NX-25
-- [ ] 56. ME-29
+- [x] 56. ME-29
 - [ ] 57. ME-10
 - [ ] 58. ME-20
 - [ ] 59. ME-25
@@ -162,6 +162,9 @@
 | NX-15 AST 路由测试未注入新 TVStorage 全局与 policy | 1 | 更新既有测试 namespace 和 fake DB，继续验证严格 True/异常/request_id 契约 |
 
 | ME-15 全量仓库收集受归档外 config.py、缺失 pinyin/empyrical 与既有 footprint 私有导入阻断 | 2 | 保留环境与基线限制；执行 9 项专项、52 项直接相邻和广泛可运行回归，实际产品生命周期路径均已故障注入 |
+
+| ME-29 provider workflow 首次执行引用不存在的 `test_me11_baostock_contracts.py` | 1 | 对照实际测试目录，修正为 `test_me11_baostock_reliability.py`，并重新执行完整 provider job，82 项通过 |
+| ME-29 本地完整 pytest 收集缺少 `empyrical`，扩大回归另有 8 项缺少 `pinyin` | 2 | 保留环境限制；运行可收集仓库回归 414 passed/5 skipped，并把完整 Python 3.11 `uv sync --locked` 留在 CI，不使用 ignore/deselect 绕过托管门禁 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。
