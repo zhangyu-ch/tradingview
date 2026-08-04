@@ -230,7 +230,7 @@ class ExchangeIB(Exchange):
         获取当前持仓
 
         DEMO:
-        [{'code': 'NVDA', 'account': 'DU6941075', 'avgCost': 273.93, 'position': 1.0}]
+        [{'code': 'NVDA', 'account': '<configured-account>', 'avgCost': 273.93, 'position': 1.0}]
         """
         return self._rpc(CmdEnum.POSITIONS, {"code": code})
 

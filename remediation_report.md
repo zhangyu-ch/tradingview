@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 63
-- **待处理：** 18
+- **已完成：** 64
+- **待处理：** 17
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -74,7 +74,7 @@
 |61|`ME-04`|中|Web Payload|🟡 部分修复|已完成（统一 K 线 payload 边界）|通过（29 项严格 payload 测试、92 项直接相邻及 525 项可运行仓库回归通过；schema、时区、排序、重复、身份和稳定错误边界均已关闭）|`fix(ME-04)`|
 |62|`ME-01`|中|Web Storage|🟡 部分修复|已完成（存储授权绑定登录会话）|通过（4 项授权专项、60 项严格相邻及 515 项当前可运行仓库回归通过；请求伪造 user 不再影响任何存储查询或写入）|`fix(ME-01)`|
 |63|`ME-03`|低|Web UDF|❌ 未修复|已完成（UDF 周期并集动态覆盖全部市场）|通过（独有纽约期货周期故障注入、真实路由 AST 及 17 项元数据/注册表相邻测试通过）|`fix(ME-03)`|
-|64|`MX-11`|低|Configuration|❌ 未修复|待处理|—|—|
+|64|`MX-11`|低|Configuration|❌ 未修复|已完成（具体 IB 账户已移出模板）|通过（仓库受检运行路径不再含具体 IB 账户，3 项专项与 11 项 Secret 相邻测试固定防回归）|`test(MX-11)`|
 |65|`MX-07`|低|Frontend|❌ 未修复|待处理|—|—|
 |66|`MX-10`|低|Frontend|❌ 未修复|待处理|—|—|
 |67|`NX-09`|低|Backtesting Fees|❌ 未修复|待处理|—|—|
@@ -1592,16 +1592,21 @@
 ### 64. MX-11 · 配置模板暴露具体 IB 账户标识
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Configuration
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（具体 IB 账户已移出模板）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 原报告点名的 config.py.demo 具体 IB 账户已由 ME-27 改成 env:// 引用；但继续扫描发现 ExchangeIB.positions() 的运行时 docstring 仍保留 DU6941075 具体账户样例。因此“仓库暴露具体 IB 账户标识”的根因仍部分存在，需要在本条彻底清除并固定门禁。
+- **b. 我是怎么修复的？** 保留 ME-27 已完成的 env://TRADINGVIEW_ZY_IB_ACCOUNT 配置与运行时解析；把 ExchangeIB docstring 中的具体 DU 账户替换为无身份占位符。新增 MX-11 防回归门禁，扫描配置、worker 与适配器不得出现 DU+数字，IB worker 必须在 ib.connect 前通过 resolve_config_secret(required=True) 解析账户，明文和缺失环境变量均 fail-closed。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 静态扫描 config.py.demo、script_ib_tasks.py 与 exchange_ib.py，确认不存在 DU+数字具体账户，模板只包含 env://TRADINGVIEW_ZY_IB_ACCOUNT。
+  - 检查真实 IB worker 在 ib.connect 前调用 resolve_config_secret(config, "IB_ACCOUNT", required=True)，并只传 configured_account。
+  - 动态验证明文 DU1234567 被 SecretReferenceError 拒绝、缺失环境变量被拒绝、有效环境引用解析成功。
+  - 运行 MX-11 与 ME-27 相邻测试，结果 14 passed（-W error）；执行 py_compile、git diff --check 与 CRLF 检查。
+- **e. 验证是否通过？** 通过（仓库受检运行路径不再含具体 IB 账户，3 项专项与 11 项 Secret 相邻测试固定防回归）
+- **提交：** test(MX-11): prevent concrete IB account templates
+- **修改文件：** `src/tradingview_zy/exchange/exchange_ib.py`, `tests/test_mx11_ib_account_template.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 未连接真实 IB Gateway/TWS；本条只验证账户标识不进入仓库模板及解析边界，真实账户授权由 IB 服务端验证。
 - **原报告最新结论：** 最新 config.py.demo 仍包含具体 IB_ACCOUNT = 'DU6941075'。
 - **原报告建议：** 改为明显占位符/空值，并在启动时拒绝示例值。
 

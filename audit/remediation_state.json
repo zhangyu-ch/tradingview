@@ -3919,16 +3919,32 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（具体 IB 账户已移出模板）",
+      "problem_verified": true,
+      "problem_summary": "原报告点名的 config.py.demo 具体 IB 账户已由 ME-27 改成 env:// 引用；但继续扫描发现 ExchangeIB.positions() 的运行时 docstring 仍保留 DU6941075 具体账户样例。因此“仓库暴露具体 IB 账户标识”的根因仍部分存在，需要在本条彻底清除并固定门禁。",
+      "fix_summary": "保留 ME-27 已完成的 env://TRADINGVIEW_ZY_IB_ACCOUNT 配置与运行时解析；把 ExchangeIB docstring 中的具体 DU 账户替换为无身份占位符。新增 MX-11 防回归门禁，扫描配置、worker 与适配器不得出现 DU+数字，IB worker 必须在 ib.connect 前通过 resolve_config_secret(required=True) 解析账户，明文和缺失环境变量均 fail-closed。",
+      "verification_performed": true,
+      "verification_method": [
+        "静态扫描 config.py.demo、script_ib_tasks.py 与 exchange_ib.py，确认不存在 DU+数字具体账户，模板只包含 env://TRADINGVIEW_ZY_IB_ACCOUNT。",
+        "检查真实 IB worker 在 ib.connect 前调用 resolve_config_secret(config, \"IB_ACCOUNT\", required=True)，并只传 configured_account。",
+        "动态验证明文 DU1234567 被 SecretReferenceError 拒绝、缺失环境变量被拒绝、有效环境引用解析成功。",
+        "运行 MX-11 与 ME-27 相邻测试，结果 14 passed（-W error）；执行 py_compile、git diff --check 与 CRLF 检查。"
+      ],
+      "verification_result": "通过（仓库受检运行路径不再含具体 IB 账户，3 项专项与 11 项 Secret 相邻测试固定防回归）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/exchange/exchange_ib.py",
+        "tests/test_mx11_ib_account_template.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "未连接真实 IB Gateway/TWS；本条只验证账户标识不进入仓库模板及解析边界，真实账户授权由 IB 服务端验证。"
+      ],
+      "commit_subject": "test(MX-11): prevent concrete IB account templates"
     }
   },
   {
