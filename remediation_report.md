@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 71
-- **待处理：** 10
+- **已完成：** 72
+- **待处理：** 9
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -82,7 +82,7 @@
 |69|`NX-17`|低|Web UDF|❌ 未修复|已完成（UDF 市场描述符与交易日历统一）|通过（现金/FX/crypto、七类期货会话、未知品种保守退化、真实路由及 63 项相邻测试通过）|`fix(NX-17)`|
 |70|`LO-02`|低|Maintainability|❌ 未修复|已完成（共享行情适配器与同步工作流）|通过（35 项聚焦、71 项 TDX/日历相邻、99 项 provider 严格组合及 565 项可运行仓库回归通过；环境阻断已单独记录）|`refactor(LO-02)`|
 |71|`LO-06`|低|Readability|❌ 未修复|已完成（显式依赖、审计异常边界与可执行门禁）|通过（运行代码 wildcard import 清零；显式异常/命名门禁与 63 项严格相邻测试通过）|`refactor(LO-06)`|
-|72|`MX-16`|低|Dead Code|❌ 未修复|待处理|—|—|
+|72|`MX-16`|低|Dead Code|❌ 未修复|已完成（删除未加载资产与 no-op 任务壳）|通过（死资产和任务壳均删除，运行引用图为空，15 项相邻测试通过）|`refactor(MX-16)`|
 |73|`MX-18`|低|Strategy Architecture|❌ 未修复|待处理|—|—|
 |74|`NX-11`|低|Database Schema|❌ 未修复|待处理|—|—|
 |75|`LO-05`|低|Architecture|🟡 部分修复|待处理|—|—|
@@ -1773,16 +1773,22 @@
 ### 72. MX-16 · 存在未加载的 ai.js 和完全 no-op 的 OtherTasks
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Dead Code
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（删除未加载资产与 no-op 任务壳）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `static/js/ai.js` 没有被任何运行模板加载，只显示已不可用提示；`OtherTasks` 构造时仍创建 StocksBKGN，但 run_task 全部注释后只剩 pass，Web app factory 仍注册其懒加载代理。两个桩会让维护者误判功能存在，并保留无意义依赖和初始化面。
+- **b. 我是怎么修复的？** 删除未加载的 ai.js 和完全 no-op 的 other_tasks.py；从 create_app 删除 `_other_tasks` 懒代理，不替它编造新职责。同步更新 scheduler 生命周期测试，并新增运行时静态资源/任务引用图门禁，防止资产或空壳在没有真实注册、展示和测试时被恢复。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 全运行树搜索确认 ai.js、OtherTasks、other_tasks 无引用，归档历史文档不作为运行能力声明。
+  - AST 检查真实 app factory 不再创建 OtherTasks 常量或 `_other_tasks` 代理。
+  - 运行 MX-16、ME-26 和 ME-05 组合，15 passed（-W error）。
+  - 执行 compileall、git diff --check 和 Web 主文件 CRLF bare-LF 门禁。
+- **e. 验证是否通过？** 通过（死资产和任务壳均删除，运行引用图为空，15 项相邻测试通过）
+- **提交：** refactor(MX-16): remove dead AI and task stubs
+- **修改文件：** `web/tradingview_zy_chart/cl_app/static/js/ai.js`, `web/tradingview_zy_chart/cl_app/other_tasks.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_mx16_dead_code_removal.py`, `tests/test_me26_scheduler_lifecycle.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 无法证明仓库外私有模板曾引用 ai.js；当前交付物的全部运行模板、静态代码、Python 入口和 app factory 已确认无引用。
+  - archive/docs 下的历史架构报告仍提及旧文件，它们是历史快照；当前文档漂移将在 LO-08 按顺序处理。
 - **原报告最新结论：** ai.js 仍是未加载/不可用桩，OtherTasks.run_task() 仍为 pass；能力边界没有删除或实现。
 - **原报告建议：** 删除无效资产和任务壳，或实现后显式注册、展示与测试。
 

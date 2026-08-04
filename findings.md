@@ -468,3 +468,7 @@
 - 第三方 SDK 异常类型不统一时，唯一合理的 broad catch 应集中在明确 integration boundary，并带静态规则豁免理由；业务 adapter 不再各自 print/return None。
 - 结构化日志的稳定字段应是 market/code/request_id/operation/provider/error_type，绝不能复制第三方异常消息，因为其中可能包含 token、URL 或账号。
 - 锁文件治理下不能临时 pip 安装未锁定 lint 工具；项目配置声明 Ruff 规则，仓库内无依赖 AST checker 负责 CI 执行和故障注入。
+
+## MX-16 死能力删除边界
+- 未加载的前端桩和只剩 pass 的后台任务不是“未来功能”，而是错误能力声明；没有真实职责、入口和测试时应从运行树删除。
+- app factory 中的懒代理仍会保留导入和初始化认知面；删除实现时必须同时删除注册点并用引用图固定。

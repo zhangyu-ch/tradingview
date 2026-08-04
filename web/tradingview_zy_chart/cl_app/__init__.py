@@ -341,7 +341,6 @@ def create_app(test_config=None):
 
     _alert_tasks = _LazyTasks("alert_tasks", "AlertTasks")
     _xuangu_tasks = _LazyTasks("xuangu_tasks", "XuanguTasks")
-    _other_tasks = _LazyTasks("other_tasks", "OtherTasks")
 
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)

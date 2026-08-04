@@ -716,3 +716,9 @@
 - 门禁：pyproject 启用 F403/F405/BLE001；repository hygiene 执行 AST checker，拒绝 wildcard、目标短名和无理由 broad catch。
 - 验证：故障注入确认 network/unknown SDK 异常映射和日志不泄密；LO-06/LO-02/ME-11/ME-14/ME-17/ME-29 组合 63 passed（-W error）；compileall、质量门禁、CRLF 和 diff 通过。
 - 提交主题：`refactor(LO-06): enforce auditable provider code`。
+
+### 问题 72：MX-16
+- **状态：** complete
+- 删除未加载的 `ai.js`、完全 no-op 的 `OtherTasks` 及 app factory 懒代理；不把不可用能力伪装成实现。
+- 运行时引用图、app factory AST、MX-16/ME-26/ME-05 共 15 项严格测试通过；compileall、CRLF 与 diff 门禁通过。
+- 提交主题：`refactor(MX-16): remove dead AI and task stubs`。

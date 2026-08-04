@@ -149,11 +149,9 @@ def test_flask_factory_has_no_scheduler_lifecycle_side_effects() -> None:
 def test_task_modules_do_not_import_apscheduler_and_web_alert_reconcile_is_a_noop() -> None:
     alert_source = (WEB / "cl_app" / "alert_tasks.py").read_text(encoding="utf-8")
     xuangu_source = (WEB / "cl_app" / "xuangu_tasks.py").read_text(encoding="utf-8")
-    other_source = (WEB / "cl_app" / "other_tasks.py").read_text(encoding="utf-8")
-
     assert "apscheduler" not in alert_source.lower()
     assert "apscheduler" not in xuangu_source.lower()
-    assert "apscheduler" not in other_source.lower()
+    assert not (WEB / "cl_app" / "other_tasks.py").exists()
     assert "def __init__(self, scheduler=None)" in alert_source
     assert "if self.scheduler is None:" in alert_source
     assert "return True" in alert_source[alert_source.index("def run(self):") :]
