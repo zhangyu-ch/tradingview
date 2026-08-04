@@ -241,3 +241,10 @@
 - “最后一行可能未完成”原先只靠无条件 `iloc[:-1]` 表达。现在 sidecar 显式记录 `last_row_complete`，调用方可通过 `include_incomplete` 选择，legacy CSV 采用保守规则。
 - 所有写入使用同目录临时文件、flush+fsync、`os.replace` 和固定条带锁；坏 CSV/JSON 重命名为 `.corrupt.*`，暂时性 PermissionError 只返回不可用。
 - 任意对象 pickle 状态缓存已替换为 schema/version/SHA-256 JSON 白名单；真实恶意 `__reduce__` payload 未执行。TDX 除权缓存同步迁移为原子 CSV。
+
+
+## ME-17 QMT 行情区间与供应商协议复核（恢复重建）
+- 旧 `klines()` 在每次读取前都会检查并触发下载，且下载和读取的 `end_time` 都固定为空；声明的闭区间实际上只使用下界。
+- 迅投接口把下载与本地读取分开，`get_market_data_ex` 返回 `{stock_code: DataFrame}`。修复按该结构校验，并在 provider 返回后再次执行 timezone-aware 闭区间裁剪。
+- 空 DataFrame 是稳定的无数据结果；缺目标代码、非 DataFrame、缺 OHLCV、重复时间、非有限数值和空盘口分别返回明确 unavailable/schema 错误，不再泄漏 KeyError/IndexError。
+- 证券目录改为实例私有且返回防御性副本，订阅默认列表改为 `None`；默认 K 线读取不产生下载副作用，需要刷新时显式调用 `download_klines()` 或 `args={"download": True}`。

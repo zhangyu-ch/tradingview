@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 42
-- **待处理：** 39
+- **已完成：** 43
+- **待处理：** 38
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -53,7 +53,7 @@
 |40|`ME-12`|中|TDX Adapters|❌ 未修复|已完成|通过（11 项 ME-12 专项、74 项相邻组合、235 项可收集广泛回归通过；3 skipped；递归重连、错误分母、不可用价格伪装和四个证据适配器的硬编码时段根因均已关闭）|`fix(ME-12)`|
 |41|`ME-23`|中|Backtesting Config|❌ 未修复|已完成|通过（7 项 ME-23 专项、30 项相邻组合通过；版本/生效区间/品种覆盖、交易器注入、保存快照、加载完整性和篡改失败路径均已验证）|`fix(ME-23): `|
 |42|`HI-16`|中|File Cache|❌ 未修复|已完成|通过（9 项 HI-16 专项、44 项相邻组合通过；原子失败、损坏隔离、暂时 I/O、旧 pickle 不执行、真实交易器安全状态和除权 CSV 路径均已验证）|`fix(HI-16): `|
-|43|`ME-17`|中|QMT Market Data|❌ 未修复|待处理|—|—|
+|43|`ME-17`|中|QMT Market Data|❌ 未修复|已完成|通过（8 项 ME-17 专项、55 项相邻组合通过；范围、下载隔离、空/畸形数据、实例状态与 Tick 边界均已动态验证）|`fix(ME-17): `|
 |44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|待处理|—|—|
 |45|`ME-19`|中|Selection Tasks|❌ 未修复|待处理|—|—|
 |46|`ME-18`|中|Strategy Runners|❌ 未修复|待处理|—|—|
@@ -1042,16 +1042,27 @@
 ### 43. ME-17 · ExchangeQMT 使用可变默认参数、忽略 end_date 并缺少空数据校验
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / QMT Market Data
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `ExchangeQMT.klines()` 声明接收 start_date/end_date，但下载和最终读取的 `end_time` 都固定为空；每次读取前还会检查本地数据并无条件触发全量或增量下载，形成隐藏网络/磁盘副作用。返回值直接假设为 field->DataFrame 且包含 time/OHLCV，None、空响应、缺代码、缺字段、重复时间或非数值都会以 KeyError/IndexError/除零等非领域错误失败。`subscribe_all_ticks` 使用可变默认列表，证券目录又保存在类级 `g_all_stocks=[]`，实例之间可共享并污染状态。
+- **b. 我是怎么修复的？** 按迅投历史行情接口契约把下载与读取拆开：新增显式 `download_klines()`，普通 `klines()` 默认只读取本地数据，只有 `args.download=True` 才显式下载。start/end 统一解析为 Asia/Shanghai aware 边界，同时传入 `download_history_data`/`get_market_data_ex`，返回后再次按闭区间裁剪，避免 SDK 忽略边界。读取迁移为官方 code->DataFrame 结构并校验响应类型、目标代码、time/OHLCV、数值有限性和时间唯一性；空 DataFrame 返回标准空 K 线，缺代码/畸形 schema 分别抛 `QMTDataUnavailableError`/`QMTDataSchemaError`。请求参数、频率、日期顺序、复权、count 和代码格式在任何 SDK 调用前校验。证券目录改为实例私有防御性副本，订阅默认参数改 None；stock detail 与 tick 也增加 schema 校验，涨跌幅复用前收价安全函数。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前读取 `exchange_qmt.py`：确认两处下载和最终读取 `end_time` 均为 `""`，`klines()` 无条件调用 download，响应直接按 `qmt_klines.items()`/`["time"]` 解析，类级列表与 `market_list=[...]` 均存在。
+  - 对照迅投官方历史行情文档，确认 `download_history_data` 和 `get_market_data_ex` 都接受 start_time/end_time，且后者返回 `{stock_code: DataFrame}`；实现与测试按该协议构造，不依赖猜测的 field->DataFrame 结构。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me17_qmt_contracts.py`，8 项专项通过；验证 09:30–10:00 精确闭区间、date-only 结束日、QMT 参数值、默认零下载和显式下载 start/end。
+  - 在 SDK 调用计数桩上验证 start>end、未知频率、bool count 和畸形代码均在副作用前抛 `QMTRequestError`，下载/读取调用数保持 0。
+  - 故障注入 None/缺代码/空 DataFrame/缺 OHLCV/重复时间/NaN，分别验证稳定空表或明确 unavailable/schema 错误；Tick 前收价为 0 返回 rate=None，空盘口明确失败。
+  - 验证两个 ExchangeQMT 实例不共享证券目录，返回列表为防御性副本，`subscribe_all_ticks.market_list` 默认值严格为 None，类中不再存在 `g_all_stocks`。
+  - 运行 ME-17、CR-04、HI-16、ME-23、ME-12、MX-17、NX-20、RV-04、NX-08 和报告统计组合测试，共 55 passed；执行 compileall、`git diff --check`，原 CRLF 文件 bare-LF 为 0。
+- **e. 验证是否通过？** 通过（8 项 ME-17 专项、55 项相邻组合通过；范围、下载隔离、空/畸形数据、实例状态与 Tick 边界均已动态验证）
+- **提交：** `fix(ME-17): validate QMT ranges and payloads`
+- **修改文件：** `src/tradingview_zy/exchange/exchange_qmt.py`, `tests/test_me17_qmt_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器没有安装专有 xtquant/QMT 客户端，也未连接 MiniQMT；动态验证使用与官方参数和返回结构一致的协议桩。真实客户端版本、下载耗时和本地数据目录权限仍需 QMT 环境联调。
+  - 为删除隐藏副作用，`klines()` 默认不再自动下载。依赖旧行为的调用方需要先调用 `download_klines()` 或显式传 `args={"download": True}`；这是有意的可观察契约变化。
+  - QMT SDK 单次下载/读取接口没有在本适配器中提供可强制取消的 deadline；本条关闭参数、边界和数据协议问题，调用级统一 deadline 属于后续 adapter/utility 可靠性治理。
+  - 本条继续保留 QMT 仅行情能力；CR-04 已删除的实盘 trader 没有恢复，订单仍由统一 fail-closed 边界阻断。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_qmt.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 默认参数改 None；严格裁剪 start/end；分离下载与读取；schema 校验和明确错误类型。
 

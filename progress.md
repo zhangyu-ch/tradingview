@@ -406,3 +406,13 @@
 - 首轮专项唯一失败来自测试在默认 `signal` 模式下错误期待初始现金；改为显式 `trade` 模式后通过，产品行为未修改。
 - 限制：CSV 与 sidecar 非跨文件事务；进程间为 last-writer-wins；旧 pickle 不做自动迁移；完整 BackTest 产物 pickle 不属于本缓存路径。
 - 提交：`fix(HI-16): make file caches atomic and non-executable`。
+
+
+### 问题 43：ME-17（恢复重建）
+- **状态：** complete
+- 验证结论：QMT 读取隐式下载、end_date 全链路被忽略、响应无 schema/空值保护、类级目录缓存与订阅可变默认均存在。
+- 修复：下载拆为显式 `download_klines`；默认读取使用 `get_market_data_ex` 并传递/二次执行 start/end；所有请求和 code->DataFrame/tick/detail 响应严格校验；目录缓存实例隔离，默认列表改 None。
+- 专项及相邻测试：8 项 ME-17、55 项组合通过；QMT 调用计数、精确时间窗口、空/缺列/重复/NaN、零前收价和实例状态均动态验证。
+- 当前容器无 xtquant/MiniQMT；测试只注入官方参数与返回结构一致的协议桩，并为缺失 `tzlocal` 注入 UTC 最小桩，实际 adapter 产品逻辑未替换。
+- 限制：默认读取不再自动下载是有意契约变化；SDK 单次调用强制 deadline 留给统一 adapter 可靠性治理。
+- 提交：`fix(ME-17): validate QMT ranges and payloads`。

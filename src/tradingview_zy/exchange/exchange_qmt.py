@@ -1,53 +1,323 @@
+from __future__ import annotations
+
 import datetime
-import time
-from typing import Dict, List, Union
+import math
+import re
+from collections.abc import Mapping, Sequence
+from typing import Any, Dict, List, Union
+from zoneinfo import ZoneInfo
 
 import pandas as pd
-import pytz
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from tradingview_zy import fun
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from xtquant import xtdata
 
-"""
-QMT 沪深行情
-"""
+"""QMT 沪深行情适配器。"""
+
+
+class QMTError(RuntimeError):
+    """Base class for QMT request and provider failures."""
+
+
+class QMTRequestError(QMTError, ValueError):
+    """Raised before any SDK side effect for an invalid request."""
+
+
+class QMTDataUnavailableError(QMTError):
+    """Raised when the SDK returns no response for a requested resource."""
+
+
+class QMTDataSchemaError(QMTError):
+    """Raised when the SDK response violates the documented data contract."""
 
 
 class ExchangeQMT(Exchange):
-    g_all_stocks = []
+    _TIMEZONE = ZoneInfo("Asia/Shanghai")
+    _PROJECT_CODE_RE = re.compile(r"^(?P<exchange>SH|SZ|BJ)\.(?P<code>[A-Za-z0-9_@-]{1,32})$")
+    _QMT_CODE_RE = re.compile(r"^(?P<code>[A-Za-z0-9_@-]{1,32})\.(?P<exchange>SH|SZ|BJ)$")
+    _BASE_PERIODS = {
+        "y": "1d",
+        "m": "1d",
+        "w": "1d",
+        "d": "1d",
+        "60m": "5m",
+        "30m": "5m",
+        "15m": "5m",
+        "5m": "5m",
+        "3m": "1m",
+        "1m": "1m",
+    }
+    _DEFAULT_COUNTS = {
+        "y": -1,
+        "m": 8000 * 20,
+        "w": 8000 * 5,
+        "d": 8000,
+        "60m": 8000 * 12,
+        "30m": 8000 * 6,
+        "15m": 8000 * 3,
+        "5m": 8000,
+        "3m": 8000 * 3,
+        "1m": 8000,
+    }
+    _DIVIDEND_TYPES = {
+        "none",
+        "front",
+        "back",
+        "front_ratio",
+        "back_ratio",
+    }
+    _KLINE_COLUMNS = ["code", "date", "open", "high", "low", "close", "volume"]
 
     def __init__(self):
         xtdata.enable_hello = False
+        self.tz = self._TIMEZONE
+        self._all_stocks: list[dict[str, Any]] = []
 
-        # 设置时区
-        self.tz = pytz.timezone("Asia/Shanghai")
+    @classmethod
+    def code_to_tdx(cls, code: str) -> str:
+        """Normalize either QMT or project code to ``EXCHANGE.CODE``."""
+        if not isinstance(code, str):
+            raise QMTRequestError("code must be a string")
+        value = code.strip().upper()
+        project = cls._PROJECT_CODE_RE.fullmatch(value)
+        if project:
+            return value
+        qmt = cls._QMT_CODE_RE.fullmatch(value)
+        if qmt:
+            return f"{qmt.group('exchange')}.{qmt.group('code')}"
+        raise QMTRequestError("code must be SH.CODE/SZ.CODE/BJ.CODE or CODE.SH/CODE.SZ/CODE.BJ")
 
-    def code_to_tdx(self, code: str):
-        """
-        兼容之前的通达信格式,和 qmt 代码格式进行转换
-        """
-        _c = code.split(".")
-        if len(_c[0]) == 6:
-            return _c[1] + "." + _c[0]
+    @classmethod
+    def code_to_qmt(cls, code: str) -> str:
+        """Normalize either QMT or project code to ``CODE.EXCHANGE``."""
+        project = cls.code_to_tdx(code)
+        exchange, instrument = project.split(".", 1)
+        return f"{instrument}.{exchange}"
+
+    @staticmethod
+    def _copy_catalog(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        return [dict(item) for item in items]
+
+    @classmethod
+    def _validate_frequency(cls, frequency: str) -> str:
+        if not isinstance(frequency, str) or frequency not in cls._BASE_PERIODS:
+            raise QMTRequestError(f"unsupported QMT frequency: {frequency!r}")
+        return cls._BASE_PERIODS[frequency]
+
+    @classmethod
+    def _parse_bound(
+        cls, value: str | datetime.date | datetime.datetime | pd.Timestamp | None, *, is_end: bool
+    ) -> tuple[pd.Timestamp | None, str]:
+        if value is None or value == "":
+            return None, ""
+        if isinstance(value, bool):
+            raise QMTRequestError("date boundary must not be boolean")
+
+        date_only = False
+        try:
+            if isinstance(value, datetime.datetime):
+                timestamp = pd.Timestamp(value)
+            elif isinstance(value, datetime.date):
+                timestamp = pd.Timestamp(value)
+                date_only = True
+            elif isinstance(value, pd.Timestamp):
+                timestamp = value
+            elif isinstance(value, str):
+                text = value.strip()
+                if not text:
+                    return None, ""
+                date_only = bool(
+                    re.fullmatch(r"\d{8}", text)
+                    or re.fullmatch(r"\d{4}-\d{2}-\d{2}", text)
+                )
+                timestamp = pd.Timestamp(text)
+            else:
+                raise TypeError
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise QMTRequestError(f"invalid date boundary: {value!r}") from exc
+
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.tz_localize(cls._TIMEZONE)
         else:
-            return _c[0] + "." + _c[1]
+            timestamp = timestamp.tz_convert(cls._TIMEZONE)
+        if date_only:
+            timestamp = timestamp.normalize()
+            if is_end:
+                timestamp += pd.Timedelta(hours=23, minutes=59, seconds=59)
+        return timestamp, timestamp.strftime("%Y%m%d%H%M%S")
 
-    def code_to_qmt(self, code: str):
-        """
-        兼容之前的通达信格式,和 qmt 代码格式进行转换
-        """
-        _c = code.split(".")
-        if len(_c[0]) == 6:
-            return _c[0] + "." + _c[1]
+    @classmethod
+    def _request_contract(
+        cls,
+        code: str,
+        frequency: str,
+        start_date: str | datetime.date | datetime.datetime | pd.Timestamp | None,
+        end_date: str | datetime.date | datetime.datetime | pd.Timestamp | None,
+        args: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        qmt_code = cls.code_to_qmt(code)
+        project_code = cls.code_to_tdx(code)
+        period = cls._validate_frequency(frequency)
+        if args is None:
+            options: dict[str, Any] = {}
+        elif isinstance(args, dict):
+            options = dict(args)
         else:
-            return _c[1] + "." + _c[0]
+            raise QMTRequestError("args must be a mapping")
 
-    def default_code(self):
+        if start_date in (None, "") and options.get("download_start_date") not in (None, ""):
+            start_date = options["download_start_date"]
+        if end_date in (None, "") and options.get("download_end_date") not in (None, ""):
+            end_date = options["download_end_date"]
+
+        start, start_text = cls._parse_bound(start_date, is_end=False)
+        end, end_text = cls._parse_bound(end_date, is_end=True)
+        if start is not None and end is not None and start > end:
+            raise QMTRequestError("start_date must be before or equal to end_date")
+
+        dividend_type = options.get("dividend_type", "front")
+        if not isinstance(dividend_type, str) or dividend_type not in cls._DIVIDEND_TYPES:
+            raise QMTRequestError(f"unsupported dividend_type: {dividend_type!r}")
+
+        count = options.get("req_counts", cls._DEFAULT_COUNTS[frequency])
+        if isinstance(count, bool) or not isinstance(count, int) or count == 0 or count < -1:
+            raise QMTRequestError("req_counts must be -1 or a positive integer")
+        if start is not None or end is not None:
+            count = -1
+
+        download = options.get("download", False)
+        if not isinstance(download, bool):
+            raise QMTRequestError("download must be a boolean")
+        incrementally = options.get("incrementally", True)
+        if not isinstance(incrementally, bool):
+            raise QMTRequestError("incrementally must be a boolean")
+
+        return {
+            "project_code": project_code,
+            "qmt_code": qmt_code,
+            "frequency": frequency,
+            "period": period,
+            "start": start,
+            "end": end,
+            "start_text": start_text,
+            "end_text": end_text,
+            "dividend_type": dividend_type,
+            "count": count,
+            "download": download,
+            "incrementally": incrementally,
+        }
+
+    @classmethod
+    def _empty_klines(cls) -> pd.DataFrame:
+        return pd.DataFrame(columns=cls._KLINE_COLUMNS)
+
+    @staticmethod
+    def _finite_number(value: Any, field: str, *, nonnegative: bool = False) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise QMTDataSchemaError(f"QMT field {field!r} must be numeric") from exc
+        if not math.isfinite(number):
+            raise QMTDataSchemaError(f"QMT field {field!r} must be finite")
+        if nonnegative and number < 0:
+            raise QMTDataSchemaError(f"QMT field {field!r} must be non-negative")
+        return number
+
+    @classmethod
+    def _normalize_kline_frame(
+        cls,
+        response: Any,
+        request: Mapping[str, Any],
+    ) -> pd.DataFrame:
+        if response is None:
+            raise QMTDataUnavailableError("QMT returned no K-line response")
+        if not isinstance(response, Mapping):
+            raise QMTDataSchemaError("QMT K-line response must be a code-to-DataFrame mapping")
+        qmt_code = request["qmt_code"]
+        if qmt_code not in response:
+            raise QMTDataUnavailableError(f"QMT response has no data for {qmt_code}")
+        source = response[qmt_code]
+        if not isinstance(source, pd.DataFrame):
+            raise QMTDataSchemaError("QMT K-line value must be a pandas DataFrame")
+        if source.empty:
+            return cls._empty_klines()
+
+        required = {"time", "open", "high", "low", "close", "volume"}
+        missing = sorted(required - set(source.columns))
+        if missing:
+            raise QMTDataSchemaError(f"QMT K-line response is missing columns: {missing}")
+
+        frame = source.loc[:, ["time", "open", "high", "low", "close", "volume"]].copy()
+        for column in ["time", "open", "high", "low", "close", "volume"]:
+            try:
+                frame[column] = pd.to_numeric(frame[column], errors="raise")
+            except (TypeError, ValueError) as exc:
+                raise QMTDataSchemaError(f"QMT K-line column {column!r} must be numeric") from exc
+        numeric = frame[["time", "open", "high", "low", "close", "volume"]].to_numpy(dtype=float)
+        if not math.isfinite(float(numeric.max())) or not math.isfinite(float(numeric.min())):
+            raise QMTDataSchemaError("QMT K-line response contains non-finite values")
+        if (frame["volume"] < 0).any():
+            raise QMTDataSchemaError("QMT K-line volume must be non-negative")
+        if (
+            (frame["high"] < frame[["open", "close", "low"]].max(axis=1)).any()
+            or (frame["low"] > frame[["open", "close", "high"]].min(axis=1)).any()
+        ):
+            raise QMTDataSchemaError("QMT K-line OHLC values are inconsistent")
+
+        frame["date"] = pd.to_datetime(frame["time"], unit="ms", utc=True).dt.tz_convert(
+            cls._TIMEZONE
+        )
+        if frame["date"].duplicated().any():
+            raise QMTDataSchemaError("QMT K-line response contains duplicate timestamps")
+        frame["code"] = request["project_code"]
+        frame = frame.loc[:, cls._KLINE_COLUMNS].sort_values("date").reset_index(drop=True)
+
+        start = request["start"]
+        end = request["end"]
+        if start is not None:
+            frame = frame.loc[frame["date"] >= start]
+        if end is not None:
+            frame = frame.loc[frame["date"] <= end]
+        return frame.reset_index(drop=True)
+
+    @classmethod
+    def _convert_frequency(cls, frame: pd.DataFrame, frequency: str) -> pd.DataFrame:
+        if frame.empty:
+            return frame
+        if frequency in {"d", "5m", "1m"}:
+            result = frame.copy()
+        elif frequency == "y":
+            indexed = frame.set_index("date")
+            grouped = indexed.groupby(indexed.index.year, sort=True)
+            rows = []
+            for _, group in grouped:
+                rows.append(
+                    {
+                        "code": group["code"].iloc[0],
+                        "date": group.index[0].replace(month=1, day=1, hour=15, minute=0, second=0),
+                        "open": group["open"].iloc[0],
+                        "high": group["high"].max(),
+                        "low": group["low"].min(),
+                        "close": group["close"].iloc[-1],
+                        "volume": group["volume"].sum(),
+                    }
+                )
+            result = pd.DataFrame(rows, columns=cls._KLINE_COLUMNS)
+        else:
+            result = convert_stock_kline_frequency(frame.copy(), frequency)
+            result = result.loc[:, cls._KLINE_COLUMNS]
+
+        if frequency in {"d", "w", "m", "y"} and not result.empty:
+            result = result.copy()
+            result["date"] = result["date"].dt.normalize() + pd.Timedelta(hours=15)
+        return result.sort_values("date").reset_index(drop=True)
+
+    def default_code(self) -> str:
         return "SH.000001"
 
-    def support_frequencys(self):
+    def support_frequencys(self) -> dict:
         return {
             "y": "1y",
             "m": "1mon",
@@ -60,66 +330,51 @@ class ExchangeQMT(Exchange):
             "1m": "1m",
         }
 
-    def all_stocks(self):
-        """
-        获取所有股票代码
-        """
-        if len(self.g_all_stocks) > 0:
-            return self.g_all_stocks
+    def all_stocks(self) -> list[dict[str, Any]]:
+        if self._all_stocks:
+            return self._copy_catalog(self._all_stocks)
+        response = xtdata.get_full_tick(["SH", "SZ", "BJ"])
+        if not isinstance(response, Mapping):
+            raise QMTDataUnavailableError("QMT returned no security catalogue")
 
-        # 黑名单 code
-        black_codes = [
-            "SZ.399290",
-            "SZ.399289",
-            "SZ.399302",
-            "SZ.399298",
-            "SZ.399481",
-            "SZ.399299",
-            "SZ.399301",
-            "SH.000013",
-            "SH.000022",
-            "SH.000116",
-            "SH.000061",
-            "SH.000101",
-            "SH.000012",
-            "SZ.988201",
-            "SZ.980068",
-            "SZ.980001",
-            "SZ.980023",
-        ]
-
-        ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
-        tick_codes = list(ticks.keys())
-
-        all_stocks = []
-        for _c in tick_codes:
-            _stock_type: dict = xtdata.get_instrument_type(_c)
-            if (
-                _stock_type.get("stock")
-                or _stock_type.get("etf")
-                or _stock_type.get("index")
-            ):
-                pass
-            else:
+        black_codes = {
+            "SZ.399290", "SZ.399289", "SZ.399302", "SZ.399298", "SZ.399481",
+            "SZ.399299", "SZ.399301", "SH.000013", "SH.000022", "SH.000116",
+            "SH.000061", "SH.000101", "SH.000012", "SZ.988201", "SZ.980068",
+            "SZ.980001", "SZ.980023",
+        }
+        result: list[dict[str, Any]] = []
+        for qmt_code in response:
+            project_code = self.code_to_tdx(qmt_code)
+            instrument_type = xtdata.get_instrument_type(qmt_code)
+            if not isinstance(instrument_type, Mapping):
+                raise QMTDataSchemaError("QMT instrument type must be a mapping")
+            if not any(instrument_type.get(kind) for kind in ("stock", "etf", "index")):
                 continue
-            _stock = self.stock_info(self.code_to_tdx(_c))
-            all_stocks.append(_stock)
+            if project_code in black_codes:
+                continue
+            result.append(self.stock_info(project_code))
+        self._all_stocks = self._copy_catalog(result)
+        return self._copy_catalog(self._all_stocks)
 
-        all_stocks = [_s for _s in all_stocks if _s["code"] not in black_codes]
+    def download_klines(
+        self,
+        code: str,
+        frequency: str,
+        start_date: str | datetime.date | datetime.datetime | pd.Timestamp | None = None,
+        end_date: str | datetime.date | datetime.datetime | pd.Timestamp | None = None,
+        args: dict[str, Any] | None = None,
+    ) -> bool:
+        request = self._request_contract(code, frequency, start_date, end_date, args)
+        xtdata.download_history_data(
+            request["qmt_code"],
+            request["period"],
+            start_time=request["start_text"],
+            end_time=request["end_text"],
+            incrementally=request["incrementally"],
+        )
+        return True
 
-        self.g_all_stocks = all_stocks
-
-        # print(f"股票共获取数量：{len(self.g_all_stocks)}")
-        # print(f"耗时：{time.time() - s_time}")
-
-        # print(f"股票共获取数量：{len(self.g_all_stocks)}")
-        return self.g_all_stocks
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_random(min=1, max=5),
-        retry=retry_if_result(lambda _r: _r is None),
-    )
     def klines(
         self,
         code: str,
@@ -128,243 +383,149 @@ class ExchangeQMT(Exchange):
         end_date: str = None,
         args=None,
     ) -> Union[pd.DataFrame, None]:
-        frequency_map = {
-            "y": "1d",
-            "m": "1d",
-            "w": "1d",
-            "d": "1d",
-            "60m": "5m",
-            "30m": "5m",
-            "15m": "5m",
-            "5m": "5m",
-            "3m": "1m",
-            "1m": "1m",
-        }
-        # TODO 多数据，自定义周去转换消耗时间比较长，可修改为增量替换
-        frequency_count = {
-            "y": -1,
-            "m": 8000 * 20,
-            "w": 8000 * 5,
-            "d": 8000,
-            "60m": 8000 * 12,
-            "30m": 8000 * 6,
-            "15m": 8000 * 3,
-            "5m": 8000,
-            "3m": 8000 * 3,
-            "1m": 8000,
-        }
-        # 复权方式
-        dividend_type = "front"
-        if args is not None and "dividend_type" in args:
-            dividend_type = args["dividend_type"]
+        request = self._request_contract(code, frequency, start_date, end_date, args)
+        if request["download"]:
+            self.download_klines(code, frequency, start_date, end_date, args)
 
-        # 指定请求数据条数
-        req_counts = frequency_count[frequency]
-        if args is not None and "req_counts" in args:
-            req_counts = args["req_counts"]
-        if start_date:
-            req_counts = -1
-
-        qmt_code = self.code_to_qmt(code)
-
-        # 首先检查当前是否有数据
-        kline_exists = xtdata.get_market_data(
+        response = xtdata.get_market_data_ex(
             field_list=[],
-            stock_list=[qmt_code],
-            period=frequency_map[frequency],
-            start_time="",
-            end_time="",
-            count=1,
-            dividend_type=dividend_type,
+            stock_list=[request["qmt_code"]],
+            period=request["period"],
+            start_time=request["start_text"],
+            end_time=request["end_text"],
+            count=request["count"],
+            dividend_type=request["dividend_type"],
             fill_data=False,
         )
-        if kline_exists is None or kline_exists["time"].empty:
-            # 如果没有数据，则全量下载
-            s_time = time.time()
-            # 根据周期，决定下载的时间起始日期
-            if frequency in ["1m", "3m"]:
-                download_start_date = fun.datetime_to_str(
-                    datetime.datetime.now() - datetime.timedelta(days=180), "%Y%m%d"
-                )
-            elif frequency in ["5m", "15m", "30m", "60m"]:
-                download_start_date = fun.datetime_to_str(
-                    datetime.datetime.now() - datetime.timedelta(days=2880), "%Y%m%d"
-                )
-            else:
-                download_start_date = ""
-            if args is not None and "download_start_date" in args:
-                download_start_date = args["download_start_date"]
+        frame = self._normalize_kline_frame(response, request)
+        frame = self._convert_frequency(frame, frequency)
 
-            xtdata.download_history_data(
-                qmt_code,
-                frequency_map[frequency],
-                start_time=download_start_date,
-                end_time="",
-                incrementally=True,
-            )
-            # print(f"{code}-{frequency} 全量下载历史数据耗时：{time.time() - s_time}")
-        else:
-            # 增量下载
-            # s_time = time.time()
-            xtdata.download_history_data(
-                qmt_code,
-                frequency_map[frequency],
-                start_time="",
-                end_time="",
-                incrementally=True,
-            )
-            # print(f"{code}-{frequency} 增量下载历史数据耗时：{time.time() - s_time}")
-
-        # s_time = time.time()
-        qmt_klines = xtdata.get_market_data(
-            field_list=[],
-            stock_list=[qmt_code],
-            period=frequency_map[frequency],
-            start_time=start_date.replace("-", "") if start_date else "",
-            end_time="",
-            count=req_counts,
-            dividend_type=dividend_type,
-            fill_data=False,
-        )
-        # print(f"{code}-{frequency} 获取历史数据耗时：{time.time() - s_time}")
-
-        s_time = time.time()
-        klines_df = pd.DataFrame(
-            {key: value.values[0] for key, value in qmt_klines.items()}
-        )
-        klines_df["code"] = code
-
-        klines_df["date"] = pd.to_datetime(
-            klines_df["time"], unit="ms", utc=True
-        ).dt.tz_convert(self.tz)
-        klines_df = klines_df[
-            ["code", "date", "open", "high", "low", "close", "volume"]
-        ]
-        # 将 open high low close volume 转换为 float
-        klines_df[["open", "high", "low", "close", "volume"]] = klines_df[
-            ["open", "high", "low", "close", "volume"]
-        ].astype(float)
-        klines_df = klines_df.sort_values("date")
-
-        # 如果日线，小时设置为15点
-        if frequency in ["d", "w", "m", "y"]:
-            klines_df["date"] = klines_df["date"].apply(lambda x: x.replace(hour=15))
-
-        # print(f"{code}-{frequency} 获取历史数据转换耗时：{time.time() - s_time}")
-
-        if frequency not in ["d", "5m", "1m"]:
-            # s_time = time.time()
-            klines_df = convert_stock_kline_frequency(klines_df, frequency)
-            # print(f"{code}-{frequency} 转换历史周期数据耗时：{time.time() - s_time}")
-
-        # print(klines_df.tail(2))
-        if req_counts > 0:
-            klines_df = klines_df.iloc[-req_counts:]
-
-        return klines_df
+        start = request["start"]
+        end = request["end"]
+        if start is not None:
+            frame = frame.loc[frame["date"] >= start]
+        if end is not None:
+            frame = frame.loc[frame["date"] <= end]
+        if request["count"] > 0:
+            frame = frame.iloc[-request["count"] :]
+        return frame.reset_index(drop=True)
 
     def stock_info(self, code: str) -> Union[Dict, None]:
-        """
-        获取股票名称
-        """
-        qmt_code = self.code_to_qmt(code)
-        stock_detail = xtdata.get_instrument_detail(qmt_code, False)
+        project_code = self.code_to_tdx(code)
+        detail = xtdata.get_instrument_detail(self.code_to_qmt(project_code), False)
+        if detail is None:
+            raise QMTDataUnavailableError(f"QMT returned no instrument detail for {project_code}")
+        if not isinstance(detail, Mapping):
+            raise QMTDataSchemaError("QMT instrument detail must be a mapping")
+        name = detail.get("InstrumentName")
+        if not isinstance(name, str) or not name.strip():
+            raise QMTDataSchemaError("QMT instrument detail has no InstrumentName")
+        price_tick = self._finite_number(detail.get("PriceTick"), "PriceTick")
+        if price_tick <= 0:
+            raise QMTDataSchemaError("QMT PriceTick must be positive")
         return {
-            "code": code,
-            "name": stock_detail["InstrumentName"],
-            "precision": fun.reverse_decimal_to_power_of_ten(stock_detail["PriceTick"]),
+            "code": project_code,
+            "name": name.strip(),
+            "precision": fun.reverse_decimal_to_power_of_ten(price_tick),
         }
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        获取 tick 信息
-        """
-        ticks = {}
-        if len(codes) == 0:
-            return ticks
-        qmt_ticks = xtdata.get_full_tick([self.code_to_qmt(_c) for _c in codes])
-        for _c, _t in qmt_ticks.items():
-            ticks[self.code_to_tdx(_c)] = Tick(
-                code=self.code_to_tdx(_c),
-                last=_t["lastPrice"],
-                buy1=_t["bidPrice"][0],
-                sell1=_t["askPrice"][0],
-                high=_t["high"],
-                low=_t["low"],
-                open=_t["open"],
-                volume=_t["volume"],
-                rate=(_t["lastPrice"] - _t["lastClose"]) / _t["lastClose"] * 100,
-            )
+    @classmethod
+    def _tick_from_payload(cls, project_code: str, payload: Any) -> Tick:
+        if not isinstance(payload, Mapping):
+            raise QMTDataSchemaError("QMT tick must be a mapping")
+        for field in ("bidPrice", "askPrice"):
+            values = payload.get(field)
+            if isinstance(values, (str, bytes)) or not isinstance(values, Sequence) or not values:
+                raise QMTDataSchemaError(f"QMT tick {field!r} must contain level 1")
+        return Tick(
+            code=project_code,
+            last=cls._finite_number(payload.get("lastPrice"), "lastPrice"),
+            buy1=cls._finite_number(payload["bidPrice"][0], "bidPrice[0]"),
+            sell1=cls._finite_number(payload["askPrice"][0], "askPrice[0]"),
+            high=cls._finite_number(payload.get("high"), "high"),
+            low=cls._finite_number(payload.get("low"), "low"),
+            open=cls._finite_number(payload.get("open"), "open"),
+            volume=cls._finite_number(payload.get("volume"), "volume", nonnegative=True),
+            rate=calculate_change_rate(payload.get("lastPrice"), payload.get("lastClose")),
+        )
 
-        return ticks
+    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+        if not isinstance(codes, list):
+            raise QMTRequestError("codes must be a list")
+        if not codes:
+            return {}
+        qmt_codes = [self.code_to_qmt(code) for code in codes]
+        response = xtdata.get_full_tick(qmt_codes)
+        if response is None:
+            raise QMTDataUnavailableError("QMT returned no tick response")
+        if not isinstance(response, Mapping):
+            raise QMTDataSchemaError("QMT tick response must be a mapping")
+        result: dict[str, Tick] = {}
+        for qmt_code, payload in response.items():
+            project_code = self.code_to_tdx(qmt_code)
+            result[project_code] = self._tick_from_payload(project_code, payload)
+        return result
 
     def all_ticks(self) -> Dict[str, Tick]:
-        ticks = {}
-        all_stocks = self.all_stocks()
-        all_codes = [_s["code"] for _s in all_stocks]
-        qmt_ticks = xtdata.get_full_tick(["SH", "SZ", "BJ"])
-        for _c, _t in qmt_ticks.items():
-            _tdx_code = self.code_to_tdx(_c)
-            if _tdx_code not in all_codes:
-                continue
-            ticks[_tdx_code] = Tick(
-                code=_tdx_code,
-                last=_t["lastPrice"],
-                buy1=_t["bidPrice"][0],
-                sell1=_t["askPrice"][0],
-                high=_t["high"],
-                low=_t["low"],
-                open=_t["open"],
-                volume=_t["volume"],
-                rate=(
-                    (_t["lastPrice"] - _t["lastClose"]) / _t["lastClose"] * 100
-                    if _t["lastClose"] != 0
-                    else 0
-                ),
-            )
+        allowed = {item["code"] for item in self.all_stocks()}
+        response = xtdata.get_full_tick(["SH", "SZ", "BJ"])
+        if response is None:
+            raise QMTDataUnavailableError("QMT returned no whole-market tick response")
+        if not isinstance(response, Mapping):
+            raise QMTDataSchemaError("QMT tick response must be a mapping")
+        result: dict[str, Tick] = {}
+        for qmt_code, payload in response.items():
+            project_code = self.code_to_tdx(qmt_code)
+            if project_code in allowed:
+                result[project_code] = self._tick_from_payload(project_code, payload)
+        return result
 
-        return ticks
-
-    def get_divid_factors(self, stock_code: str) -> pd.DataFrame:
-        """
-        获取股票除权除息信息
-        """
-        df = xtdata.get_divid_factors(self.code_to_qmt(stock_code))
-        if df is None or df.empty:
+    def get_divid_factors(self, stock_code: str) -> pd.DataFrame | None:
+        project_code = self.code_to_tdx(stock_code)
+        frame = xtdata.get_divid_factors(self.code_to_qmt(project_code))
+        if frame is None or (isinstance(frame, pd.DataFrame) and frame.empty):
             return None
-        df.loc[:, "stock_code"] = stock_code
-        df["divid_date"] = pd.to_datetime(df["time"] / 1000, unit="s")
-        return df
+        if not isinstance(frame, pd.DataFrame) or "time" not in frame.columns:
+            raise QMTDataSchemaError("QMT dividend factors must be a DataFrame with time")
+        result = frame.copy()
+        result.loc[:, "stock_code"] = project_code
+        result["divid_date"] = pd.to_datetime(result["time"], unit="ms", utc=True).dt.tz_convert(
+            self._TIMEZONE
+        )
+        return result
 
     def subscribe_all_ticks(
-        self, callback, market_list: List[str] = ["SH", "SZ", "BJ"]
-    ):
-        all_stocks = self.all_stocks()
-        all_codes = [_s["code"] for _s in all_stocks]
-        print(len(all_codes))
+        self, callback, market_list: List[str] | None = None
+    ) -> None:
+        if not callable(callback):
+            raise QMTRequestError("callback must be callable")
+        markets = ["SH", "SZ", "BJ"] if market_list is None else list(market_list)
+        allowed = {item["code"] for item in self.all_stocks()}
 
-        def on_tick(_ticks):
-            for _code, _tick in _ticks.items():
-                _tdx_code = self.code_to_tdx(_code)
-                if _tdx_code not in all_codes:
-                    continue
-                callback(_tdx_code, _tick)
+        def on_tick(values):
+            if not isinstance(values, Mapping):
+                raise QMTDataSchemaError("QMT subscription payload must be a mapping")
+            for qmt_code, payload in values.items():
+                project_code = self.code_to_tdx(qmt_code)
+                if project_code in allowed:
+                    callback(project_code, payload)
 
-        xtdata.subscribe_whole_quote(market_list, on_tick)
+        xtdata.subscribe_whole_quote(markets, on_tick)
         xtdata.run()
 
-    def subscribe_stocks_quotes(self, codes: List[str], callback):
-        """
-        订阅股票行情
-        """
-        qmt_codes = [self.code_to_qmt(_c) for _c in codes]
+    def subscribe_stocks_quotes(self, codes: List[str], callback) -> None:
+        if not callable(callback):
+            raise QMTRequestError("callback must be callable")
+        project_codes = [self.code_to_tdx(code) for code in codes]
+        qmt_codes = [self.code_to_qmt(code) for code in project_codes]
 
-        def on_tick(_ticks):
-            for _code, _tick in _ticks.items():
-                _tdx_code = self.code_to_tdx(_code)
-                if _tdx_code not in codes:
-                    continue
-                callback(_tdx_code, _tick)
+        def on_tick(values):
+            if not isinstance(values, Mapping):
+                raise QMTDataSchemaError("QMT subscription payload must be a mapping")
+            for qmt_code, payload in values.items():
+                project_code = self.code_to_tdx(qmt_code)
+                if project_code in project_codes:
+                    callback(project_code, payload)
 
         xtdata.subscribe_whole_quote(qmt_codes, on_tick)
         xtdata.run()
@@ -375,7 +536,7 @@ class ExchangeQMT(Exchange):
         周一至周五，09:30-11:30 13:00-15:00
         """
         now_dt = datetime.datetime.now()
-        if now_dt.weekday() in [5, 6]:  # 周六日不交易
+        if now_dt.weekday() in [5, 6]:
             return False
         hour = now_dt.hour
         minute = now_dt.minute
@@ -401,58 +562,3 @@ class ExchangeQMT(Exchange):
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)
-
-
-if __name__ == "__main__":
-    ex = ExchangeQMT()
-
-    # stocks = ex.all_stocks()
-    # stock_maps = {}
-    # for _s in stocks:
-    #     stock_maps[_s["code"][0:5]] = _s
-    # for _t, _s in stock_maps.items():
-    #     print(_t, _s)
-    # print(len(stocks))
-
-    klines = ex.klines(
-        "SZ.002645",
-        "1m",
-    )
-
-    # 2026-02-04 日期的 volume 累加
-    klines["ddd"] = klines["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
-    volume = klines[klines["ddd"] == "2026-02-04"]["volume"].sum()
-
-    print(klines[klines["ddd"] == "2026-02-04"])
-    print(volume)
-
-    # stock = ex.stock_info("SH.000001")
-    # print(stock)
-
-    # df = ex.get_divid_factors("SH.600519")
-
-    # print(df)
-
-    # def on_klines(_qmt_code, tick):
-    #     if _qmt_code != "600519.SH":
-    #         return
-    #     print(
-    #         _qmt_code,
-    #         "最新价格",
-    #         tick["lastPrice"],
-    #         " 时间：",
-    #         fun.timeint_to_datetime(int(tick["time"] / 1000)),
-    #     )
-    #     _tdx_code = ex.code_to_tdx(_qmt_code)
-    #     print(tick)
-    #     # for _f in ["1m", "5m", "d"]:
-    #     #     print(f"周期：{_f}")
-    #     #     klines_df = ex.klines(_tdx_code, _f, args={"req_counts": 2})
-
-    #     #     print(klines_df)
-    #     print("-" * 20)
-
-    # ex.subscribe_all_ticks(on_klines)
-
-    # ticks = ex.all_ticks()
-    # print(len(ticks))
