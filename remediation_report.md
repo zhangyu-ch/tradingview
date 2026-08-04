@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 74
-- **待处理：** 7
+- **已完成：** 75
+- **待处理：** 6
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -84,8 +84,8 @@
 |71|`LO-06`|低|Readability|❌ 未修复|已完成（显式依赖、审计异常边界与可执行门禁）|通过（运行代码 wildcard import 清零；显式异常/命名门禁与 63 项严格相邻测试通过）|`refactor(LO-06)`|
 |72|`MX-16`|低|Dead Code|❌ 未修复|已完成（删除未加载资产与 no-op 任务壳）|通过（死资产和任务壳均删除，运行引用图为空，15 项相邻测试通过）|`refactor(MX-16)`|
 |73|`MX-18`|低|Strategy Architecture|❌ 未修复|已完成（显式版本化 Signal→Decision→Operation 桥接）|通过（双向可追溯转换、非执行信号拒绝、篡改检测和 82 项严格相邻测试通过）|`feat(MX-18)`|
-|74|`NX-11`|低|Database Schema|❌ 未修复|已完成（独立监控事件类型、动作与数值评分）|通过（13 项专项、105 项严格相邻及 595 项可收集仓库回归通过；环境限制已记录）|`fix(NX-11)`|
-|75|`LO-05`|低|Architecture|🟡 部分修复|待处理|—|—|
+|74|`NX-11`|低|Database Schema|❌ 未修复|已完成（独立监控事件类型、动作与数值评分）|通过（14 项专项、105 项严格相邻及 595 项可收集仓库回归通过；MySQL/pinyin/empyrical 环境限制已单独记录）|`fix(NX-11)`|
+|75|`LO-05`|低|Architecture|🟡 部分修复|已完成（MarketRegistry 成为全栈市场单一来源）|通过（82 项严格聚焦/相邻测试及 605 项可运行仓库回归通过；单注册全栈派生与故障注入已固定）|`fix(LO-05)`|
 |76|`LO-07`|低|Dead Code|🟡 部分修复|待处理|—|—|
 |77|`LO-08`|低|Documentation|🟡 部分修复|待处理|—|—|
 |78|`LO-03`|低|Domain Model|🟡 部分修复|待处理|—|—|
@@ -1819,46 +1819,55 @@
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Database Schema
 - **本轮状态：** 已完成（独立监控事件类型、动作与数值评分）
-- **问题是否存在：** 是。通用策略事件仍把 `event_type` 复用到 `line_type VARCHAR(5)`，把 `action` 复用到 `bi_is_done VARCHAR(10)`，并把浮点 `score` 先格式化、截断到最多 10 个字符后写入 `bi_is_td VARCHAR(10)`。SQLite 不强制声明长度，掩盖了 MySQL 风险；大评分已经会因科学计数法截断而失真。
-- **a. 这个问题是什么？** 事件类型、策略动作和评分是三个不同领域值，却共享为旧缠论提醒设计的短字符串列。结果是 schema 无法表达类型、数值精度没有保证、扩展新事件/动作容易碰到长度上限，且查询方只能依赖字符串约定。
-- **b. 我是怎么修复的？**
-  - 新增 `monitoring_events.py`，以 `MonitoringEventType`、受限 `StrategyAction` 和有限浮点数建立通用监控持久化边界；`select/ignore` 等非持久化动作明确拒绝。
-  - `cl_alert_record` 新增独立物理列 `event_type VARCHAR(32)`、`action VARCHAR(16)`、`score` 双精度数值；旧 `line_type/bi_is_done/bi_is_td` 仅保留迁移兼容。
-  - 新增幂等迁移：只回填可识别的 `sig/signal`、合法动作和有限评分；未知历史值不猜测、不覆盖。
-  - 新事件在单一事务中只写 typed columns，`flush/refresh` 后精确往返验证；非法动作、字符串评分、NaN/Inf 在写入前 fail-closed。
-  - MySQL 旧表迁移使用 `DOUBLE`，避免普通 `FLOAT` 的单精度损失；SQLite 使用 `FLOAT`。
-  - `AlertTasks` 直接保存原始 `float` 与 canonical 事件枚举，不再执行 `f"{score:.4g}"[:10]`；查询兼容新列与已知旧别名。
-  - 前端评分显示改为显式判断 `null/undefined`，合法的 `0` 不再显示为空。
-- **c. 修复后是否验证？** 是。
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 通用策略监控命中仍把 event_type 写入旧 line_type VARCHAR(5)，把 action 写入旧 bi_is_done VARCHAR(10)，并把浮点评分先格式化为最多 10 个字符后写入 bi_is_td VARCHAR(10)。SQLite 的宽松类型会掩盖长度问题；大评分会被科学计数法截断，未来事件类型/动作扩展也没有独立领域边界。问题真实存在。
+- **b. 我是怎么修复的？** 新增 monitoring_events.py，定义 MonitoringEventType、可持久化 StrategyAction 集合和有限数 score 规范化；新事件只写独立 event_type VARCHAR(32)、action VARCHAR(16)、score 双精度数值列。增加幂等旧表迁移，只把可识别的 sig/signal、合法动作和有限旧评分回填，未知历史数据保留在旧列而不伪造。AlertTasks 直接持久化原始浮点评分和 canonical event type，不再格式化/截断；查询同时兼容新列和已知旧别名，前端对 0 分使用显式 null 判断。MySQL 旧表新增 score 使用 DOUBLE，避免 FLOAT 单精度再次引入精度损失。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - NX-11 专项 14 项以 `-W error` 运行，覆盖枚举、动作集合、评分类型/有限性、旧值映射和未知值拒绝。
-  - 在真实旧 SQLite schema 上连续执行两次迁移，验证幂等新增列、选择性回填、未知旧记录保留和索引建立。
-  - 参数化保存 `watch/buy/sell/open/close`，验证 `123456789.123456` 精确往返，并确认新记录的三个旧列均为 `NULL`。
-  - 编译 MySQL DDL并验证迁移类型选择；真实 MySQL 双精度往返已加入既有 `RUN_MYSQL_TESTS` 门禁。
-  - 隔离动态加载真实 `alert_tasks.py`，确认事件枚举、动作枚举和原始浮点评分进入 DB；Node 语法及前端零分契约通过。
-  - NX-11 与 ME-18、ME-20、NX-10、MX-18、MX-07、MySQL gate 相邻组合：`105 passed, 1 skipped`（`-W error`）。
-  - 可收集仓库回归：`595 passed, 5 skipped`；8 项历史 Web 测试仅因当前容器缺少 `pinyin` 在包导入阶段阻断。完整回测测试另因缺少 `empyrical` 无法收集。
-  - compileall、仓库卫生、可读性、质量门禁、Secret、供应链、JSON、JavaScript、`git diff --check` 和 CRLF 门禁全部通过。
-- **e. 验证是否通过？** 通过。通用监控事件现在拥有独立、可扩展且数值正确的持久化协议；旧数据只在可证明安全时迁移。
+  - 执行 NX-11 专项 14 项（-W error），覆盖领域枚举、动作集合、非有限/字符串评分拒绝、已知旧值映射和未知旧值 fail-closed。
+  - 以真实旧 SQLite cl_alert_record schema 执行两次迁移，验证幂等新增 event_type/action/score、仅回填可识别值、未知旧记录保持原样并创建查询索引。
+  - 参数化保存 watch/buy/sell/open/close，验证 123456789.123456 精确往返，新事件不写 line_type/bi_is_done/bi_is_td；非法 action、NaN/Inf 和字符串 score 在任何提交前拒绝。
+  - 编译 MySQL Table DDL，确认模型使用双精度 score；迁移类型 helper 明确为 MySQL DOUBLE、SQLite FLOAT，并把真实 MySQL 往返加入已有 RUN_MYSQL_TESTS 门禁。
+  - 隔离加载真实 alert_tasks.py，验证 MonitoringEventType.STRATEGY_SIGNAL、StrategyAction.WATCH 和 float score 原样到达 DB 边界；前端 JavaScript 对 0 分不再因 truthiness 显示为空。
+  - 运行 NX-11/ME-18/ME-20/NX-10/MX-18/MX-07/MySQL 相邻组合，105 passed、1 skipped（-W error）。
+  - 临时准备受控 config 后运行可收集仓库回归：595 passed、5 skipped；另 8 项只因当前容器缺少 pinyin 在 cl_app 导入阶段失败。完整套件另有 test_backtesting_base_generic.py 因缺少 empyrical 在收集阶段阻断。
+  - 执行 compileall、repository hygiene、readability、quality、Secret、supply-chain、Node 语法、JSON、git diff 和三个历史 CRLF 文件门禁，全部通过。
+- **e. 验证是否通过？** 通过（14 项专项、105 项严格相邻及 595 项可收集仓库回归通过；MySQL/pinyin/empyrical 环境限制已单独记录）
 - **提交：** fix(NX-11): type monitoring event persistence
 - **修改文件：** `src/tradingview_zy/monitoring_events.py`, `src/tradingview_zy/db.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `web/tradingview_zy_chart/cl_app/static/js/alert.js`, `tests/test_nx11_monitoring_event_schema.py`, `tests/test_me18_strategy_runner_contracts.py`, `tests/test_selection_monitoring.py`, `tests/test_me29_mysql_gate.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
-- **验证限制：** 当前容器没有真实 MySQL、`pinyin` 和 `empyrical`；对应真实 MySQL gate 已扩展，Web 产品路径通过隔离动态执行，环境阻断没有被声称为通过。数据库列不使用 MySQL 原生 ENUM，而是在领域边界穷尽验证有界字符串，以避免未来枚举扩展需要高风险 DDL。
+- **验证限制：**
+  - 当前容器没有真实 MySQL 服务；本地完成 MySQL 方言 DDL/迁移类型验证，并把双精度往返加入已有真实 MySQL CI 门禁。
+  - 8 个历史 Web 集成测试因当前环境缺少 pinyin 在包导入阶段阻断；真实 AlertTasks 产品文件已通过最小协议桩隔离动态执行。
+  - 未知历史 line_type/action/score 不会被猜测迁移，只继续从旧列读取；需要人工数据治理后才能转为新协议。
+  - event_type/action 的数据库列采用有界字符串，领域层以 StrEnum/StrategyAction 强制枚举。避免 MySQL 原生 ENUM 的在线扩展锁定，同时保持应用写边界穷尽校验。
 - **原报告最新结论：** 策略加载改为注册表不改变监控事件数据库列长度；event_type/action/score 仍复用旧短字符串列。
 - **原报告建议：** 迁移为独立 event_type/action Enum 和数值 score，并在策略边界验证。
 
 ### 75. LO-05 · 新增市场需要跨枚举、配置、工厂、DB、UDF、模板和脚本散改（Shotgun Surgery）
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 低 / Architecture
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（MarketRegistry 成为全栈市场单一来源）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 虽然 provider、能力和 DB 分区已经集中在 MarketRegistry，Web 元数据仍在 market_metadata.py 维护第二套八市场映射，/tv/config、首页模板和若干同步入口继续手写市场、默认代码、周期、TradingView 类型/session/timezone 与 UI 行为。新增市场仍需要跨配置模板、工厂、UDF、页面和脚本同步修改，遗漏会形成启动或运行时漂移，问题真实存在。
+- **b. 我是怎么修复的？** 把默认 provider、UI 名称、描述、默认代码、展示周期、附加同步周期、TradingView 类型/时区/session、payload 时区、默认市场、秒级/UI 搜索/板块标志和 DB 分区全部并入 MarketSpec；market_metadata.py 只生成 registry 投影，不再拥有静态市场表。新配置以 MARKET_PROVIDERS 映射覆盖 registry 默认值，旧 EXCHANGE_* 仅作读取兼容；Exchange 工厂先读取未验证名称、执行 removed-provider tombstone，再验证普通 provider，避免导入或缓存已删除实现。首页市场选项、默认值、/tv/config、symbols/search 行为和同步 JSON 校验全部消费 registry 派生数据；新增通用 registry-validated 同步 CLI。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 新增 LO-05 穷尽测试，验证 MARKET_REGISTRY 精确覆盖 Market、每个 descriptor 元数据完整、默认 provider 已注册且全仓恰有一个默认市场。
+  - 构造仅含一个 synthetic paper descriptor 的 registry，验证同一条注册即可派生 catalog、默认市场、默认代码、周期、UDF type/session/timezone 与 UI 标志；缺市场、零/双默认和缺失默认 provider 均 fail-closed。
+  - 验证 MARKET_PROVIDERS 默认/覆盖、legacy EXCHANGE_* 读取兼容、非法映射和未知 provider 拒绝；CTP/ZB tombstone 仍在任何 provider import/cache 前返回专用错误。
+  - 静态验证 market_metadata.py 已删除三套重复映射，config.py.demo 不再赋值八个 EXCHANGE_*，Exchange 工厂、cl_app 路由与首页模板不再手写八市场列表或默认代码。
+  - 遍历全部同步 JSON，使用 load_sync_config 按 registry 市场与展示+附加同步周期校验；未知市场、未知周期和通用 CLI 缺 --config 均稳定失败，导入 CLI 不构造 provider。
+  - 运行 LO-05、ME-10、ME-05、ME-03、NX-17、NX-01、NX-25、CR-05、MX-02、MX-05、HI-17、LO-02 组合：82 passed（-W error）。
+  - 排除当前环境缺少 empyrical 的既有收集阻断，并单独 deselect 8 个因缺 pinyin 在 cl_app 包导入前阻断的历史测试后，仓库级可运行回归 605 passed、5 skipped、8 deselected。
+  - 执行 compileall、repository hygiene、quality/readability/dependency/Secret/supply-chain、JSON、Node、git diff 和四个历史 CRLF 文件门禁，全部通过。
+- **e. 验证是否通过？** 通过（82 项严格聚焦/相邻测试及 605 项可运行仓库回归通过；单注册全栈派生与故障注入已固定）
+- **提交：** fix(LO-05): centralize full-stack market metadata
+- **修改文件：** `src/tradingview_zy/market_registry.py`, `src/tradingview_zy/market_metadata.py`, `src/tradingview_zy/config.py.demo`, `src/tradingview_zy/exchange/__init__.py`, `src/tradingview_zy/sync_batch.py`, `script/crontab/reboot_sync_market_klines.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/templates/index.html`, `tests/test_lo05_market_registry_single_source.py`, `tests/test_me10_exchange_contracts.py`, `tests/test_cr05_ctp_removed.py`, `tests/test_mx02_zb_removed.py`, `tests/test_nx01_ctp_front_address_removed.py`, `tests/test_nx25_zb_tls_removal.py`, `tests/test_mx05_rate_timer.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - Market 枚举仍是类型系统的封闭边界；新增市场需要增加一个枚举值和一个 MarketSpec，但不再需要修改配置模板、工厂、DB/UDF 映射、首页选项或同步校验表。
+  - 旧本地 config.py 的 EXCHANGE_* 只保留兼容读取；新模板与新部署只应使用 MARKET_PROVIDERS。
+  - provider 可能只实现市场展示周期的子集；运行时仍由 capability-bound provider 和实际适配器拒绝不支持请求，registry 的 additional_sync_frequencies 只用于显式同步任务。
+  - 当前容器缺少 pinyin 和 empyrical；8 个历史 Web 测试与一个回测收集文件的环境限制已单独记录，相关静态/隔离和相邻产品路径均已验证。
 - **原报告最新结论：** MarketRegistry 已集中配置属性、时区、TradingView 类型/session、默认代码、provider、能力和 DB 分区；Exchange 工厂与 DB 路由已接入。Web UDF、模板和若干脚本仍有独立市场映射。
 - **原报告建议：** 让 UDF/config、页面和脚本消费注册表，并删除重复映射；新增市场用单一注册+穷尽测试验收。
 

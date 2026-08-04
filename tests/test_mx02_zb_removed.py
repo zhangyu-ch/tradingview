@@ -43,7 +43,7 @@ def test_zb_runtime_and_configuration_contract_are_removed() -> None:
 
 def test_factory_rejects_legacy_zb_before_import_or_cache(monkeypatch) -> None:
     g_exchange_obj.clear()
-    monkeypatch.setattr(config, "EXCHANGE_CURRENCY", "zb")
+    monkeypatch.setattr(config, "MARKET_PROVIDERS", {"currency": "zb"})
     sys.modules.pop("tradingview_zy.exchange.exchange_zb", None)
 
     with pytest.raises(UnsupportedProviderError, match="ZB provider 已从运行包移除"):

@@ -27,8 +27,11 @@ from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.footprint import SUB_FREQUENCY_MAP, TTLCache, aggregate_footprint
 from tradingview_zy.market_metadata import (
     all_market_frequencies,
+    default_market_value,
+    market_catalog,
     market_default_codes,
     market_frequencies,
+    market_ui_metadata,
     tradingview_symbol_metadata,
 )
 from tradingview_zy.web_payloads import (
@@ -249,6 +252,8 @@ def create_app(test_config=None):
     # Web 元数据来自无副作用静态注册表；provider 仅在具体请求时惰性构造。
     market_frequencys = market_frequencies()
     market_default_codes = market_default_codes()
+    market_catalog_items = market_catalog()
+    default_market_key = default_market_value()
 
     __log = fun.get_logger()
 
@@ -479,6 +484,8 @@ def create_app(test_config=None):
             "index.html",
             market_default_codes=market_default_codes,
             market_frequencys=market_frequencys,
+            market_catalog=market_catalog_items,
+            default_market=default_market_key,
         )
 
     @app.route("/tv/config")
@@ -497,22 +504,12 @@ def create_app(test_config=None):
             "supports_timescale_marks": True,
             "supports_time": False,
             "exchanges": [
-                {"value": "a", "name": "沪深", "desc": "沪深A股"},
-                {"value": "hk", "name": "港股", "desc": "港股"},
-                {"value": "fx", "name": "外汇", "desc": "外汇"},
-                {"value": "us", "name": "美股", "desc": "美股"},
-                {"value": "futures", "name": "国内期货", "desc": "国内期货"},
-                {"value": "ny_futures", "name": "纽约期货", "desc": "纽约期货"},
                 {
-                    "value": "currency",
-                    "name": "数字货币(Futures)",
-                    "desc": "数字货币（合约）",
-                },
-                {
-                    "value": "currency_spot",
-                    "name": "数字货币(Spot)",
-                    "desc": "数字货币（现货）",
-                },
+                    "value": item["value"],
+                    "name": item["name"],
+                    "desc": item["desc"],
+                }
+                for item in market_catalog_items
             ],
         }
 
@@ -549,7 +546,8 @@ def create_app(test_config=None):
         symbol_metadata = tradingview_symbol_metadata(market, stocks["code"])
         sector = ""
         industry = ""
-        if market == "a":
+        ui_metadata = market_ui_metadata(market)
+        if ui_metadata["plate_panel"]:
             try:
                 gnbk = ex.stock_owner_plate(code)
                 sector = " / ".join([item["name"] for item in gnbk["GN"]])
@@ -574,7 +572,7 @@ def create_app(test_config=None):
             "minmov": 1,
             "minmov2": 0,
             "has_intraday": True,
-            "has_seconds": market in ["futures", "ny_futures"],
+            "has_seconds": ui_metadata["has_seconds"],
             "has_daily": True,
             "has_weekly_and_monthly": True,
             "sector": sector,
@@ -605,7 +603,8 @@ def create_app(test_config=None):
         ex = get_exchange(Market(exchange))
         all_stocks = ex.all_stocks()
         query_lower = query.lower()
-        if exchange in ["currency", "currency_spot"]:
+        ui_metadata = market_ui_metadata(exchange)
+        if not ui_metadata["search_name"]:
             res_stocks = [stock for stock in all_stocks if query_lower in stock["code"].lower()]
         else:
             res_stocks = [

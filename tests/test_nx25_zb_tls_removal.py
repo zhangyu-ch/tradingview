@@ -40,10 +40,10 @@ def test_factory_rejects_zb_before_import_and_cache_mutation() -> None:
     method_start = source.index("def get_exchange")
     segment = source[method_start:]
     reject_offset = segment.index("_reject_removed_provider(market, provider_name)")
-    registry_offset = segment.index("configured_provider(market, config)")
+    registry_offset = segment.index("selected_provider(market, config)")
     import_offset = segment.index("import_module(spec.module)")
     cache_offset = segment.index("g_exchange_obj[market.value] = facade")
-    assert reject_offset < registry_offset < import_offset < cache_offset
+    assert registry_offset < reject_offset < import_offset < cache_offset
     assert "exchange_zb" not in segment
 
 def test_runtime_tree_has_no_direct_zb_adapter_reference() -> None:

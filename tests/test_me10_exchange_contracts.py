@@ -172,8 +172,8 @@ def test_factory_publishes_cache_only_after_success(monkeypatch) -> None:
             }
         ),
     )
-    monkeypatch.setattr(config, "EXCHANGE_A", "tdx")
-    monkeypatch.setattr(exchange, "configured_provider", lambda market, config_module: "tdx")
+    monkeypatch.setattr(config, "MARKET_PROVIDERS", {"a": "tdx"})
+    monkeypatch.setattr(exchange, "selected_provider", lambda market, config_module: "tdx")
     monkeypatch.setattr(exchange, "provider_spec", lambda market, provider_name=None: ("tdx", fake))
     try:
         with pytest.raises(ProviderUnavailableError):

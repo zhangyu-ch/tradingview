@@ -71,10 +71,19 @@ def test_inline_script_remains_javascript_parseable_after_jinja_substitution() -
     checker = "new Function(process.argv[1]);"
     for javascript in inline_scripts:
         javascript = re.sub(
-            r"\{\{\s*market_frequencys\|\s*tojson\s*\}\}", "{}", javascript
+            r"\{\{\s*market_frequencys\s*\|\s*tojson\s*\}\}",
+            "{}",
+            javascript,
         )
         javascript = re.sub(
-            r"\{\{\s*market_default_codes\.[^}]+\}\}", "TEST", javascript
+            r"\{\{\s*market_default_codes\s*\|\s*tojson\s*\}\}",
+            "{}",
+            javascript,
+        )
+        javascript = re.sub(
+            r"\{\{\s*default_market\s*\|\s*tojson\s*\}\}",
+            '"a"',
+            javascript,
         )
         result = subprocess.run(
             ["node", "-e", checker, javascript],

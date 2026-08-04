@@ -43,7 +43,7 @@ def test_ctp_runtime_implementation_and_dependency_are_removed() -> None:
 
 def test_factory_rejects_removed_ctp_before_import_or_cache(monkeypatch) -> None:
     g_exchange_obj.clear()
-    monkeypatch.setattr(config, "EXCHANGE_FUTURES", "ctp")
+    monkeypatch.setattr(config, "MARKET_PROVIDERS", {"futures": "ctp"})
     sys.modules.pop("tradingview_zy.exchange.exchange_ctp", None)
 
     with pytest.raises(UnsupportedProviderError, match="已从运行包移除"):

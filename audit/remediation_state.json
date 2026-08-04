@@ -4593,16 +4593,52 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（MarketRegistry 成为全栈市场单一来源）",
+      "problem_verified": true,
+      "problem_summary": "虽然 provider、能力和 DB 分区已经集中在 MarketRegistry，Web 元数据仍在 market_metadata.py 维护第二套八市场映射，/tv/config、首页模板和若干同步入口继续手写市场、默认代码、周期、TradingView 类型/session/timezone 与 UI 行为。新增市场仍需要跨配置模板、工厂、UDF、页面和脚本同步修改，遗漏会形成启动或运行时漂移，问题真实存在。",
+      "fix_summary": "把默认 provider、UI 名称、描述、默认代码、展示周期、附加同步周期、TradingView 类型/时区/session、payload 时区、默认市场、秒级/UI 搜索/板块标志和 DB 分区全部并入 MarketSpec；market_metadata.py 只生成 registry 投影，不再拥有静态市场表。新配置以 MARKET_PROVIDERS 映射覆盖 registry 默认值，旧 EXCHANGE_* 仅作读取兼容；Exchange 工厂先读取未验证名称、执行 removed-provider tombstone，再验证普通 provider，避免导入或缓存已删除实现。首页市场选项、默认值、/tv/config、symbols/search 行为和同步 JSON 校验全部消费 registry 派生数据；新增通用 registry-validated 同步 CLI。",
+      "verification_performed": true,
+      "verification_method": [
+        "新增 LO-05 穷尽测试，验证 MARKET_REGISTRY 精确覆盖 Market、每个 descriptor 元数据完整、默认 provider 已注册且全仓恰有一个默认市场。",
+        "构造仅含一个 synthetic paper descriptor 的 registry，验证同一条注册即可派生 catalog、默认市场、默认代码、周期、UDF type/session/timezone 与 UI 标志；缺市场、零/双默认和缺失默认 provider 均 fail-closed。",
+        "验证 MARKET_PROVIDERS 默认/覆盖、legacy EXCHANGE_* 读取兼容、非法映射和未知 provider 拒绝；CTP/ZB tombstone 仍在任何 provider import/cache 前返回专用错误。",
+        "静态验证 market_metadata.py 已删除三套重复映射，config.py.demo 不再赋值八个 EXCHANGE_*，Exchange 工厂、cl_app 路由与首页模板不再手写八市场列表或默认代码。",
+        "遍历全部同步 JSON，使用 load_sync_config 按 registry 市场与展示+附加同步周期校验；未知市场、未知周期和通用 CLI 缺 --config 均稳定失败，导入 CLI 不构造 provider。",
+        "运行 LO-05、ME-10、ME-05、ME-03、NX-17、NX-01、NX-25、CR-05、MX-02、MX-05、HI-17、LO-02 组合：82 passed（-W error）。",
+        "排除当前环境缺少 empyrical 的既有收集阻断，并单独 deselect 8 个因缺 pinyin 在 cl_app 包导入前阻断的历史测试后，仓库级可运行回归 605 passed、5 skipped、8 deselected。",
+        "执行 compileall、repository hygiene、quality/readability/dependency/Secret/supply-chain、JSON、Node、git diff 和四个历史 CRLF 文件门禁，全部通过。"
+      ],
+      "verification_result": "通过（82 项严格聚焦/相邻测试及 605 项可运行仓库回归通过；单注册全栈派生与故障注入已固定）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/market_registry.py",
+        "src/tradingview_zy/market_metadata.py",
+        "src/tradingview_zy/config.py.demo",
+        "src/tradingview_zy/exchange/__init__.py",
+        "src/tradingview_zy/sync_batch.py",
+        "script/crontab/reboot_sync_market_klines.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "web/tradingview_zy_chart/cl_app/templates/index.html",
+        "tests/test_lo05_market_registry_single_source.py",
+        "tests/test_me10_exchange_contracts.py",
+        "tests/test_cr05_ctp_removed.py",
+        "tests/test_mx02_zb_removed.py",
+        "tests/test_nx01_ctp_front_address_removed.py",
+        "tests/test_nx25_zb_tls_removal.py",
+        "tests/test_mx05_rate_timer.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "Market 枚举仍是类型系统的封闭边界；新增市场需要增加一个枚举值和一个 MarketSpec，但不再需要修改配置模板、工厂、DB/UDF 映射、首页选项或同步校验表。",
+        "旧本地 config.py 的 EXCHANGE_* 只保留兼容读取；新模板与新部署只应使用 MARKET_PROVIDERS。",
+        "provider 可能只实现市场展示周期的子集；运行时仍由 capability-bound provider 和实际适配器拒绝不支持请求，registry 的 additional_sync_frequencies 只用于显式同步任务。",
+        "当前容器缺少 pinyin 和 empyrical；8 个历史 Web 测试与一个回测收集文件的环境限制已单独记录，相关静态/隔离和相邻产品路径均已验证。"
+      ],
+      "commit_subject": "fix(LO-05): centralize full-stack market metadata"
     }
   },
   {

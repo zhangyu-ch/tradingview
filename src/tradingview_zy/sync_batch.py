@@ -23,6 +23,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from tradingview_zy.domain import InvalidRequestError
+from tradingview_zy.market_registry import market_spec, parse_market
+
 CHECKPOINT_SCHEMA_VERSION = 1
 _ITEM_SEPARATOR = "::"
 
@@ -598,10 +601,25 @@ def load_sync_config(path: Path) -> dict[str, Any]:
     for key in ["market", "mode", "source", "destination", "universe", "frequencies"]:
         if key not in config:
             raise SyncBatchError(f"sync config is missing {key!r}")
+    try:
+        market = parse_market(config["market"])
+    except InvalidRequestError as exc:
+        raise SyncBatchError("sync config market is not registered") from exc
+    config["market"] = market.value
     if config["mode"] not in {"incremental", "missing_only"}:
         raise SyncBatchError("sync mode must be incremental or missing_only")
     if not isinstance(config["frequencies"], dict) or not config["frequencies"]:
         raise SyncBatchError("frequencies must be a non-empty object")
+    spec = market_spec(market)
+    supported_frequencies = set(spec.frequencies) | set(
+        spec.additional_sync_frequencies
+    )
+    unsupported = set(config["frequencies"]) - supported_frequencies
+    if unsupported:
+        raise SyncBatchError(
+            "sync config contains unsupported frequencies: "
+            + ", ".join(sorted(unsupported))
+        )
     return config
 
 
@@ -879,11 +897,18 @@ def run_configured_sync(
         resume=resume,
     )
 
-def configured_sync_cli(default_config: Path, argv: Sequence[str] | None = None) -> int:
+def configured_sync_cli(
+    default_config: Path | None, argv: Sequence[str] | None = None
+) -> int:
     parser = argparse.ArgumentParser(
         description="Run an auditable, checkpointed historical K-line sync batch"
     )
-    parser.add_argument("--config", type=Path, default=Path(default_config))
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path(default_config) if default_config is not None else None,
+        required=default_config is None,
+    )
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--batch-deadline", type=float, default=3600.0)
     parser.add_argument("--call-timeout", type=float, default=60.0)

@@ -762,3 +762,32 @@
 - 全部静态、供应链、Secret、JavaScript、JSON、CRLF 和 diff 门禁通过。
 - 提交主题：`fix(NX-11): type monitoring event persistence`。
 - 下一条：75. LO-05。
+### 2026-08-04 · 问题 75 LO-05 验证开始
+- 确认问题仍存在：provider registry 与 Web metadata 双源，`/tv/config`、首页模板和八个 `EXCHANGE_*` 配置仍需手工同步。
+- 修复方向：扩展 `MarketSpec` 为全栈市场描述符；Web、UDF、模板和 provider override 全部由注册表派生，并补“只新增一个 registry 条目即可通过”的穷尽故障注入。
+
+
+- 2026-08-04T14:50:50Z：LO-05 已确认 index/alert/xuangu 三个模板均手写八市场选项；首次 render_template 正则过窄无命中并被 `set -e` 中止，改用文件名/函数边界定位。
+
+- 2026-08-04T14:51:33Z：LO-05 测试盘点命令首次因 shell 重定向位置错误中止，未写产品文件；已改为逐文件存在性判断。
+- LO-05 首轮整体补丁在 `config.py.demo` 的换行假设处中止；exchange factory 的前置修改已成功落盘，其余文件未写入。改为逐文件 CRLF/LF 感知替换。
+
+- LO-05 首次相邻测试在收集阶段被缺失的本地 `src/tradingview_zy/config.py` 阻断；该文件按仓库设计不入库。后续改用 `script/remediation/prepare_test_config.py` 生成临时配置，并在测试结束后删除，不重复裸环境测试。
+- 2026-08-04T15:03:01Z：LO-05 已扩展 `MarketSpec` 为 provider、默认配置、UI、UDF、payload 时区、DB 分区和频率的单一静态描述符；`market_metadata.py` 已改为纯派生视图，尚待迁移消费者并测试。
+
+- LO-05 实现补齐：`MarketSpec` 新增唯一默认市场和板块面板标志；`market_metadata.py` 增加 registry 派生的 catalog/default/UI API；模板、UDF、provider 选择和同步配置均消费这些投影。
+- 新增 `test_lo05_market_registry_single_source.py`，覆盖穷尽注册、单描述符驱动全栈、默认/覆盖 provider、旧重复映射删除、动态模板、同步配置校验和通用 CLI import 无副作用。
+- 更新 MX-05 JavaScript 语法门禁，适配新的整表 JSON 与动态默认市场 Jinja 表达式。
+
+- LO-05 首轮 75 项聚焦/相邻测试结果：70 通过、5 失败。失败均定位为契约迁移缺口：HK Futu 的附加 10m 同步周期、旧测试仍写 EXCHANGE_A、两个 tombstone 顺序断言反向、MX-05 Jinja 正则空白未匹配；未发现 provider 运行时回归。
+- LO-05 扩展组合首次引用不存在的历史测试名 `test_v6_market_registry.py`，收集前即停止；改用仓库实际存在的新穷尽测试与 ME-10 契约测试。
+- LO-05 首次仓库级回归：603 passed/5 skipped，10 failures；其中 2 项是 CR-05/MX-02 测试仍写已删除的 EXCHANGE_*，8 项仍为环境缺少 pinyin 的历史 Web 阻断。
+- LO-05 removed-provider 复验发现 `configured_provider` 会在 tombstone 前把 ctp/zb 当普通未知 provider 拒绝。改为工厂先 `selected_provider`、再 tombstone、最后 `provider_spec`，保留专用删除证明且仍不导入实现。
+
+
+### 问题 75：LO-05 完成
+- MarketRegistry 现在同时声明 provider/能力、默认 provider、UI/UDF 元数据、默认代码、展示与同步周期、时区/session、默认市场和 DB 分区；其余模块只消费派生投影。
+- 首页、`/tv/config`、symbols/search 和同步配置均删除八市场手写映射；新配置使用 `MARKET_PROVIDERS`，旧 `EXCHANGE_*` 仅保留读取兼容。
+- 严格聚焦/相邻组合 82 passed；可运行仓库回归 605 passed、5 skipped、8 deselected；质量、供应链、Secret、Node、JSON、diff 与 CRLF 门禁通过。
+- 提交主题：`fix(LO-05): centralize full-stack market metadata`。
+- 下一条：76. LO-07。

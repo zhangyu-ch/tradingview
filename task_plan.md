@@ -89,7 +89,7 @@
 - [x] 72. MX-16
 - [x] 73. MX-18
 - [x] 74. NX-11
-- [ ] 75. LO-05
+- [x] 75. LO-05
 - [ ] 76. LO-07
 - [ ] 77. LO-08
 - [ ] 78. LO-03
@@ -124,6 +124,16 @@
 ## 遇到的错误
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| LO-05 工厂改用 selected_provider 后，ME-10 缓存原子性测试仍 monkeypatch 旧导入名 | 1 | 将测试注入点同步迁到 selected_provider，保留 provider_spec 与构造失败不缓存断言 |
+| LO-05 将 removed-provider 配置迁到 MARKET_PROVIDERS 后，configured_provider 在 tombstone 前先按注册表拒绝，丢失专用安全错误 | 1 | 工厂先用 selected_provider 读取未验证名称，再执行 tombstone，最后由 provider_spec 验证普通未知 provider；不导入/不缓存 |
+| LO-05 仓库级回归发现 CR-05/MX-02 两个旧测试仍写已删除的 EXCHANGE_* 配置属性 | 1 | 将测试迁移到 MARKET_PROVIDERS；产品 tombstone 行为不变，legacy reader 已由 LO-05 专项覆盖 |
+| LO-05 扩展组合引用了远程/历史名称 `tests/test_v6_market_registry.py`，本地仓库无该文件 | 1 | 以实际测试目录为准，由新 LO-05 穷尽测试和 ME-10 领域测试覆盖，不重复不存在路径 |
+| MX-05 Jinja 语法替换正则未允许变量名与管道间空格 | 1 | 扩展正则的可选空白，不改变模板产品逻辑 |
+| NX-01/NX-25 静态测试仍要求已移除 provider 检查先于 provider 解析 | 1 | 修正测试为 provider 解析 → tombstone → import/cache 的可执行安全顺序 |
+| LO-05 移除 config demo 的 EXCHANGE_* 后，旧 ME-10 测试仍 monkeypatch 不存在属性 | 1 | 测试迁移到新的 MARKET_PROVIDERS 覆盖入口；另保留独立 legacy-config 兼容测试 |
+| LO-05 首轮聚焦测试发现 HK Futu 同步使用 10m，而 Web 市场周期只声明默认展示集 | 1 | 在同一 MarketSpec 增加附加同步周期契约，sync_batch 校验注册表的展示+同步并集，不放宽 UDF 默认展示 |
+| LO-05 首次相邻测试收集因归档外 `src/tradingview_zy/config.py` 缺失而在 exchange package 导入前阻断 | 1 | 不重复裸环境命令；使用仓库 `prepare_test_config.py` 生成受控临时配置，测试后清理 |
+| LO-05 首轮多文件补丁把 `config.py.demo` 误判为 LF，精确片段未命中 | 1 | 保留已成功的 exchange factory 修改；按每个文件实际换行符分步替换并逐文件编译，不重复整体补丁 |
 | 上传 ZIP 不含 `.git` 历史 | 1 | 以 ZIP 内容创建新的本地 `main` 基线提交，并记录远程校正信息 |
 | 会话恢复日志首次使用未引用 heredoc，反引号触发命令替换并把 `git diff` 写入 progress.md | 1 | 从 HEAD 仅恢复三份规划文件，改用 Python 字符串追加并保留产品工作树 |
 | NX-11 源码摘录脚本假定相邻函数名精确存在，`str.index` 中止 | 1 | 改用 `rg -n` 定位实际边界，再按行号读取；未修改产品文件 |
@@ -234,3 +244,5 @@
 | NX-11 相邻 Web 集成测试在导入 `cl_app` 时缺少 `pinyin` | 1 | 不伪造完整 Web 依赖；保留环境阻断，改用既有最小协议桩隔离加载真实 `alert_tasks.py`，并单独执行核心迁移/领域测试 |
 | NX-11 完整 pytest 在收集 `test_backtesting_base_generic.py` 时缺少 `empyrical` | 1 | 不重复同一失败；记录环境限制，排除该既有收集阻断后运行全部可收集仓库回归 |
 | NX-11 可运行全仓回归在 `-W error` 下触发 3 个历史测试自身的未关闭文件/SQLite ResourceWarning | 1 | 不在 NX-11 提交夹带无关测试清理；保留 105 项直接相邻严格告警门禁，全仓按项目原告警策略执行并记录结果 |
+| LO-05 render_template 调用搜索使用过窄的单行正则且无命中，命令因 `set -e` 中止 | 1 | 改用简单模板文件名搜索和上下文定位；模板选项证据已成功读取 |
+| LO-05 测试文件循环把 `2>/dev/null` 误放进 for 列表，shell 语法错误 | 1 | 去除列表内重定向，逐文件先判断存在再读取；未修改仓库产品文件 |

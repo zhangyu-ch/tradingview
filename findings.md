@@ -496,3 +496,18 @@
 - 兼容迁移只应回填可证明的旧别名；未知历史值保留在旧列比猜测成新事件更安全。
 - DB 原生 ENUM 会把每次动作扩展变成高风险 DDL；有界字符串列配合单一领域枚举、写边界验证和穷尽测试更适合当前跨 SQLite/MySQL 架构。
 - 数值前端渲染不能使用 truthiness；`0` 是合法评分，只有 `null/undefined` 才代表缺失。
+## LO-05 市场注册表全栈盘点
+- `market_registry.py` 当前只集中 provider/capability/config_attribute；`market_metadata.py` 仍维护第二套八市场默认代码、周期、TradingView 类型/session/timezone，形成真实双源。
+- `/tv/config` 手写八个 exchange 描述，首页模板手写八个默认代码键；新增市场仍需同步修改 Python、路由和模板。
+- 配置模板仍通过八个 `EXCHANGE_*` 全局变量选择 provider。要真正降低 shotgun surgery，应让 MarketSpec 声明默认 provider，配置只提供可选 `MARKET_PROVIDERS` override；旧属性只作兼容读取。
+- 国内期货 session 依赖 instrument profile，不应退化为静态值；profile→TradingView session 也应成为 MarketSpec 的数据，而运行时 profile 由 trading_calendar 决定。
+- 进一步确认标准 `get_exchange()` 在调用注册表前仍手写 `Market -> EXCHANGE_*` 字典，只为读取 tombstone provider；这可以直接改为 `market_spec(market).config_attribute`，无需第二套映射。
+- 首页不仅手写默认代码键，还手写市场选择项与 `/tv/config` exchange 描述；如果注册表提供 label、default_code、frequencies 和 TradingView 元数据，这些都可由同一描述符生成。
+
+
+## LO-05 全栈市场单一来源最终结论
+- 市场注册表必须同时描述静态产品语义和 provider 路由；若 Web/UDF、配置模板或同步脚本另有八市场字典，所谓 registry 仍只是局部目录。
+- 默认 provider 应属于 descriptor，而配置只表达覆盖。这样新增市场只增加一个 Market 枚举值和一个 MarketSpec；新部署无需再编辑八个 EXCHANGE_* 变量。
+- removed-provider tombstone 需要读取“尚未验证的 provider 名称”后立即执行，再进入普通 registry 验证；否则 CTP/ZB 会被降格为一般未知 provider，丢失删除原因和安全证明。
+- 展示周期与特定离线同步周期可以有不同集合，但两者必须位于同一个 MarketSpec；同步任务不可自行维护第三套允许列表。
+- 单一来源应以 synthetic descriptor 故障注入证明：一个注册条目能同时派生页面 catalog、默认代码、UDF session/type/timezone 和同步校验，而缺项/双默认在启动时失败。

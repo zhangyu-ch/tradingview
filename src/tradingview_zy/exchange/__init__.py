@@ -16,8 +16,8 @@ from tradingview_zy.domain import (
 )
 from tradingview_zy.exchange.exchange import Exchange
 from tradingview_zy.market_registry import (
-    configured_provider,
     provider_capabilities,
+    selected_provider,
     provider_spec,
     require_capability,
 )
@@ -57,20 +57,10 @@ def _translate_constructor_error(provider_name: str, error: BaseException) -> Ex
 def get_exchange(market: Market | str) -> ContractedExchange:
     """Return a lazily constructed, capability-bound provider facade."""
     market = market if isinstance(market, Market) else Market(str(market))
-    provider_name = getattr(config, {
-        Market.A: "EXCHANGE_A",
-        Market.HK: "EXCHANGE_HK",
-        Market.FUTURES: "EXCHANGE_FUTURES",
-        Market.NY_FUTURES: "EXCHANGE_NY_FUTURES",
-        Market.FX: "EXCHANGE_FX",
-        Market.CURRENCY: "EXCHANGE_CURRENCY",
-        Market.CURRENCY_SPOT: "EXCHANGE_CURRENCY_SPOT",
-        Market.US: "EXCHANGE_US",
-    }[market], None)
+    provider_name = selected_provider(market, config)
 
-    # Tombstones must run before registry resolution, provider import or cache mutation.
-    if isinstance(provider_name, str):
-        _reject_removed_provider(market, provider_name)
+    # Tombstones must run before provider import or cache mutation.
+    _reject_removed_provider(market, provider_name)
 
     with _exchange_lock:
         cached = g_exchange_obj.get(market.value)
@@ -80,8 +70,6 @@ def get_exchange(market: Market | str) -> ContractedExchange:
             cached.close()
             g_exchange_obj.pop(market.value, None)
 
-        provider_name = configured_provider(market, config)
-        _reject_removed_provider(market, provider_name)
         _, spec = provider_spec(market, provider_name=provider_name)
         try:
             module = import_module(spec.module)
