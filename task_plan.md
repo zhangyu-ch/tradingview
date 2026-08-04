@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 7（第 57 条 ME-10 已重建并验证，下一条为第 58 条 ME-20）
+阶段 7（第 58 条 ME-20 已重建并验证，下一条为第 59 条 ME-25）
 
 ## 各阶段
 
@@ -62,7 +62,7 @@
 - [x] 55. NX-25
 - [x] 56. ME-29
 - [x] 57. ME-10
-- [ ] 58. ME-20
+- [x] 58. ME-20
 - [ ] 59. ME-25
 - [ ] 60. ME-27
 - [ ] 完成 51–60
@@ -169,6 +169,9 @@
 | ME-10 初版 `market_registry.py` 从 `exchange.contracts` 导入，直接导入注册表时触发 exchange package 和缺失 config.py | 1 | 把领域类型移到根级 `domain.py`，`exchange/contracts.py` 仅兼容 re-export；复验无 config.py 也可导入 24 项注册表 |
 | ME-10 factory 原子缓存测试试图 monkeypatch 只读 MappingProxyType | 1 | 改为替换 factory 已导入的 `configured_provider/provider_spec` 边界，不修改不可变注册表；构造失败不缓存测试通过 |
 | NEW-06 旧静态测试把整个 MARKET_REGISTRY 赋值误当成 DB_CAPABILITIES 定义 | 1 | 改为动态遍历每个 market 的 db ProviderSpec，逐项断言不含 SECURITY_MASTER/PLATES |
+
+| ME-20 首次参数化测试用包含 dict metadata 的 StrategySignal 构造 set，收集阶段因对象不可哈希失败 | 1 | 测试目的只是验证非 list 容器，改用普通字符串 set；产品实现未变，60 项专项通过 |
+| ME-20 扩展组合把 ME-10 测试放在已导入 strategy 包之后，ME-10 的无 config.py 隔离前提被破坏 | 1 | 不把测试顺序污染归因于产品；ME-10 保留原独立门禁，ME-20 使用 91/108 项直接相邻组合验证 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

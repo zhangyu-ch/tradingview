@@ -3479,16 +3479,46 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（版本化信号协议与 runner 输出边界）",
+      "problem_verified": true,
+      "problem_summary": "ME-18 已提供结构化批次结果和基础 K 线/输出检查，但 StrategySignal 仍无 schema 版本，name 未绑定目标，动作没有 selection/monitoring 用途隔离，message/metadata 无资源边界，naive 时间缺少明确市场语义，ignore、重复信号、无界输出和任务层裸 list 绕过仍可能进入持久化。",
+      "fix_summary": "建立 StrategySignal v1：新增 StrategyAction/StrategyPurpose StrEnum、schema_version 和稳定 JSON payload；runner 逐项生成 canonical signal，严格绑定 code/name/frequency，按用途限制动作，校验有限 score、消息文本、市场时区 event_time 和有界 JSON metadata。单目标最多 64 个 materialized signal，拒绝 generator、非信号成员及完全重复；ignore 转为 miss。XuanguTasks/AlertTasks 仅接受 BatchRunResult，删除历史裸 list 绕过，并补充协议文档和故障注入测试。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 tests/test_me20_strategy_signal_protocol.py：60 passed（-W error）。",
+        "运行 ME-20、ME-18、ME-19 与 strategy loader 聚焦组合：91 passed（-W error）。",
+        "加入 ME-26 scheduler 与 ME-30 instrument calendar 任务相邻路径：108 passed（-W error）。",
+        "独立运行完整 tests/test_selection_monitoring.py 时 6 项通过、1 项因缺本地 config.py、8 项因缺 Flask/pinyin 在产品断言前阻断；随后用隔离生成的 config.py 单独复验 DB 模型项通过，合计 7 项历史断言已执行。",
+        "验证 canonical action 枚举、Asia/Shanghai aware 时间、JSON payload 往返、metadata 深拷贝及深度/节点/字节预算。",
+        "执行 compileall、py_compile、git diff --check、audit JSON 解析，并确认 7 个历史 CRLF 文件 bare-LF=0。"
+      ],
+      "verification_result": "通过（60 项 ME-20 专项、91 项核心聚焦和 108 项任务相邻测试通过；无版本输出、用途错配、时间/metadata/数量边界和裸 list 绕过根因已关闭）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "commit_subject": "fix(ME-20): validate versioned strategy signals",
+      "files_changed": [
+        "src/tradingview_zy/strategies/base.py",
+        "src/tradingview_zy/strategies/__init__.py",
+        "src/tradingview_zy/selection.py",
+        "src/tradingview_zy/monitoring.py",
+        "web/tradingview_zy_chart/cl_app/xuangu_tasks.py",
+        "web/tradingview_zy_chart/cl_app/alert_tasks.py",
+        "docs/strategy-protocol.md",
+        "tests/test_me20_strategy_signal_protocol.py",
+        "tests/test_me18_strategy_runner_contracts.py",
+        "tests/test_me19_selection_task_atomicity.py",
+        "tests/test_selection_monitoring.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "标准 SelectionRunner/MonitoringRunner 路径强制协议；外部 Python 仍可手工构造未校验对象，持久化前必须继续使用标准 runner。",
+        "metadata 是有界 JSON 数据，不是签名或授权载荷；消费者不得把其中字符串当作代码、模块路径或 HTML 执行。",
+        "本条只收敛选股/监控 StrategySignal；回测 Operation 的跨场景转换由 MX-18 单独处理。",
+        "当前容器缺少 Flask/pinyin；8 个历史 cl_app 集成断言未执行到产品逻辑。缺 config.py 的 DB 模型断言已用隔离生成配置单独验证通过。"
+      ]
     }
   },
   {

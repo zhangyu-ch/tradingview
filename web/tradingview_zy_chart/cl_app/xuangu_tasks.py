@@ -34,13 +34,9 @@ class XuanguTasks(object):
 
     @staticmethod
     def _batch_result(value):
-        if isinstance(value, BatchRunResult):
-            return value
-        # Compatibility for trusted in-process callers that still return the old
-        # signal-list shape. Production runners always return BatchRunResult.
-        if isinstance(value, list):
-            return BatchRunResult(hits=value)
-        raise TypeError("selection runner must return BatchRunResult")
+        if not isinstance(value, BatchRunResult):
+            raise TypeError("selection runner must return BatchRunResult")
+        return value
 
     def _run_xuangu_job(self, market, task_name, frequencys, zx_group, target_zx_group):
         registry = self.xuangu_task_config_list()

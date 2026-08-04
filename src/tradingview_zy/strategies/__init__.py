@@ -1,4 +1,10 @@
-from .base import StrategyContext, StrategySignal
+from .base import (
+    BatchRunResult,
+    StrategyAction,
+    StrategyContext,
+    StrategyPurpose,
+    StrategySignal,
+)
 from .loader import (
     RegisteredStrategy,
     StrategyRegistryError,
@@ -10,7 +16,10 @@ from .loader import (
 )
 
 __all__ = [
+    "BatchRunResult",
+    "StrategyAction",
     "StrategyContext",
+    "StrategyPurpose",
     "StrategySignal",
     "RegisteredStrategy",
     "StrategyRegistryError",

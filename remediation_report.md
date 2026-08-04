@@ -1445,16 +1445,26 @@
 ### 58. ME-20 · 策略输出只有形状约定，没有边界校验和领域类型
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Strategy Protocol
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（版本化信号协议与 runner 输出边界）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** ME-18 已经增加结构化批次结果与基础 K 线/输出检查，但策略输出仍是可被任意值填充的 dataclass：没有 schema 版本，name 未绑定目标，动作没有 Selection/Monitoring 用途隔离，message/metadata 无字符、UTF-8、深度或节点预算，naive event_time 的市场语义不明确，ignore 会被当作命中，单目标输出数量和重复信号没有上限。XuanguTasks/AlertTasks 还接受历史裸 list，可信进程内调用方可以绕过 runner 输出边界。
+- **b. 我是怎么修复的？** 建立 `StrategySignal` v1 协议：新增 `StrategyAction`/`StrategyPurpose` StrEnum、`schema_version=1` 和稳定 `to_payload()`；SelectionRunner/MonitoringRunner 在策略返回后逐项创建新的 canonical signal。边界严格绑定 target 的 code/name/frequency，按用途限制动作，score 只接受有限实数，message 按字符、UTF-8 和控制字符约束，event_time 与 context.now 使用明确市场时区并拒绝异常未来时间，metadata 递归限制为有界 JSON object、保持值语义并深拷贝隔离，禁止非有限或可执行对象。单目标最多 64 个 materialized signal，拒绝 generator、非信号成员和完全重复；ignore 转为 miss，不进入持久化命中。任务层删除裸 list 兼容，只接受 `BatchRunResult`。新增协议文档和 ME-20 故障注入测试，并把既有测试 fake runner 迁移到结构化返回。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `tests/test_me20_strategy_signal_protocol.py`：60 passed（warnings-as-errors），覆盖 schema、领域动作、用途隔离、目标身份字段、有限 score、message、市场时区、未来时间、metadata JSON/深度/节点/字节边界、深拷贝、输出数量、重复信号、ignore miss 和任务裸 list 门禁。
+  - 运行 ME-20 + ME-18 + ME-19 + strategy loader 聚焦组合：91 passed（warnings-as-errors），确认逐标的失败隔离、K 线输入协议、事务替换和可信策略加载没有回退。
+  - 加入 ME-26 scheduler 与 ME-30 instrument calendar 任务相邻路径：108 passed（warnings-as-errors）。
+  - 独立运行完整 `test_selection_monitoring.py` 时，6 项通过，1 项因缺本地 `config.py`、8 项因缺 Flask/`pinyin` 在产品断言前阻断；随后用隔离生成的 `config.py` 单独复验 DB 模型项通过，因此共 7 项历史断言已执行，剩余 8 项环境阻断未计入产品通过数量。
+  - 验证 canonical action 为 `StrategyAction`、event_time 为 Asia/Shanghai aware datetime、`to_payload()` 可 JSON 往返；修改原始嵌套 metadata 后 canonical metadata 不变。
+  - 执行 compileall、py_compile、`git diff --check`、audit JSON 解析，并确认 strategies/selection/monitoring/AlertTasks/XuanguTasks 与历史组合测试文件保持纯 CRLF（bare-LF=0）。
+- **e. 验证是否通过？** 通过（60 项 ME-20 专项、91 项核心聚焦和 108 项任务相邻测试均以 warnings-as-errors 通过；旧裸 list 绕过、无版本输出、动作/时间/metadata/数量边界根因已关闭）
+- **提交：** `fix(ME-20): validate versioned strategy signals`
+- **修改文件：** `src/tradingview_zy/strategies/base.py`, `src/tradingview_zy/strategies/__init__.py`, `src/tradingview_zy/selection.py`, `src/tradingview_zy/monitoring.py`, `web/tradingview_zy_chart/cl_app/xuangu_tasks.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `docs/strategy-protocol.md`, `tests/test_me20_strategy_signal_protocol.py`, `tests/test_me18_strategy_runner_contracts.py`, `tests/test_me19_selection_task_atomicity.py`, `tests/test_selection_monitoring.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 标准 SelectionRunner/MonitoringRunner 路径强制协议；Python 外部代码仍可手工构造未校验 `StrategySignal` 或 `BatchRunResult`，持久化前应继续使用标准 runner。
+  - metadata 是有界 JSON 数据但不是签名或可信授权载荷；消费者不得把其中字符串当作代码、模块路径或 HTML 执行。
+  - 本条只收敛选股/监控 `StrategySignal`；回测 `Operation` 是独立领域协议，跨场景 Signal→Decision→Order 转换留给第 73 条 MX-18。
+  - 当前容器缺少 Flask/`pinyin`，8 个历史 cl_app 集成断言未执行到产品逻辑；缺本地 `config.py` 的 DB 模型断言已用隔离生成配置单独验证通过。ME-29 的 Python 3.11 锁定 CI 会安装项目依赖后运行完整套件。
 - **原报告最新结论：** 策略加载器现在会验证目标是类、具有 run()、构造参数签名和参数类型，这修复了“构造前无边界”的一部分。可是 StrategySignal 返回值的 action、score、时间、code/frequency 和有限数值仍未在 runner 边界统一校验。
 - **原报告建议：** 为策略输出建立版本化 schema/validated dataclass，并在 SelectionRunner/MonitoringRunner 接受结果时逐项验证。
 

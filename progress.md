@@ -584,3 +584,14 @@
 - 修复：新增根级领域契约、24 项 side-effect-free registry、ContractedExchange facade 和原子惰性 factory；DB 不声明 security master/plates，全部 provider 不声明 live orders。
 - 验证：7 项专项、31 项聚焦、125 项 provider/工厂直接相邻测试以 warnings-as-errors 通过；真实 SQLite DB facade 与 Secret 故障注入通过。
 - 提交：`fix(ME-10): add capability-bound exchange contracts`。
+
+
+### 问题 58：ME-20（恢复重建）
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：StrategySignal 缺版本、用途动作、目标绑定、资源边界和明确时间语义，任务层仍能接受裸 list 绕过，问题存在。
+- 修复：新增 v1 schema、StrategyAction/StrategyPurpose、canonical signal、有限 score/message/time/metadata、64 条输出上限、重复拒绝与 ignore→miss；Selection/Monitoring 采用不同动作集合，任务层仅接受 BatchRunResult。
+- 验证：60 项 ME-20 专项、91 项核心聚焦、108 项 scheduler/calendar 任务相邻测试以 warnings-as-errors 通过；完整历史 selection_monitoring 中 6 项直接通过；隔离生成 config.py 后 DB 模型项另通过，剩余 8 项在缺 Flask/pinyin 导入阶段阻断。
+- 测试过程：首个非 list 容器参数误用含 dict 的不可哈希 StrategySignal set，改为普通 set 后产品代码不变；ME-10 顺序隔离测试单独保留。
+- compileall、py_compile、JSON、diff 与 7 个历史 CRLF 文件 bare-LF=0 门禁通过。
+- 提交：`fix(ME-20): validate versioned strategy signals`。

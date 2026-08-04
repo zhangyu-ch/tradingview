@@ -39,6 +39,9 @@ class FakeExchange:
 class PositiveCloseStrategy:
     name = "positive_close"
 
+    def __init__(self, action: str = "select"):
+        self.action = action
+
     def run(self, context: StrategyContext):
         last = context.klines.iloc[-1]
         if float(last["close"]) > float(last["open"]):
@@ -46,7 +49,7 @@ class PositiveCloseStrategy:
                 StrategySignal(
                     code=context.code,
                     name=context.name,
-                    action="select",
+                    action=self.action,
                     score=1.0,
                     message="close > open",
                     frequency=context.frequency,
@@ -77,7 +80,7 @@ def test_selection_runner_uses_plain_klines_only():
 
 def test_monitoring_runner_returns_events_without_chanlun_data():
     exchange = FakeExchange()
-    runner = MonitoringRunner(exchange=exchange, strategy=PositiveCloseStrategy())
+    runner = MonitoringRunner(exchange=exchange, strategy=PositiveCloseStrategy("watch"))
 
     events = runner.run_code(
         market="a",
@@ -90,7 +93,7 @@ def test_monitoring_runner_returns_events_without_chanlun_data():
     assert events.ok is True
     assert events.failures == []
     assert len(events.hits) == 1
-    assert events.hits[0].action == "select"
+    assert events.hits[0].action == "watch"
     assert events.hits[0].frequency == "d"
 
 

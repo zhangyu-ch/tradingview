@@ -88,11 +88,9 @@ class AlertTasks(object):
 
     @staticmethod
     def _batch_result(value):
-        if isinstance(value, BatchRunResult):
-            return value
-        if isinstance(value, list):
-            return BatchRunResult(hits=value)
-        raise TypeError("monitoring runner must return BatchRunResult")
+        if not isinstance(value, BatchRunResult):
+            raise TypeError("monitoring runner must return BatchRunResult")
+        return value
 
     @staticmethod
     def _stocks_in_open_sessions(exchange, stocks):

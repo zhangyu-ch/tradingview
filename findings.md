@@ -370,3 +370,14 @@
 - 构造器结果只能在构造、声明方法和 facade 校验全部成功后发布到缓存；异常对象或半初始化对象不能被后续请求复用。
 - SDK 原始异常可保留在 exception chain 供本地调试，但 public message/to_dict 不能复制原文，避免 token、账号和 URL query 泄漏。
 - `LIVE_ORDERS` 必须与账户/持仓读取分离；能读账户不代表订单状态机已验收。
+
+
+## ME-20 版本化策略信号协议复核（恢复重建）
+- “返回 dataclass”只约束外形，不约束领域语义；协议必须在 runner 接受点重新 canonicalize，而不能信任策略自行构造的对象。
+- Selection 与 Monitoring 的动作集合不同；`select` 进入监控或 `buy` 进入选股都应作为 output failure，而不是由下游猜测。
+- code/name/frequency 必须与当前 target 完全绑定，避免策略把另一个标的或周期的信号注入当前批次。
+- metadata 只允许有界 JSON 数据，并保持原值、深拷贝隔离；它不是代码、模块路径、HTML 或授权载荷。
+- naive `event_time` 与 `context.now` 只能按目标市场时区解释；aware 时间转换到市场时区，异常未来时间 fail-closed。
+- `ignore` 是显式未命中，不应保存为事件。单目标输出必须 materialized、有数量上限且去重，避免 generator 延迟副作用和无界持久化。
+- 任务层只接受 `BatchRunResult`，否则可信进程内 fake/custom runner 可绕过标准 runner 已完成的输出校验。
+- 回测 `Operation` 仍是独立协议；本条不提前吞并 MX-18 的跨场景 Signal→Decision→Order 架构选择。

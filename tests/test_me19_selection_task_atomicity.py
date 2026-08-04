@@ -190,8 +190,10 @@ def test_task_replaces_target_once_after_all_frequencies_and_deduplicates(monkey
 
         def run(self, market, stocks, frequency):
             if frequency == "d":
-                return [_event("A1", name="Daily", message="d"), _event("A2", message="d")]
-            return [_event("A1", name="Latest", message="60m")]
+                return BatchRunResult(
+                    hits=[_event("A1", name="Daily", message="d"), _event("A2", message="d")]
+                )
+            return BatchRunResult(hits=[_event("A1", name="Latest", message="60m")])
 
     monkeypatch.setattr(module, "ZiXuan", FakeZiXuan)
     monkeypatch.setattr(module, "SelectionRunner", FakeRunner)
@@ -280,7 +282,7 @@ def test_replace_failure_keeps_previous_running_result(monkeypatch) -> None:
             pass
 
         def run(self, market, stocks, frequency):
-            return [_event("A1")]
+            return BatchRunResult(hits=[_event("A1")])
 
     monkeypatch.setattr(module, "ZiXuan", FakeZiXuan)
     monkeypatch.setattr(module, "SelectionRunner", Runner)
@@ -322,7 +324,7 @@ def test_opt_type_is_removed_and_running_results_are_scoped_by_market(monkeypatc
             pass
 
         def run(self, market, stocks, frequency):
-            return [_event(f"{market}-result")]
+            return BatchRunResult(hits=[_event(f"{market}-result")])
 
     monkeypatch.setattr(module, "ZiXuan", FakeZiXuan)
     monkeypatch.setattr(module, "SelectionRunner", Runner)

@@ -1,20 +1,60 @@
 from __future__ import annotations
 
+import copy
 import datetime as dt
+import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any, Literal
 
 import pandas as pd
 
-from tradingview_zy.web_payloads import normalize_klines_for_market
+from tradingview_zy.web_payloads import market_timezone, normalize_klines_for_market
 
-StrategyAction = Literal["select", "watch", "buy", "sell", "open", "close", "ignore"]
 StrategyRunStage = Literal["target", "provider", "input", "strategy", "output"]
-
+SIGNAL_SCHEMA_VERSION = 1
+MAX_SIGNALS_PER_TARGET = 64
+MAX_MESSAGE_CHARS = 2_000
+MAX_MESSAGE_BYTES = 8_192
+MAX_METADATA_DEPTH = 6
+MAX_METADATA_NODES = 256
+MAX_METADATA_BYTES = 16_384
+MAX_EVENT_FUTURE_SKEW = dt.timedelta(minutes=5)
 _REQUIRED_KLINE_COLUMNS = ("date", "open", "close", "high", "low", "volume")
-_ALLOWED_ACTIONS = {"select", "watch", "buy", "sell", "open", "close", "ignore"}
+
+
+class StrategyAction(StrEnum):
+    SELECT = "select"
+    WATCH = "watch"
+    BUY = "buy"
+    SELL = "sell"
+    OPEN = "open"
+    CLOSE = "close"
+    IGNORE = "ignore"
+
+
+class StrategyPurpose(StrEnum):
+    SELECTION = "selection"
+    MONITORING = "monitoring"
+
+
+_ALLOWED_ACTIONS: dict[StrategyPurpose, frozenset[StrategyAction]] = {
+    StrategyPurpose.SELECTION: frozenset(
+        {StrategyAction.SELECT, StrategyAction.IGNORE}
+    ),
+    StrategyPurpose.MONITORING: frozenset(
+        {
+            StrategyAction.WATCH,
+            StrategyAction.BUY,
+            StrategyAction.SELL,
+            StrategyAction.OPEN,
+            StrategyAction.CLOSE,
+            StrategyAction.IGNORE,
+        }
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -32,12 +72,27 @@ class StrategyContext:
 class StrategySignal:
     code: str
     name: str
-    action: StrategyAction
+    action: StrategyAction | str
     score: float
     message: str
     frequency: str
     event_time: dt.datetime
     metadata: dict[str, Any] = field(default_factory=dict)
+    schema_version: int = SIGNAL_SCHEMA_VERSION
+
+    def to_payload(self) -> dict[str, Any]:
+        action = self.action.value if isinstance(self.action, StrategyAction) else str(self.action)
+        return {
+            "schema_version": self.schema_version,
+            "code": self.code,
+            "name": self.name,
+            "action": action,
+            "score": self.score,
+            "message": self.message,
+            "frequency": self.frequency,
+            "event_time": self.event_time.isoformat(),
+            "metadata": copy.deepcopy(self.metadata),
+        }
 
 
 @dataclass(frozen=True)
@@ -90,8 +145,6 @@ class BatchRunResult:
         self.failures.extend(other.failures)
         return self
 
-    # Keep the historical signal-list read API usable while callers migrate to
-    # explicit hits/misses/failures handling.
     def __iter__(self):
         return iter(self.hits)
 
@@ -106,14 +159,26 @@ class StrategyInputError(ValueError):
     """Raised when provider data violates the strategy K-line contract."""
 
 
+class StrategyOutputError(ValueError):
+    """Raised when a strategy output violates the versioned signal contract."""
+
+
 def normalize_strategy_results(results: Any) -> list[StrategySignal]:
     if results is None:
         return []
     if isinstance(results, StrategySignal):
         return [results]
-    if isinstance(results, list) and all(isinstance(item, StrategySignal) for item in results):
-        return results
-    raise TypeError("strategy run() must return StrategySignal, list[StrategySignal], or None")
+    if not isinstance(results, list):
+        raise TypeError(
+            "strategy run() must return StrategySignal, list[StrategySignal], or None"
+        )
+    if len(results) > MAX_SIGNALS_PER_TARGET:
+        raise StrategyOutputError(
+            f"strategy returned more than {MAX_SIGNALS_PER_TARGET} signals"
+        )
+    if not all(isinstance(item, StrategySignal) for item in results):
+        raise TypeError("strategy result list contains a non-StrategySignal item")
+    return results
 
 
 def _clean_error_message(error: BaseException) -> str:
@@ -152,6 +217,10 @@ def _validate_text(value: Any, field_name: str, max_length: int) -> str:
         raise ValueError(f"{field_name} must not be empty")
     if len(value) > max_length:
         raise ValueError(f"{field_name} exceeds {max_length} characters")
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{field_name} contains invalid Unicode") from error
     if any(ord(char) < 32 or ord(char) == 127 for char in value):
         raise ValueError(f"{field_name} contains control characters")
     return value
@@ -231,26 +300,177 @@ def validate_strategy_klines(
     return normalized
 
 
-def _validate_strategy_signals(
-    signals: list[StrategySignal],
+def _market_datetime(value: Any, market: str, field_name: str) -> dt.datetime:
+    if not isinstance(value, dt.datetime):
+        raise TypeError(f"{field_name} must be a datetime")
+    tz = market_timezone(market)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=tz)
+    return value.astimezone(tz)
+
+
+def _validate_metadata_text(
+    value: Any,
+    field_name: str,
+    max_length: int,
+    *,
+    allow_empty: bool,
+) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    if not allow_empty and value.strip() == "":
+        raise ValueError(f"{field_name} must not be empty")
+    if len(value) > max_length:
+        raise ValueError(f"{field_name} exceeds {max_length} characters")
+    try:
+        value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{field_name} contains invalid Unicode") from error
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError(f"{field_name} contains control characters")
+    return value
+
+
+def _metadata_value(
+    value: Any,
+    *,
+    depth: int,
+    budget: list[int],
+    field_name: str = "metadata",
+) -> Any:
+    budget[0] += 1
+    if budget[0] > MAX_METADATA_NODES:
+        raise StrategyOutputError("strategy signal metadata has too many nodes")
+    if depth > MAX_METADATA_DEPTH:
+        raise StrategyOutputError("strategy signal metadata is too deeply nested")
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise StrategyOutputError("strategy signal metadata contains a non-finite number")
+        return value
+    if isinstance(value, str):
+        return _validate_metadata_text(
+            value, field_name, 2_000, allow_empty=True
+        )
+    if isinstance(value, list):
+        if len(value) > 128:
+            raise StrategyOutputError("strategy signal metadata list is too large")
+        return [
+            _metadata_value(item, depth=depth + 1, budget=budget, field_name=field_name)
+            for item in value
+        ]
+    if isinstance(value, Mapping):
+        if len(value) > 128:
+            raise StrategyOutputError("strategy signal metadata object is too large")
+        result: dict[str, Any] = {}
+        for raw_key, raw_value in value.items():
+            key = _validate_metadata_text(
+                raw_key, "metadata key", 128, allow_empty=False
+            )
+            result[key] = _metadata_value(
+                raw_value,
+                depth=depth + 1,
+                budget=budget,
+                field_name=f"metadata.{key}",
+            )
+        return result
+    raise TypeError("strategy signal metadata must contain JSON-compatible values")
+
+
+def _canonical_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise TypeError("strategy signal metadata must be an object")
+    canonical = _metadata_value(value, depth=0, budget=[0])
+    encoded = json.dumps(
+        canonical,
+        ensure_ascii=False,
+        sort_keys=True,
+        allow_nan=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    if len(encoded) > MAX_METADATA_BYTES:
+        raise StrategyOutputError("strategy signal metadata exceeds the UTF-8 byte limit")
+    return copy.deepcopy(canonical)
+
+
+def _canonical_signal(
+    signal: StrategySignal,
     target: StrategyRunTarget,
+    purpose: StrategyPurpose,
+    context_now: dt.datetime,
+) -> StrategySignal:
+    if type(signal.schema_version) is not int or signal.schema_version != SIGNAL_SCHEMA_VERSION:
+        raise StrategyOutputError("strategy signal schema_version is unsupported")
+    code = _validate_text(signal.code, "strategy signal code", 128)
+    name = _validate_text(signal.name, "strategy signal name", 256)
+    frequency = _validate_text(signal.frequency, "strategy signal frequency", 32)
+    if code != target.code:
+        raise StrategyOutputError("strategy signal code does not match the target")
+    if name != target.name:
+        raise StrategyOutputError("strategy signal name does not match the target")
+    if frequency != target.frequency:
+        raise StrategyOutputError("strategy signal frequency does not match the target")
+    try:
+        action = StrategyAction(signal.action)
+    except (TypeError, ValueError) as error:
+        raise StrategyOutputError("strategy signal action is unsupported") from error
+    if action not in _ALLOWED_ACTIONS[purpose]:
+        raise StrategyOutputError(
+            f"strategy signal action {action.value} is invalid for {purpose.value}"
+        )
+    if isinstance(signal.score, bool) or not isinstance(signal.score, (int, float)):
+        raise TypeError("strategy signal score must be numeric")
+    score = float(signal.score)
+    if not math.isfinite(score):
+        raise StrategyOutputError("strategy signal score must be finite")
+    message = _validate_text(signal.message, "strategy signal message", MAX_MESSAGE_CHARS)
+    if len(message.encode("utf-8")) > MAX_MESSAGE_BYTES:
+        raise StrategyOutputError("strategy signal message exceeds the UTF-8 byte limit")
+    event_time = _market_datetime(signal.event_time, target.market, "strategy signal event_time")
+    if event_time > context_now + MAX_EVENT_FUTURE_SKEW:
+        raise StrategyOutputError("strategy signal event_time is too far in the future")
+    metadata = _canonical_metadata(signal.metadata)
+    return StrategySignal(
+        code=code,
+        name=name,
+        action=action,
+        score=score,
+        message=message,
+        frequency=frequency,
+        event_time=event_time,
+        metadata=metadata,
+        schema_version=SIGNAL_SCHEMA_VERSION,
+    )
+
+
+def validate_strategy_signals(
+    results: Any,
+    target: StrategyRunTarget,
+    *,
+    purpose: StrategyPurpose,
+    context_now: dt.datetime,
 ) -> list[StrategySignal]:
+    signals = normalize_strategy_results(results)
+    canonical: list[StrategySignal] = []
+    fingerprints: set[str] = set()
     for signal in signals:
-        if signal.code != target.code:
-            raise ValueError("strategy signal code does not match the target")
-        if signal.frequency != target.frequency:
-            raise ValueError("strategy signal frequency does not match the target")
-        if signal.action not in _ALLOWED_ACTIONS:
-            raise ValueError("strategy signal action is unsupported")
-        if isinstance(signal.score, bool) or not isinstance(signal.score, (int, float)):
-            raise TypeError("strategy signal score must be numeric")
-        if not math.isfinite(float(signal.score)):
-            raise ValueError("strategy signal score must be finite")
-        if not isinstance(signal.message, str):
-            raise TypeError("strategy signal message must be a string")
-        if not isinstance(signal.event_time, dt.datetime):
-            raise TypeError("strategy signal event_time must be a datetime")
-    return signals
+        item = _canonical_signal(signal, target, purpose, context_now)
+        fingerprint = json.dumps(
+            item.to_payload(),
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+        if fingerprint in fingerprints:
+            raise StrategyOutputError("strategy returned a duplicate signal")
+        fingerprints.add(fingerprint)
+        if item.action is not StrategyAction.IGNORE:
+            canonical.append(item)
+    return canonical
 
 
 def failure_result(
@@ -275,11 +495,10 @@ def run_strategy_target(
     strategy: Any,
     target: StrategyRunTarget,
     *,
+    purpose: StrategyPurpose,
     now: dt.datetime | None = None,
 ) -> BatchRunResult:
     try:
-        # Targets constructed outside the standard runner still receive the same
-        # validation before any provider side effect.
         target = strategy_target_from_stock(
             target.market,
             {"code": target.code, "name": target.name},
@@ -298,13 +517,22 @@ def run_strategy_target(
     except Exception as error:
         return failure_result(target, "input", error)
 
+    try:
+        context_now = _market_datetime(
+            now or dt.datetime.now(tz=market_timezone(target.market)),
+            target.market,
+            "strategy context now",
+        )
+    except Exception as error:
+        return failure_result(target, "input", error)
+
     context = StrategyContext(
         market=target.market,
         code=target.code,
         name=target.name,
         frequency=target.frequency,
         klines=prepared_klines,
-        now=now or dt.datetime.now(),
+        now=context_now,
     )
     try:
         raw_results = strategy.run(context)
@@ -312,8 +540,11 @@ def run_strategy_target(
         return failure_result(target, "strategy", error)
 
     try:
-        signals = _validate_strategy_signals(
-            normalize_strategy_results(raw_results), target
+        signals = validate_strategy_signals(
+            raw_results,
+            target,
+            purpose=purpose,
+            context_now=context_now,
         )
     except Exception as error:
         return failure_result(target, "output", error)

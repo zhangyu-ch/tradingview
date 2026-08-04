@@ -10,6 +10,7 @@ from tradingview_zy.strategies.base import (
     placeholder_target,
     run_strategy_target,
     strategy_target_from_stock,
+    StrategyPurpose,
 )
 
 
@@ -44,6 +45,7 @@ class SelectionRunner:
                     self.exchange,
                     self.strategy,
                     target,
+                    purpose=StrategyPurpose.SELECTION,
                     now=now,
                 )
             )

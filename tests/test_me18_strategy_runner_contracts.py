@@ -54,6 +54,9 @@ def _frame(
 
 
 class PositiveStrategy:
+    def __init__(self, action: str = "select"):
+        self.action = action
+
     def run(self, context: StrategyContext):
         last = context.klines.iloc[-1]
         if float(last["close"]) <= float(last["open"]):
@@ -61,7 +64,7 @@ class PositiveStrategy:
         return StrategySignal(
             code=context.code,
             name=context.name,
-            action="select",
+            action=self.action,
             score=1.0,
             message="positive",
             frequency=context.frequency,
@@ -114,7 +117,7 @@ def test_selection_batch_separates_hit_miss_and_provider_failure() -> None:
 def test_monitoring_batch_continues_after_input_failure() -> None:
     bad = _frame("BAD").drop(columns=["volume"])
     exchange = MappingExchange({"BAD": bad, "GOOD": _frame("GOOD")})
-    batch = MonitoringRunner(exchange, PositiveStrategy()).run(
+    batch = MonitoringRunner(exchange, PositiveStrategy("watch")).run(
         "a",
         [{"code": "BAD", "name": "Bad"}, {"code": "GOOD", "name": "Good"}],
         "d",
@@ -332,7 +335,7 @@ def test_valid_naive_market_time_is_localized_without_mutating_provider_frame() 
 
 def test_monitoring_run_code_returns_structured_result_with_signal_list_compatibility() -> None:
     batch = MonitoringRunner(
-        MappingExchange({"A": _frame("A")}), PositiveStrategy()
+        MappingExchange({"A": _frame("A")}), PositiveStrategy("watch")
     ).run_code("a", "A", "A", "d")
 
     assert isinstance(batch, BatchRunResult)
@@ -375,7 +378,7 @@ def test_alert_task_persists_good_hits_and_reports_partial_batch_failure(monkeyp
     loader_module = types.ModuleType("tradingview_zy.strategies.loader")
     loader_module.StrategyRegistryError = ValueError
     loader_module.find_registered_strategy_id_by_path = lambda registry, path: "demo"
-    loader_module.load_registered_strategy = lambda registry, strategy_id, kwargs: PositiveStrategy()
+    loader_module.load_registered_strategy = lambda registry, strategy_id, kwargs: PositiveStrategy("watch")
     zixuan_module = types.ModuleType("tradingview_zy.zixuan")
     zixuan_module.ZiXuan = lambda market: SimpleNamespace(
         zx_stocks=lambda group: [
