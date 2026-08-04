@@ -50,6 +50,7 @@ def test_catalog_discovers_distinct_codes_from_existing_partition_tables() -> No
     assert list_market_kline_codes(engine, "a") == ["SH.600000", "SZ.000001"]
     assert list_market_kline_codes(engine, "hk") == ["HK.00700"]
     assert list_market_kline_codes(engine, "us") == []
+    engine.dispose()
 
 
 def test_catalog_rejects_empty_market_to_avoid_broad_table_scan() -> None:
@@ -60,6 +61,8 @@ def test_catalog_rejects_empty_market_to_avoid_broad_table_scan() -> None:
         assert "market" in str(exc)
     else:
         raise AssertionError("empty market must not scan every K-line table")
+    finally:
+        engine.dispose()
 
 
 def test_exchange_db_maps_persisted_codes_to_legacy_stock_contract() -> None:

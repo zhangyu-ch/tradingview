@@ -3409,16 +3409,46 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（能力绑定运行边界；旧宽接口保留为迁移兼容）",
+      "problem_verified": true,
+      "problem_summary": "标准工厂返回宽泛 Exchange 对象，没有可靠能力声明、调用前拒绝、响应校验或统一 secret-safe 错误；DB 还可能被过报为 security master/plates。",
+      "fix_summary": "新增细粒度 Capability/Protocol/领域错误、无副作用 MarketRegistry 和 ContractedExchange facade；24 个 provider 组合保守声明，DB 不声明 SECURITY_MASTER/PLATES，所有 provider 不声明 LIVE_ORDERS；工厂只在构造和契约验证成功后缓存。",
+      "verification_performed": true,
+      "verification_method": [
+        "ME-10 专项 7 passed（-W error）。",
+        "ME-10 + NEW-06 + tombstone + DB catalog 聚焦 31 passed。",
+        "21 个 provider/factory/calendar 相邻文件 125 passed（-W error）。",
+        "真实 SQLite DB factory 返回 facade，支持 metadata/catalog/session，plate 在调用 provider 前拒绝。",
+        "Secret 哨兵异常不进入 str/to_dict；连接异常 retryable，畸形响应被拒绝。",
+        "无 config.py 直接导入 registry 成功；py_compile、diff、CRLF 检查通过。"
+      ],
+      "verification_result": "通过（7 项专项、31 项聚焦、125 项直接相邻测试通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "commit_subject": "fix(ME-10): add capability-bound exchange contracts",
+      "files_changed": [
+        "src/tradingview_zy/domain.py",
+        "src/tradingview_zy/exchange/contracts.py",
+        "src/tradingview_zy/exchange/contracted.py",
+        "src/tradingview_zy/market_registry.py",
+        "src/tradingview_zy/exchange/__init__.py",
+        "docs/provider-capabilities.md",
+        "tests/test_me10_exchange_contracts.py",
+        "tests/test_new06_db_capability_guard.py",
+        "tests/test_nx01_ctp_front_address_removed.py",
+        "tests/test_nx23_exchange_db_catalog.py",
+        "tests/test_nx25_zb_tls_removal.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "旧 provider 类仍保留 broad Exchange ABC，标准 factory 才强制新边界。",
+        "轻量响应 schema 不能替代真实 SDK/网络/账号沙箱。",
+        "账户/持仓读取能力不等于实盘订单已启用；LIVE_ORDERS 全部禁用。",
+        "DB CATALOG 不是 authoritative security master。"
+      ]
     }
   },
   {

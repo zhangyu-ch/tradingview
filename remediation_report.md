@@ -1418,16 +1418,27 @@
 ### 57. ME-10 · 统一 Exchange 接口没有能力声明和统一错误模型
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Adapter Architecture
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（能力绑定运行边界；旧宽接口保留为迁移兼容）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 当前本地权威代码仍由一个要求所有 provider 同时实现行情、目录、板块、账户、持仓和订单方法的宽泛 `Exchange` ABC 作为统一接口；标准工厂通过大型 if/elif 返回原始适配器，没有可靠能力声明、调用前拒绝、行为级响应校验或统一领域错误。多个 provider 用 `pass`、固定空值或宽泛 `Exception` 表示不支持，构造异常还可能把 SDK 原始文本暴露给上层。远程固定点虽有能力注册表，但 DB provider 过报 `SECURITY_MASTER/PLATES`，不能原样照搬。
+- **b. 我是怎么修复的？** 新增细粒度 `Capability`、Protocol 和 secret-safe `ExchangeError` 层级；新增可直接导入且无 SDK/config 副作用的 `MarketRegistry`，为 24 个 market/provider 组合保守声明真实行为。DB 只声明 metadata、market data、ticks、持久化 code catalog 和 session，不声明 authoritative `SECURITY_MASTER`、`PLATES`、账户、持仓或实盘订单；全部内置 provider 都不声明 `LIVE_ORDERS`。标准 `get_exchange()` 改为惰性 registry 解析、构造、声明方法校验和 `ContractedExchange` 包装，只有完整成功后才发布缓存；CTP/ZB tombstone 在 registry、import 和 cache 前执行。facade 在调用前要求能力，把连接/协议/普通 SDK 异常转成稳定且不反射 Secret 的领域错误，并校验 metadata、K 线、Tick、目录、交易状态、板块等基本响应形状。旧 broad provider 类及非 ABC helper 通过 facade 的迁移兼容转发保留。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `tests/test_me10_exchange_contracts.py`：7 passed（`-W error`），覆盖 8 个市场/24 个 provider 的注册表完整性、DB/实盘保守声明、声明方法非空桩、调用前拒绝、secret-safe 错误、连接错误 retryable 语义、响应形状与构造失败不缓存。
+  - 运行 ME-10 + NEW-06 + CTP/ZB tombstone + DB catalog 聚焦组合：31 passed（`-W error`）。
+  - 运行 21 个 provider/factory/calendar/重试/目录直接相邻文件：125 passed（`-W error`）。
+  - 在隔离 SQLite 配置下真实构造 DB provider，确认标准工厂返回 `ContractedExchange`，metadata/catalog/market data/ticks/session 可见；`SECURITY_MASTER/PLATES` 不可见，plate 调用在进入 DB 的 `pass` 前即抛 `UnsupportedCapabilityError`。
+  - 故障注入 provider 抛出含 `api_secret=SENTINEL token=SENTINEL` 的异常，公开 `str()` 和 `to_dict()` 均不含哨兵；连接类异常被标记 retryable，畸形 K 线被拒绝。
+  - 直接在不存在本地 `config.py` 的环境导入 `tradingview_zy.market_registry`，确认注册表可独立加载且不触发 SDK/配置副作用。
+  - 执行 `py_compile`、`git diff --check`、JSON 解析，并确认历史 `exchange/__init__.py` 保持纯 CRLF（bare-LF=0）。
+- **e. 验证是否通过？** 通过（7 项专项、31 项聚焦及 125 项 provider/工厂直接相邻测试以 warnings-as-errors 通过；能力过报、空桩调用、通用异常泄漏和构造前缓存根因已关闭）
+- **提交：** `fix(ME-10): add capability-bound exchange contracts`
+- **修改文件：** `src/tradingview_zy/domain.py`, `src/tradingview_zy/exchange/contracts.py`, `src/tradingview_zy/exchange/contracted.py`, `src/tradingview_zy/market_registry.py`, `src/tradingview_zy/exchange/__init__.py`, `docs/provider-capabilities.md`, `tests/test_me10_exchange_contracts.py`, `tests/test_new06_db_capability_guard.py`, `tests/test_nx01_ctp_front_address_removed.py`, `tests/test_nx23_exchange_db_catalog.py`, `tests/test_nx25_zb_tls_removal.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 旧 provider 类继续继承宽泛 `Exchange` ABC，供直接 provider 测试与外部代码迁移；只有标准 factory 路径强制 capability/error/response 边界。
+  - 响应校验是轻量领域边界，不验证每个第三方字段的全部业务语义；真实 SDK、账号权限、网络和回报时序仍需各 provider 沙箱验收。
+  - 账户/持仓能力只表示当前读取方法存在，不等于实盘下单已启用；`LIVE_ORDERS` 对全部内置 provider 明确禁用。
+  - `CATALOG` 只保证可枚举 code/name 形状；DB 的 code=name 目录仍不是 authoritative security master。
 - **原报告最新结论：** 新增 Capability、统一领域错误、MarketRegistry 和 require_capability；未知市场/provider fail-closed，构造失败前不缓存。但旧 Exchange 大接口及部分 provider 的声明/实现一致性尚未完全解决。
 - **原报告建议：** 拆分细粒度 Protocol；对每个 provider 做“声明能力必须有真实实现”的契约测试；修正 DB provider 的 security_master/plates 声明。
 

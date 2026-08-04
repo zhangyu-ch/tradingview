@@ -22,31 +22,14 @@ def test_current_runtime_has_no_ctp_front_consumer_or_configuration() -> None:
 def test_removed_ctp_is_rejected_before_provider_import_or_cache_write() -> None:
     path = ROOT / "src/tradingview_zy/exchange/__init__.py"
     source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    get_exchange = next(
-        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "get_exchange"
-    )
-    futures_branch = next(
-        node
-        for node in ast.walk(get_exchange)
-        if isinstance(node, ast.If)
-        and isinstance(node.test, ast.Compare)
-        and ast.get_source_segment(source, node.test) == "market == Market.FUTURES"
-    )
-    segment = ast.get_source_segment(source, futures_branch) or ""
-
-    reject_offset = segment.index("_reject_removed_provider(")
-    supported_import_offsets = [
-        segment.index("from tradingview_zy.exchange.exchange_tq import"),
-        segment.index("from tradingview_zy.exchange.exchange_tdx_futures import"),
-        segment.index("from tradingview_zy.exchange.exchange_db import"),
-    ]
-    cache_offset = segment.index("g_exchange_obj[market.value]")
-
-    assert reject_offset < min(supported_import_offsets)
-    assert reject_offset < cache_offset
+    method_start = source.index("def get_exchange")
+    segment = source[method_start:]
+    reject_offset = segment.index("_reject_removed_provider(market, provider_name)")
+    registry_offset = segment.index("configured_provider(market, config)")
+    import_offset = segment.index("import_module(spec.module)")
+    cache_offset = segment.index("g_exchange_obj[market.value] = facade")
+    assert reject_offset < registry_offset < import_offset < cache_offset
     assert "exchange_ctp" not in segment
-
 
 def test_runtime_tree_contains_no_ctp_front_address_names() -> None:
     forbidden = ("ctp_front", "md_front", "td_front", "front_md", "front_td")

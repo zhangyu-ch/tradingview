@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 7（第 56 条 ME-29 已重建并验证，下一条为第 57 条 ME-10）
+阶段 7（第 57 条 ME-10 已重建并验证，下一条为第 58 条 ME-20）
 
 ## 各阶段
 
@@ -61,7 +61,7 @@
 - [x] 54. NX-01
 - [x] 55. NX-25
 - [x] 56. ME-29
-- [ ] 57. ME-10
+- [x] 57. ME-10
 - [ ] 58. ME-20
 - [ ] 59. ME-25
 - [ ] 60. ME-27
@@ -165,6 +165,10 @@
 
 | ME-29 provider workflow 首次执行引用不存在的 `test_me11_baostock_contracts.py` | 1 | 对照实际测试目录，修正为 `test_me11_baostock_reliability.py`，并重新执行完整 provider job，82 项通过 |
 | ME-29 本地完整 pytest 收集缺少 `empyrical`，扩大回归另有 8 项缺少 `pinyin` | 2 | 保留环境限制；运行可收集仓库回归 414 passed/5 skipped，并把完整 Python 3.11 `uv sync --locked` 留在 CI，不使用 ignore/deselect 绕过托管门禁 |
+
+| ME-10 初版 `market_registry.py` 从 `exchange.contracts` 导入，直接导入注册表时触发 exchange package 和缺失 config.py | 1 | 把领域类型移到根级 `domain.py`，`exchange/contracts.py` 仅兼容 re-export；复验无 config.py 也可导入 24 项注册表 |
+| ME-10 factory 原子缓存测试试图 monkeypatch 只读 MappingProxyType | 1 | 改为替换 factory 已导入的 `configured_provider/provider_spec` 边界，不修改不可变注册表；构造失败不缓存测试通过 |
+| NEW-06 旧静态测试把整个 MARKET_REGISTRY 赋值误当成 DB_CAPABILITIES 定义 | 1 | 改为动态遍历每个 market 的 db ProviderSpec，逐项断言不含 SECURITY_MASTER/PLATES |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

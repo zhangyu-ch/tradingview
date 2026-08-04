@@ -37,30 +37,14 @@ def test_runtime_python_has_no_tls_verification_bypass() -> None:
 def test_factory_rejects_zb_before_import_and_cache_mutation() -> None:
     path = ROOT / "src/tradingview_zy/exchange/__init__.py"
     source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    get_exchange = next(
-        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "get_exchange"
-    )
-    currency_branch = next(
-        node
-        for node in ast.walk(get_exchange)
-        if isinstance(node, ast.If)
-        and isinstance(node.test, ast.Compare)
-        and ast.get_source_segment(source, node.test) == "market == Market.CURRENCY"
-    )
-    segment = ast.get_source_segment(source, currency_branch) or ""
-
-    reject_offset = segment.index("_reject_removed_provider(")
-    import_offsets = [
-        segment.index("from tradingview_zy.exchange.exchange_binance import"),
-        segment.index("from tradingview_zy.exchange.exchange_db import"),
-    ]
-    cache_offset = segment.index("g_exchange_obj[market.value]")
-
-    assert reject_offset < min(import_offsets)
-    assert reject_offset < cache_offset
+    method_start = source.index("def get_exchange")
+    segment = source[method_start:]
+    reject_offset = segment.index("_reject_removed_provider(market, provider_name)")
+    registry_offset = segment.index("configured_provider(market, config)")
+    import_offset = segment.index("import_module(spec.module)")
+    cache_offset = segment.index("g_exchange_obj[market.value] = facade")
+    assert reject_offset < registry_offset < import_offset < cache_offset
     assert "exchange_zb" not in segment
-
 
 def test_runtime_tree_has_no_direct_zb_adapter_reference() -> None:
     offenders: list[str] = []

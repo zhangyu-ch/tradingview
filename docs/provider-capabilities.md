@@ -1,11 +1,43 @@
 # Provider capability boundary
 
-The current local codebase does not yet expose a runtime `MarketRegistry` capability model. Until the separate interface/capability work is completed, callers must not infer capabilities merely because a provider implements the broad legacy `Exchange` class.
+The standard `get_exchange()` path returns a `ContractedExchange` facade rather
+than the legacy broad `Exchange` object. The facade checks a fine-grained
+`Capability` before calling an SDK and translates SDK failures into stable,
+secret-safe domain errors.
 
-In particular, the database provider supports persisted K-line market data, derived ticks, and a **persisted-code universe** discovered from existing K-line tables. `ExchangeDB.all_stocks()` returns those distinct codes and uses each code as its display name, so search/import/selection can operate on data that is actually stored. The DB provider does **not** provide an authoritative security master: issuer names, listing state and metadata are not present. Plate/sector membership also remains unsupported:
+The registry is side-effect free: reading capability metadata does not import an
+SDK, open a socket or publish a cache entry. A provider is cached only after its
+constructor and declared-method validation both succeed. Removed CTP and ZB
+providers are rejected before registry lookup, import and cache mutation.
 
-- `ExchangeDB.all_stocks()` exposes distinct codes found in the selected market's K-line tables;
-- `ExchangeDB.stock_owner_plate()` is not implemented;
-- `ExchangeDB.plate_stocks()` is not implemented.
+## Conservative declarations
 
-Any future registry may describe the persisted-code discovery behaviour separately. Declaring `SECURITY_MASTER` or `PLATES` remains forbidden without behaviour-level contract tests and the corresponding metadata implementation.
+No built-in provider declares `LIVE_ORDERS`. Existing live-order methods remain
+fail-closed until a separate order/fill state-machine and sandbox acceptance are
+complete.
+
+The database provider exposes:
+
+- static metadata;
+- persisted K-line market data;
+- derived ticks;
+- a persisted-code `CATALOG` discovered from existing K-line tables;
+- explicit fail-closed session status.
+
+It does **not** provide an authoritative security master. Stored K-line tables do
+not contain issuer names, listing state or corporate metadata, so DB providers
+must not declare `SECURITY_MASTER`. Declaring `SECURITY_MASTER` or `PLATES` without behavior-level evidence is forbidden. `stock_owner_plate()` and `plate_stocks()`
+remain unsupported, so declaring `PLATES` is also forbidden.
+
+## Public errors
+
+Callers may rely on stable error codes:
+
+- `unsupported_provider`;
+- `unsupported_capability`;
+- `provider_unavailable` (retryable);
+- `provider_response_invalid`.
+
+Original SDK exception messages are retained only in the Python exception chain
+for local debugging; they are not copied into `str(error)` or `to_dict()` and
+must not be returned to clients or logs without a separate redaction boundary.

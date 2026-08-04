@@ -361,3 +361,12 @@
 - 当前环境缺少依赖不应促使 CI 使用 ignore/deselect；本地可明确记录阻断，托管 Python 3.11 job 必须在 `uv sync --locked` 后运行完整套件。
 - SQLite 单测不能证明 MySQL DDL/截断语义，模板文本扫描也不能证明渲染 DOM 不含 Secret；这两类风险需要真实 service/browser gate。
 - 修复已删除私有 API 的导入属于恢复“完整套件可收集”边界，不应通过跳过测试掩盖。
+
+
+## ME-10 能力绑定适配器边界复核（恢复重建）
+- broad ABC 的“方法存在”不等于能力存在；标准工厂必须在 SDK 调用前拒绝未声明能力。
+- Registry 自身必须可在没有本地 config.py、没有 SDK 的环境直接导入，否则能力发现会重新产生启动副作用。
+- DB 的持久化 code catalog 可支持搜索/选股，但 code=name 不构成 authoritative security master；应以独立 CATALOG 与 SECURITY_MASTER 区分。
+- 构造器结果只能在构造、声明方法和 facade 校验全部成功后发布到缓存；异常对象或半初始化对象不能被后续请求复用。
+- SDK 原始异常可保留在 exception chain 供本地调试，但 public message/to_dict 不能复制原文，避免 token、账号和 URL query 泄漏。
+- `LIVE_ORDERS` 必须与账户/持仓读取分离；能读账户不代表订单状态机已验收。

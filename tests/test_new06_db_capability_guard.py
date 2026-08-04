@@ -29,10 +29,10 @@ def _is_unimplemented(node: ast.FunctionDef) -> bool:
     return False
 
 
-def test_local_tree_does_not_contain_the_reported_overclaiming_registry() -> None:
-    # The uploaded local ZIP predates the remote MarketRegistry change. The exact
-    # NEW-06 regression is therefore absent and must not be fabricated locally.
-    assert not REGISTRY.exists()
+def test_registry_exists_but_does_not_overclaim_db_security_metadata() -> None:
+    assert REGISTRY.exists()
+    source = REGISTRY.read_text(encoding="utf-8")
+    assert "DB_CAPABILITIES" in source
 
 
 def test_db_exposes_only_a_persisted_code_catalog_not_security_metadata() -> None:
@@ -50,20 +50,21 @@ def test_db_exposes_only_a_persisted_code_catalog_not_security_metadata() -> Non
 
 
 def test_future_registry_cannot_overreport_db_capabilities() -> None:
-    if not REGISTRY.exists():
-        return
-    source = REGISTRY.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    assignments: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            target_text = ast.get_source_segment(source, node) or ""
-            if "DB_CAPABILITIES" in target_text:
-                assignments.append(target_text)
-    joined = "\n".join(assignments)
-    assert "SECURITY_MASTER" not in joined
-    assert "PLATES" not in joined
+    import importlib.util
+    import sys
 
+    spec = importlib.util.spec_from_file_location("me10_registry_guard", REGISTRY)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+        for market_spec in module.MARKET_REGISTRY.values():
+            capabilities = market_spec.providers["db"].capabilities
+            assert module.Capability.SECURITY_MASTER not in capabilities
+            assert module.Capability.PLATES not in capabilities
+    finally:
+        sys.modules.pop(spec.name, None)
 
 def test_capability_documentation_is_explicit_about_db_limitations() -> None:
     text = (ROOT / "docs/provider-capabilities.md").read_text(encoding="utf-8")

@@ -576,3 +576,11 @@
 - 首次真实执行 provider job 发现 BaoStock 测试文件名错误，已修正并重跑。
 - 验证：18 passed/2 skipped 专项；82 passed provider 严格矩阵；414 passed/5 skipped 可运行仓库回归；8 项缺 pinyin、完整收集缺 empyrical，均在产品断言前阻断。
 - 提交：`fix(ME-29): add executable quality gates`。
+
+
+### 问题 57：ME-10（恢复重建）
+- **状态：** complete
+- 验证结论：标准工厂缺能力声明、调用前拒绝、统一错误和响应边界，DB 能力存在过报风险，问题存在。
+- 修复：新增根级领域契约、24 项 side-effect-free registry、ContractedExchange facade 和原子惰性 factory；DB 不声明 security master/plates，全部 provider 不声明 live orders。
+- 验证：7 项专项、31 项聚焦、125 项 provider/工厂直接相邻测试以 warnings-as-errors 通过；真实 SQLite DB facade 与 Secret 故障注入通过。
+- 提交：`fix(ME-10): add capability-bound exchange contracts`。
