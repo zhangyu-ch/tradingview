@@ -91,7 +91,7 @@
 - [x] 74. NX-11
 - [x] 75. LO-05
 - [x] 76. LO-07
-- [ ] 77. LO-08
+- [x] 77. LO-08
 - [ ] 78. LO-03
 - [ ] 79. LO-04
 - [ ] 80. LO-01
@@ -129,6 +129,8 @@
 | LO-07 聚焦回归中 NEW-06 旧门禁仍要求 DB provider 保留空板块方法 | 1 | 保留 NEW-06 不过报能力目标，将断言更新为 provider 不再声明空桩、注册表继续不含 PLATES |
 | LO-07 完整 pytest 在收集 `test_backtesting_base_generic.py` 时缺少 empyrical | 1 | 保留 CI 完整套件要求；本地先记录收集阻断，再运行其余可收集测试并单独验证本条回测 AST/编译契约 |
 | LO-07 广泛回归 8 个历史 Web 测试在 cl_app 导入阶段缺少 pinyin | 1 | 记录 619 项已通过证据；精确 deselect 8 个环境阻断节点复验其余套件，CI 仍完整安装锁定依赖 |
+| LO-08 首次聚焦测试未准备本地 config.py，两个 Exchange 测试在收集阶段停止 | 1 | 使用 `prepare_test_config.py` 原子生成受控配置，测试结束 trap 清理，不重复裸环境命令 |
+| LO-08 首次写 README 将 CRLF 规范化为 LF，造成大面积无意义 diff | 1 | 恢复 README 到 HEAD，使用字节级 CRLF 替换真实段落；同时验证首页模板 bare-LF=0 |
 | LO-05 工厂改用 selected_provider 后，ME-10 缓存原子性测试仍 monkeypatch 旧导入名 | 1 | 将测试注入点同步迁到 selected_provider，保留 provider_spec 与构造失败不缓存断言 |
 | LO-05 将 removed-provider 配置迁到 MARKET_PROVIDERS 后，configured_provider 在 tombstone 前先按注册表拒绝，丢失专用安全错误 | 1 | 工厂先用 selected_provider 读取未验证名称，再执行 tombstone，最后由 provider_spec 验证普通未知 provider；不导入/不缓存 |
 | LO-05 仓库级回归发现 CR-05/MX-02 两个旧测试仍写已删除的 EXCHANGE_* 配置属性 | 1 | 将测试迁移到 MARKET_PROVIDERS；产品 tombstone 行为不变，legacy reader 已由 LO-05 专项覆盖 |

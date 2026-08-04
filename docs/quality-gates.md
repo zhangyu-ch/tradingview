@@ -18,7 +18,10 @@ with `uv sync --locked`.
   runs a live fail-closed OSV batch scan. Its evidence is retained as a workflow artifact.
 
 The read-only repository-hygiene workflow runs `check_quality_gates.py`, the dependency
-source contract, and the deterministic supply-chain checkers before dependency installation.
+source contract, the deterministic supply-chain checkers, and
+`generate_provider_support_matrix.py --check` before dependency installation. The generated
+provider matrix must exactly match `MarketRegistry`, so code capability changes cannot leave
+README/support documentation stale.
 Removal or weakening of a stable job therefore fails independently. The job identifiers above
 are intentionally stable; maintainers must add all five to repository branch protection after
 the workflow is pushed.

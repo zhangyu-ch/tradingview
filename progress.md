@@ -811,3 +811,20 @@
 - 全部编译、质量、供应链、Secret、FIFO、JSON、diff 与 CRLF 门禁通过。
 - 提交主题：`refactor(LO-07): replace speculative stubs with capability errors`。
 - 下一条：77. LO-08。
+
+
+### 2026-08-04 · 问题 77 LO-08 验证开始
+- `check_env.py` 已由 ME-24 修复：从 `pyproject.toml` 读取 `>=3.11,<3.12`，输出稳定状态并返回可靠退出码；该原报告子问题已不存在。
+- 剩余漂移真实存在：README 仍声称支持 trader 下单/撤单，与 CR-03 全部实盘入口 fail-closed 冲突；`joinquant/` 仍位于活跃根目录并直接依赖 `jqdata`/旧 `cl`；provider 能力文档只有手写说明，没有由 MarketRegistry 自动生成并由 CI 校验的全量支持矩阵。
+- 修复方向：把 JoinQuant 研究遗留确定性归档并移出运行根目录；校准 README；从 MarketRegistry 生成 provider support matrix，并在 repository-hygiene CI 中执行 stale 检查。
+- LO-08 首次聚焦 pytest 未先运行 `prepare_test_config.py`，CR-03/LO-07 两个模块在收集时因归档外 `config.py` 缺失停止；未执行测试、产品文件未受影响。下一次使用受控临时配置并在退出时清理。
+- LO-08 首次用 `write_text(..., newline="\n")` 更新历史 CRLF README，造成全文件换行差异；已恢复 README 到 HEAD，改用字节级 CRLF 替换，并将首页关于页的同一过期“交易执行工具”描述一起校准。
+
+
+### 问题 77：LO-08 完成
+- 保留 ME-24 已修复的 pyproject 派生 check_env，不重复改写；删除 README/首页实盘能力误述。
+- 将顶层 JoinQuant 研究遗留确定性归档为 `archive/joinquant-legacy.zip`，活跃根目录不再包含专有 jqdata/旧 cl 代码。
+- 新增 MarketRegistry 派生的 provider support matrix，并由 repository-hygiene/quality contract 执行 stale 检查。
+- 7 项专项、50 项严格相邻、626 项可运行仓库回归通过；所有文档生成、质量、供应链、Secret、FIFO、diff 与 CRLF 门禁通过。
+- 提交主题：`docs(LO-08): generate support truth and archive legacy research`。
+- 下一条：78. LO-03。

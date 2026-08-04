@@ -4746,16 +4746,52 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（运行事实、支持矩阵与历史研究目录已对齐）",
+      "problem_verified": true,
+      "problem_summary": "原报告关于 check_env 的版本漂移已由 ME-24 修复，但剩余文档漂移仍真实存在：README 和首页关于页继续宣称仓库是“交易执行工具”，与 CR-03 所有实盘 order() fail-closed 冲突；顶层 joinquant/ 仍像活跃模块一样存在，却直接依赖专有 jqdata 和已移除的 cl 包；provider-capabilities.md 只有手写说明，没有从 MarketRegistry 生成、由 CI 拒绝陈旧内容的全量支持矩阵。",
+      "fix_summary": "保留 ME-24 已验证的 check_env 实现，不做重复改写。把原顶层 JoinQuant notebooks、README 和 helper 以固定 1980 时间戳、固定权限和排序条目确定性打包为 archive/joinquant-legacy.zip，删除活跃 joinquant/ 根目录，并新增 archive/README.md 明确历史代码不可运行。校准 README 与 Web 关于页，删除实盘交易能力误述，明确仅有市场数据、研究、监控、回测及部分只读账户能力，所有 live order 继续 fail-closed。新增 generate_provider_support_matrix.py，从 MarketRegistry 生成市场、默认 provider、默认代码、TradingView session/timezone 和每个 provider 精确 Capability 的确定性 Markdown；repository-hygiene CI 与 check_quality_gates.py 必须执行 --check，任何 Registry 变化未更新文档都会失败。",
+      "verification_performed": true,
+      "verification_method": [
+        "执行 LO-08 专项 7 项（-W error）：验证 check_env 从 pyproject 读取 >=3.11,<3.12，README 的 Python/uv/locked 安装说明一致。",
+        "验证 README 和首页不再出现“交易执行工具”“trader 下单”等过期声明，均链接 live-trading-disabled 与自动支持矩阵，并说明 JoinQuant 仅在 archive 留存。",
+        "打开 archive/joinquant-legacy.zip，验证恰有原四个文件、全部固定 1980 时间戳和 100644 权限；fun.py 中 jqdata/cl 依赖仅存在于归档，活跃 joinquant/ 不存在。",
+        "将 docs/provider-support-matrix.md 与 render_support_matrix(MARKET_REGISTRY) 做字节级精确比较；遍历全部市场/provider/capability，确认矩阵完整且没有内置 provider 声明 LIVE_ORDERS。",
+        "故障注入在临时矩阵追加 manual drift，执行生成器 --check 返回非零；从临时 repository-hygiene workflow 删除矩阵检查命令，check_quality_gates.py 稳定报告缺失。",
+        "运行 LO-08、ME-24、ME-29 quality gates、CR-03、LO-05、LO-07 严格组合：50 passed（-W error）。",
+        "仓库级可运行回归：626 passed、5 skipped、8 deselected；8 个节点仍因当前容器缺少 pinyin 在 cl_app 导入阶段阻断，完整套件另受缺少 empyrical 的回测收集阻断。",
+        "执行 compileall、support-matrix --check、quality/repository/readability/dependency、Secret、supply-chain、FIFO、JSON、git diff 与 README/index CRLF 门禁，全部通过。"
+      ],
+      "verification_result": "通过（7 项文档专项、50 项严格相邻及 626 项可运行仓库回归通过；文档漂移已变成 CI 可执行失败）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "README.md",
+        "web/tradingview_zy_chart/cl_app/templates/index.html",
+        "archive/README.md",
+        "archive/joinquant-legacy.zip",
+        "joinquant/#U6570#U636e#U4e0b#U8f7d.ipynb",
+        "joinquant/A#U80a1#U52a8#U91cf#U6392#U884c#U9009#U80a1#U62e9#U65f6.ipynb",
+        "joinquant/README.md",
+        "joinquant/fun.py",
+        "docs/provider-support-matrix.md",
+        "docs/provider-capabilities.md",
+        "docs/quality-gates.md",
+        "script/remediation/generate_provider_support_matrix.py",
+        "script/remediation/check_quality_gates.py",
+        ".github/workflows/repository-hygiene.yml",
+        "tests/test_lo08_documentation_contract.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "生成矩阵证明标准 factory 的声明能力和文档一致，不替代真实券商、交易所或数据供应商 sandbox/生产验收；该限制在矩阵与质量门禁文档中明确保留。",
+        "JoinQuant 遗留仅作为历史研究证据归档，未审查其专有平台许可、未恢复依赖，也不承诺可执行；恢复必须新建能力、依赖/许可评审和测试。",
+        "README 仍包含手写操作说明，但关键 Python、锁文件、实盘禁用、市场/provider 能力和历史目录边界均已有自动测试或生成门禁。",
+        "当前容器缺少 pinyin 与 empyrical；环境阻断已单独记录，CI 的 Python 3.11 锁定环境仍要求完整 pytest。"
+      ],
+      "commit_subject": "docs(LO-08): generate support truth and archive legacy research"
     }
   },
   {

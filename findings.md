@@ -520,3 +520,10 @@
 - IB 的 `all_stocks()` 只是恒定空列表，不能支撑 CATALOG/SECURITY_MASTER；保留真实 ticks/session/account/positions，删除目录能力声明。
 - 运行树墓碑模块和无调用方 RuntimeError 壳会制造虚假能力面；确认没有运行引用后应删除。真正需要的可选生命周期 hook 应明确 `return None`，而不是裸 `pass`。
 - `cl_app.__init__` 中 `_UnavailableTasks.__getattr__` 的 RuntimeError 属于第 81 条 MX-12 旧模块专用降级残留，本条只记录、不提前合并后续问题。
+
+
+## LO-08 文档、运行事实与遗留研究目录漂移
+- 环境检查结论必须从 `pyproject.toml` 派生；当前 ME-24 实现已经满足，LO-08 不应重复改写已验证代码。
+- README 的能力声明属于可执行安全边界：当 `order()` 全部 fail-closed 时，继续宣称“下单、撤单、交易执行”会误导部署和验收，必须改为明确“仅市场数据/研究/监控/回测，实盘关闭”。
+- 顶层 `joinquant/` 仍会被读者和工具当作活跃模块，且其中直接导入已移除的 `cl`。历史研究材料应确定性归档到 `archive/`，运行树与默认测试扫描不再看到它。
+- 手写 provider 文档会随 Registry 漂移；支持矩阵应从 `MarketSpec.providers` 和 `Capability` 生成，提交确定性 Markdown，并由无依赖 CI `--check` 拒绝 stale 文档。

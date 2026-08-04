@@ -122,6 +122,7 @@ def find_quality_gate_violations(root: Path) -> list[str]:
             "python script/remediation/check_readability_contract.py",
             "python script/remediation/check_supply_chain.py",
             "python script/remediation/generate_supply_chain_artifacts.py --check",
+            "python script/remediation/generate_provider_support_matrix.py --check",
         )
         for command in hygiene_commands:
             if command not in hygiene:

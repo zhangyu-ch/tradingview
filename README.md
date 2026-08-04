@@ -1,17 +1,32 @@
 # tradingview_zy
 
-`tradingview_zy` 是一个通用行情、TradingView 图表、选股监控、回测和交易执行工具。
+`tradingview_zy` 是一个多市场行情、TradingView 图表、选股监控和回测工具。
 
-本仓库已从原缠论分析系统迁移为普通行情/交易工具。运行路径中不再保留缠论计算、分型、笔、线段、中枢、买卖点、背驰等模块。历史缠论源码已压缩归档到 `archive/chanlun-runtime-source.zip`，相关文档已迁移到 `archive/docs/`。
+本仓库已从原缠论分析系统迁移为多市场行情、研究、监控与回测工具。运行路径中不再保留缠论计算、分型、笔、线段、中枢、买卖点、背驰等模块。历史缠论源码已压缩归档到 `archive/chanlun-runtime-source.zip`，相关文档已迁移到 `archive/docs/`。
 
 ## 当前保留能力
 
-- 多市场交易所适配和 K 线查询。
-- TradingView UDF 风格基础 K 线接口。
-- 自选股、通用选股任务和通用监控任务外壳。
-- 自定义策略接入接口。
-- 通用回测框架。
-- trader 下单、撤单、账户和持仓等交易执行适配。
+- 多市场 provider 适配、K 线和有界 Tick 查询。
+- TradingView UDF 风格基础行情接口。
+- 自选股、注册式选股任务和注册式监控任务。
+- 版本化策略信号协议与通用回测框架。
+- 部分 provider 的只读账户余额和持仓查询。
+
+内置 provider **不声明实盘下单能力**。所有 `order()` 入口继续 fail-closed，直到
+持久化 Order/Fill 状态机、券商对账和 sandbox 验收完成。详见
+[`docs/live-trading-disabled.md`](docs/live-trading-disabled.md)。
+
+## 支持范围
+
+市场、默认 provider、TradingView session 和精确能力由 `MarketRegistry` 统一声明。
+自动生成且由 CI 校验的完整矩阵见
+[`docs/provider-support-matrix.md`](docs/provider-support-matrix.md)。不要根据适配器上
+“存在某个方法”推断能力；只有矩阵中声明的 capability 才属于标准 `get_exchange()`
+契约。
+
+旧 JoinQuant 研究代码已经从活跃根目录移除，并以
+`archive/joinquant-legacy.zip` 留存。它依赖专有 `jqdata` 环境和已移除的 `cl` 包，
+不是当前安装或运行入口。
 
 ## 环境
 

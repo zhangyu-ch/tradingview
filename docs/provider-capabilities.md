@@ -5,6 +5,11 @@ than the legacy broad `Exchange` object. The facade checks a fine-grained
 `Capability` before calling an SDK and translates SDK failures into stable,
 secret-safe domain errors.
 
+The complete market/provider/capability table is generated from the registry and
+continuously checked in CI: [`provider-support-matrix.md`](provider-support-matrix.md).
+That generated matrix is the support source of truth; this document explains the
+contract and conservative-declaration rules.
+
 The registry is side-effect free: reading capability metadata does not import an
 SDK, open a socket or publish a cache entry. A provider is cached only after its
 constructor and declared-method validation both succeed. Removed CTP and ZB
