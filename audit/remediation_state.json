@@ -4078,16 +4078,32 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（未实现公开费用桩删除）",
+      "problem_verified": true,
+      "problem_summary": "backtesting.base 公开定义 fee_us(opt, price, amlunt)，函数体只有 pass，调用会静默返回 None；全仓 src/script/web 又没有任何调用方或兼容需求，继续保留会让维护者误认为美股费用已经实现。",
+      "fix_summary": "删除无实现、无调用方的 fee_us 公开函数，不伪造未经数据来源验证的美股费率；保留已实现的 A 股 fee_a 行为不变。新增 AST 与动态模块门禁，防止同名空桩或引用重新进入运行代码。",
+      "verification_performed": true,
+      "verification_method": [
+        "对 src、script、web 下全部 Python 文件执行 AST 扫描，确认 fee_us 定义和名称引用均为 0。",
+        "直接加载真实 backtesting/base.py，确认模块不再暴露 fee_us。",
+        "动态复算 fee_a 买入和卖出样例，结果仍分别为 32.0 与 42.0，证明相邻已实现费用函数未被破坏。",
+        "运行 NX-09 与 NX-08 回测模型相邻测试，结果 6 passed（-W error）；py_compile、CRLF 与 git diff --check 通过。"
+      ],
+      "verification_result": "通过（未实现函数和全部运行代码引用均已删除，既有 A 股费用计算及 6 项相邻测试通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/backtesting/base.py",
+        "tests/test_nx09_removed_us_fee_stub.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本条按原问题建议选择删除无调用方空桩，没有实现美股费用模型；未来恢复该能力时必须使用有来源、版本和生效日期的数据驱动费率，并增加黄金样本测试。"
+      ],
+      "commit_subject": "fix(NX-09): remove unimplemented US fee stub"
     }
   },
   {

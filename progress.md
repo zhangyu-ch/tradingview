@@ -675,3 +675,11 @@
 - 验证：Node vm 断言运行时 arity=1，node --check、布局静态契约、CRLF 与 diff 门禁通过；MX-10/MX-05 组合 7 passed（-W error）。
 - 过程修正：首次引用不存在的 test_mx05_watchlist_timer.py，按当前目录改为 test_mx05_rate_timer.py 后复验。
 - 待提交主题：`fix(MX-10): align chart display call contract`。
+
+### 问题 67：NX-09（恢复重建）
+- **状态：** complete
+- 验证结论：fee_us 是公开但只返回 None 的空桩，且 src/script/web 没有调用方，问题存在。
+- 修复：删除 fee_us，不凭空实现无来源美股费率；保留 fee_a，并增加全运行代码 AST 无定义/无引用门禁。
+- 验证：真实模块不再暴露 fee_us，fee_a 买/卖样例仍为 32/42；NX-09/NX-08 共 6 passed（-W error），编译、CRLF 与 diff 门禁通过。
+- 过程修正：首次引用不存在的 NX-08 测试文件，按当前目录改为 test_nx08_position_close_profit.py 后复验。
+- 待提交主题：`fix(NX-09): remove unimplemented US fee stub`。

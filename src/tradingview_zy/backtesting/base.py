@@ -325,10 +325,3 @@ def fee_a(opt: str, price: float, amount: float):
     fee_sum += trade_volume * ghf_rate / 100
     return fee_sum
 
-
-def fee_us(opt: str, price: float, amlunt: float):
-    """
-    美股的交易费用计算
-    """
-    pass
-
