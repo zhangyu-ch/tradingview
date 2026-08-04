@@ -8,6 +8,8 @@ from datetime import timezone
 from pathlib import Path
 
 import pytest
+
+from test_support.web_routes import route_source
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.schema import CreateTable
@@ -293,9 +295,17 @@ def test_sqlite_quota_check_is_serialized_before_usage_read(tmp_path) -> None:
 
 
 def test_web_contract_has_stable_413_field_and_quota_errors() -> None:
-    source = WEB_APP.read_text(encoding="utf-8")
-    assert '"error": "request_too_large"' in source
-    assert "except TVStorageError as error" in source
-    assert '"error": error.code' in source
-    assert "normalize_chart_payload(" in source
-    assert "normalize_drawing_payload(" in source
+    core_source = (
+        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/core.py"
+    ).read_text(encoding="utf-8")
+    storage_source = (
+        route_source("tv_charts")
+        + route_source("tv_study_templates")
+        + route_source("tv_drawings")
+    )
+    normalized = (core_source + storage_source).replace("'", '"')
+    assert '"error": "request_too_large"' in normalized
+    assert "except TVStorageError as error" in storage_source
+    assert '"error": error.code' in normalized
+    assert "normalize_chart_payload(" in storage_source
+    assert "normalize_drawing_payload(" in storage_source

@@ -867,3 +867,34 @@
 - 全部编译、质量、供应链、Secret、FIFO、Node、JSON、diff 与 CRLF 门禁通过。
 - 提交主题：`refactor(LO-04): introduce immutable data contracts`。
 - 下一条：80. LO-01。
+
+
+### 问题 80：LO-01 开始
+- 当前 `cl_app/__init__.py` 为 1,634 行，`create_app()` 占 1,516 行并内嵌 35 个路由/钩子，覆盖认证、UDF、图表存储、自选、监控/选股、设置和板块接口。
+- 依赖对象（登录限流、history tracker、tick caller、任务代理、scheduler status、市场元数据）主要以巨型闭包局部变量存在；仅少量放入 `app.extensions`。
+- 修复目标：建立显式 Web service container 放入 `app.extensions`，把 auth/pages、UDF、storage、watchlist、tasks、settings 蓝图拆出；`create_app` 只保留配置、安全初始化、服务构造和蓝图注册。第 81 条再单独清理遗留任务降级分支。
+- LO-01 首次动态 app 启动使用系统 Python，缺少 Flask；语法编译已通过。已确认 pytest 使用 `/opt/pyvenv`，后续显式切换该解释器。
+- LO-01 首次相邻回归命令引用不存在的 `test_me03_udf_resolutions.py`，pytest 在收集前退出；已用真实目录清单重组。
+- LO-01 首轮相邻回归 43 passed/3 skipped/12 failed；12 项全部是测试仍从旧 `create_app` 闭包查找路由或状态调用，未发现新蓝图产品断言失败。将测试迁到对应 blueprint/WebAppServices 位置，不恢复巨型工厂。
+
+- 2026-08-04 会话压缩恢复：重新读取 plan/progress/findings 并确认 `HEAD=b4a182f`、第 80 条蓝图/service-container 草稿仍完整保留；当前未提交差异只属于 LO-01。继续更新仍依赖旧 create_app 闭包结构的历史测试，不回退蓝图拆分。
+- 2026-08-04 LO-01 历史测试批量迁移脚本在 ME-01 精确多行断言处中止；此前已写入的 ME-02/ME-03/NX-15 修改保留且可编译。后续改为逐文件、按函数边界重写，避免再次使用同一脆弱整段匹配。
+- LO-01 首轮迁移后核心组合 54 passed、2 failed；两项失败仅是旧源码测试固定双引号，而 Blueprint 生成代码使用单引号，语义未变。测试已改为规范化源码/匹配真实 session key，不修改产品逻辑。
+- LO-01 自身首轮门禁 3 passed、2 failed：测试过度要求工厂零嵌套 helper，且误要求无依赖的 logout 路由读取 service container。已收窄为“零内嵌路由/钩子”，仅暂允第 81 条专门处理的 legacy task helper；logout/time 无依赖路由无需虚假取服务。
+- LO-01 扩大历史 Web 契约首轮为 119 passed、23 failed；失败全部是测试仍从 `cl_app/__init__.py` 截取旧闭包路由。迁移至 Blueprint 后复验为 137 passed、5 failed；剩余为三个 helper import 遗漏、一个引号格式断言和一个 DB 依赖名前缀，均已修正。
+- LO-01 首次仓库级可运行回归为 649 passed、5 skipped、8 deselected、2 failed；LO-05 测试和 RV-08 Secret checker 仍把 UDF/setting 路由固定在旧工厂。现已让测试读取 UDF Blueprint，并把 Secret checker 改为 AST 定位 `setting()` 且从 settings Blueprint 验证。
+
+
+### 问题 80：LO-01 完成
+- 验证修复前 `cl_app/__init__.py` 1,516 行、create_app 内嵌 35 个路由/钩子，问题存在。
+- 新增 app-scoped `WebAppServices` 和 core/auth/pages/udf/storage/watchlist/tasks/settings 八个 Blueprint；37 个公开路由全部迁出工厂，create_app 降为 351 行 composition root。
+- 新增 5 项结构/隔离专项；历史 Web 契约改为定位真实 Blueprint 路由。严格相邻 214 passed（-W error），仓库级可运行回归 651 passed、5 skipped、8 deselected。
+- repository/readability/quality、Secret、dependency/supply-chain、FIFO、Node、JSON、diff、CRLF 全部通过。真实 Flask/浏览器启动受当前容器缺少依赖限制；legacy task fallback 留给第 81 条。
+- 提交主题：`refactor(LO-01): split Flask app into feature blueprints`。
+
+
+### 问题 071–080 归档完成
+- 已生成包含完整源码与 `.git` 的 `tradingview_remediation_issues_071-080.zip`，并用系统 `unzip` 重新解压。
+- 归档固定点为第 80 条 LO-01 提交；问题 071–080 十个标签全部可解引用，解压后工作树干净，`git fsck --full` 返回成功。
+- 初验仅发现一个由第 74 条 amend/重打标签留下的不可达旧 tag 对象；在最终重打第 80 条计划状态后将执行 `reflog expire + gc --prune=now` 并重新生成归档，不影响任何可达提交或标签。
+- 下一条：81. MX-12。

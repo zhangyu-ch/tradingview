@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import ast
 import json
 import uuid
-from pathlib import Path
 from types import SimpleNamespace
+
+from test_support.web_routes import compile_route
 
 from tradingview_zy.tv_storage import (
     TVStorageError,
@@ -15,12 +15,6 @@ from tradingview_zy.tv_storage import (
 
 
 def _load_route(request, db, logger):
-    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    create_app = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "create_app")
-    route = next(node for node in create_app.body if isinstance(node, ast.FunctionDef) and node.name == "tv_drawings")
-    route.decorator_list = []
-    module = ast.fix_missing_locations(ast.Module(body=[route], type_ignores=[]))
     namespace = {
         "request": request,
         "db": db,
@@ -32,8 +26,7 @@ def _load_route(request, db, logger):
         "resolve_storage_owner": resolve_storage_owner,
         "current_user": SimpleNamespace(get_id=lambda: "session-user"),
     }
-    exec(compile(module, "tv_drawings", "exec"), namespace)
-    return namespace["tv_drawings"]
+    return compile_route("tv_drawings", namespace)
 
 
 def _db(save=None, get=None):

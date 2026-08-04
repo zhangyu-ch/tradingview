@@ -44,7 +44,7 @@ from tradingview_zy.web_security import (
 def _import_cl_app_or_skip():
     for dependency in ("flask", "flask_login", "apscheduler", "pinyin", "tzlocal"):
         pytest.importorskip(dependency)
-    cl_app = _import_cl_app_or_skip()
+    import cl_app
 
     return cl_app
 

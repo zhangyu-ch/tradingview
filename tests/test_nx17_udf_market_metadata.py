@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.web_routes import route_node, route_source
+
 from tradingview_zy.market_metadata import tradingview_symbol_metadata
 
 
@@ -59,20 +61,13 @@ def test_unsupported_market_is_rejected() -> None:
 
 
 def _route(name: str) -> ast.FunctionDef:
-    source = WEB_APP.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(WEB_APP))
-    create_app = next(
-        node for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "create_app"
-    )
-    return next(
-        node for node in create_app.body
-        if isinstance(node, ast.FunctionDef) and node.name == name
-    )
+    return route_node(name)
 
 
 def test_symbol_and_search_routes_consume_authoritative_descriptors() -> None:
-    source = WEB_APP.read_text(encoding="utf-8")
+    source = (
+        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/udf.py"
+    ).read_text(encoding="utf-8")
     assert "market_session =" not in source
     assert "market_timezone =" not in source
     assert "market_types =" not in source
@@ -88,7 +83,8 @@ def test_symbol_and_search_routes_consume_authoritative_descriptors() -> None:
         ]
         assert calls, name
 
-    search_source = ast.get_source_segment(source, _route("tv_search")) or ""
-    assert 'authoritative_type = tradingview_symbol_metadata(exchange)["type"]' in search_source
-    assert '"type": type_value' not in search_source
+    search_source = route_source("tv_search")
+    normalized_search_source = search_source.replace("'", '"')
+    assert 'authoritative_type = tradingview_symbol_metadata(exchange)["type"]' in normalized_search_source
+    assert '"type": type_value' not in normalized_search_source
     assert "type_value and type_value != authoritative_type" in search_source

@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pandas as pd
 
+from test_support.web_routes import route_source
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "web" / "tradingview_zy_chart"))
@@ -271,10 +273,7 @@ def test_alert_save_uses_generic_task_methods(monkeypatch):
 
 
 def test_alert_routes_use_generic_fields_without_legacy_payload_keys():
-    app_source = (
-        ROOT / "web" / "tradingview_zy_chart" / "cl_app" / "__init__.py"
-    ).read_text(encoding="utf-8")
-    alert_section = app_source[app_source.index('    @app.route("/alert_list/<market>")'):app_source.index('    @app.route("/jobs")')]
+    alert_section = route_source("alert_list") + route_source("alert_edit") + route_source("alert_records")
 
     for generic_text in [
         "strategy_config",

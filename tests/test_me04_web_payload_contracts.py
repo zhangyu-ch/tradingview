@@ -6,6 +6,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from test_support.web_routes import route_node, route_source
+
 from tradingview_zy.web_payloads import KlinePayloadError, prepare_klines_for_market
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,12 +61,7 @@ def test_rejects_provider_identity_mismatch():
 
 
 def test_history_route_prepares_before_epoch_and_returns_stable_payload_error():
-    path = ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    route = next(
-        node for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "tv_history"
-    )
+    route = route_node("tv_history")
     calls = [
         node.func.id
         for node in ast.walk(route)
@@ -73,7 +70,7 @@ def test_history_route_prepares_before_epoch_and_returns_stable_payload_error():
     assert calls.index("prepare_klines_for_market") < calls.index(
         "datetime_to_timestamp_seconds"
     )
-    source = ast.get_source_segment(path.read_text(encoding="utf-8"), route)
+    source = route_source("tv_history")
     assert "invalid_kline_payload" in source
     assert "expected_code=code" in source
     assert "expected_frequency=frequency" in source

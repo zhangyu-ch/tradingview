@@ -137,8 +137,11 @@ def test_rotating_token_invalidates_the_previous_value() -> None:
 
 
 def test_web_routes_and_browser_clients_enforce_the_csrf_contract() -> None:
-    app_source = (
-        ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
+    core_source = (
+        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/core.py"
+    ).read_text(encoding="utf-8")
+    tasks_source = (
+        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/tasks.py"
     ).read_text(encoding="utf-8")
     alert_source = (
         ROOT / "web/tradingview_zy_chart/cl_app/static/js/alert.js"
@@ -153,10 +156,12 @@ def test_web_routes_and_browser_clients_enforce_the_csrf_contract() -> None:
         ROOT / "web/tradingview_zy_chart/cl_app/templates/login.html"
     ).read_text(encoding="utf-8")
 
-    assert "@app.before_request" in app_source
-    assert "validate_csrf_request(" in app_source
-    assert '@app.route("/alert_del/<id>", methods=["POST"])' in app_source
-    assert '@app.route("/alert_del/<id>", methods=["GET"])' not in app_source
+    normalized_core = core_source.replace("'", '"')
+    normalized_tasks = tasks_source.replace("'", '"')
+    assert "@core_bp.before_app_request" in core_source
+    assert "validate_csrf_request(" in core_source
+    assert '@tasks_bp.route("/alert_del/<id>", methods=["POST"])' in normalized_tasks
+    assert '@tasks_bp.route("/alert_del/<id>", methods=["GET"])' not in normalized_tasks
     assert 'type: "POST"' in alert_source
     assert '<meta name="csrf-token"' in dark_template
     assert "js/csrf.js" in dark_template

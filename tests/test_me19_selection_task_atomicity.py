@@ -11,6 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from test_support.web_routes import route_source
+
 from tradingview_zy.strategies.base import (
     BatchRunResult,
     StrategyRunFailure,
@@ -299,12 +301,8 @@ def test_opt_type_is_removed_and_running_results_are_scoped_by_market(monkeypatc
     module = _load_xuangu_module(monkeypatch)
     run_signature = inspect.signature(module.XuanguTasks.run_xuangu)
     worker_signature = inspect.signature(module.XuanguTasks._run_xuangu_job)
-    app_source = (ROOT / "web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
     template = (ROOT / "web/tradingview_zy_chart/cl_app/templates/xuangu_list.html").read_text(encoding="utf-8")
-    route = app_source[
-        app_source.index('    @app.route("/xuangu/task_add"') :
-        app_source.index('    @app.route("/setting"')
-    ]
+    route = route_source("xuangu_task_add")
 
     assert "opt_type" not in run_signature.parameters
     assert "opt_type" not in worker_signature.parameters

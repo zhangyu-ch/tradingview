@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.web_routes import route_node
+
 from tradingview_zy.history_request_tracker import (
     HistoryRequestTracker,
     history_request_key,
@@ -172,21 +174,18 @@ def test_invalid_tracker_configuration_fails_before_serving_requests() -> None:
 
 
 def test_web_route_uses_bounded_tracker_only_for_follow_up_requests() -> None:
-    source = WEB_APP.read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    factory_source = WEB_APP.read_text(encoding="utf-8")
+    udf_source = (
+        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/udf.py"
+    ).read_text(encoding="utf-8")
 
-    assert "__history_req_counter" not in source
-    assert "HistoryRequestTracker(" in source
-    assert 'app.extensions["history_request_tracker"]' in source
-    assert 'session.get("_user_id")' in source
-    assert "request.remote_addr" in source
+    assert "__history_req_counter" not in factory_source + udf_source
+    assert "HistoryRequestTracker(" in factory_source
+    assert 'app.extensions["history_request_tracker"]' in factory_source
+    assert "session.get('_user_id')" in udf_source
+    assert "request.remote_addr" in udf_source
 
-    history_function = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name == "tv_history"
-    )
+    history_function = route_node("tv_history")
     guarded_calls = []
     for node in ast.walk(history_function):
         if not isinstance(node, ast.If):

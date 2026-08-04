@@ -216,13 +216,17 @@ def test_old_duplicate_maps_and_executable_provider_assignments_are_removed() ->
 
 def test_web_routes_and_template_consume_only_registry_projections() -> None:
     app = WEB_APP.read_text(encoding="utf-8")
+    udf = (
+        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/udf.py"
+    ).read_text(encoding="utf-8")
+    web_runtime = app + udf
     assert "market_catalog_items = market_catalog()" in app
     assert "default_market_key = default_market_value()" in app
-    assert "market_ui_metadata(market)" in app
-    assert "market_ui_metadata(exchange)" in app
-    assert '"value": "a"' not in app
-    assert 'market in ["futures", "ny_futures"]' not in app
-    assert 'market in ["currency", "currency_spot"]' not in app
+    assert "market_ui_metadata(market)" in udf
+    assert "market_ui_metadata(exchange)" in udf
+    assert '"value": "a"' not in web_runtime
+    assert 'market in ["futures", "ny_futures"]' not in web_runtime
+    assert 'market in ["currency", "currency_spot"]' not in web_runtime
 
     template = INDEX_TEMPLATE.read_text(encoding="utf-8")
     assert "{% for item in market_catalog %}" in template

@@ -8,6 +8,8 @@ from datetime import timezone
 from pathlib import Path
 
 import pytest
+
+from test_support.web_routes import route_source
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.schema import CreateTable
@@ -191,10 +193,10 @@ def test_schema_and_web_route_use_new_storage_boundary_before_persistence(tmp_pa
     assert "strategy_config TEXT" in ddl
     assert "strategy_memo TEXT" in ddl
 
-    source = WEB_APP.read_text(encoding="utf-8")
+    source = route_source("alert_save")
     parse_pos = source.index("parse_strategy_kwargs(request.form.get")
     validate_pos = source.index("validate_registered_strategy(", parse_pos)
     build_pos = source.index("build_strategy_config(strategy_id, strategy_kwargs)", validate_pos)
-    save_pos = source.index("_alert_tasks.alert_save(alert_config)", build_pos)
+    save_pos = source.index("services.alert_tasks.alert_save(alert_config)", build_pos)
     assert parse_pos < validate_pos < build_pos < save_pos
     module.db.engine.dispose()

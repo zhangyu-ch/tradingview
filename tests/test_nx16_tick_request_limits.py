@@ -5,6 +5,8 @@ import time
 
 import pytest
 
+from test_support.web_routes import route_source
+
 from tradingview_zy.tick_request import (
     BoundedProviderCaller,
     SlidingWindowLimiter,
@@ -127,9 +129,8 @@ def test_bounded_provider_caller_times_out_and_fails_busy_until_worker_exits():
 
 
 def test_web_route_uses_tick_contract_before_provider_call():
-    source = open("web/tradingview_zy_chart/cl_app/__init__.py", encoding="utf-8").read()
-    route = source[source.index("    def ticks():"):source.index("    # 获取自选组列表")]
-    assert route.index("parse_tick_request") < route.index("get_exchange")
-    assert "tick_provider_caller.call(ex.ticks" in route
+    route = route_source("ticks")
+    assert route.index("parse_tick_request") < route.index("services.get_exchange")
+    assert "services.tick_provider_caller.call(ex.ticks" in route
     assert "TickRateLimitError" in route
     assert "TickProviderTimeoutError" in route

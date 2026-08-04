@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from test_support.web_routes import route_node, route_source
+
 from tradingview_zy.market_metadata import all_market_frequencies, market_frequencies
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,17 +22,7 @@ def test_frequency_union_includes_every_market_and_future_unique_values() -> Non
 
 
 def test_real_tv_config_uses_dynamic_market_union() -> None:
-    tree = ast.parse(WEB_APP.read_text(encoding="utf-8"))
-    create_app = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "create_app"
-    )
-    route = next(
-        node
-        for node in create_app.body
-        if isinstance(node, ast.FunctionDef) and node.name == "tv_config"
-    )
+    route = route_node("tv_config")
     calls = [
         node
         for node in ast.walk(route)
@@ -39,8 +31,7 @@ def test_real_tv_config_uses_dynamic_market_union() -> None:
         and node.func.id == "all_market_frequencies"
     ]
     assert len(calls) == 1
-    assert isinstance(calls[0].args[0], ast.Name)
-    assert calls[0].args[0].id == "market_frequencys"
-    source = ast.get_source_segment(WEB_APP.read_text(encoding="utf-8"), route) or ""
-    assert 'market_frequencys["ny_futures"]' not in source
-    assert 'market_frequencys["a"]' not in source
+    assert ast.unparse(calls[0].args[0]) == "services.market_frequencies"
+    source = route_source("tv_config")
+    assert 'market_frequencies["ny_futures"]' not in source
+    assert 'market_frequencies["a"]' not in source

@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from test_support.web_routes import route_source
+
 ROOT = Path(__file__).resolve().parents[1]
 QUOTE_HELPER = ROOT / "src/tradingview_zy/exchange/tdx_quotes.py"
 CALENDAR_HELPER = ROOT / "src/tradingview_zy/trading_calendar.py"
@@ -204,9 +206,7 @@ def test_tdx_cash_adapters_delegate_trading_state_to_shared_calendar() -> None:
 
 
 def test_nullable_rate_is_serialized_and_rendered_as_unavailable() -> None:
-    route_source = (
-        ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
-    ).read_text(encoding="utf-8")
+    tick_route_source = route_source("ticks")
     js_source = (
         ROOT / "web/tradingview_zy_chart/cl_app/static/js/zixuan.js"
     ).read_text(encoding="utf-8")
@@ -215,7 +215,7 @@ def test_nullable_rate_is_serialized_and_rendered_as_unavailable() -> None:
     ).read_text(encoding="utf-8")
 
     assert "float | None" in exchange_source
-    assert "if tick.rate is None" in route_source
+    assert "if tick.rate is None" in tick_route_source
     assert "rateAvailable" in js_source
     assert "rateText" in js_source
     assert 'tick["rate"] + "%"' in js_source

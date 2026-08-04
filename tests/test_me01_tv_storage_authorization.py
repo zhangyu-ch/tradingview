@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import ast
-import copy
 import importlib
 import sys
 import types
@@ -12,34 +10,19 @@ from types import SimpleNamespace
 
 import pytest
 
+from test_support.web_routes import compile_route
+
 from tradingview_zy.tv_storage import (
     TVStorageFieldError,
     resolve_storage_owner,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB_APP = ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
 CONFIG_DEMO = ROOT / "src/tradingview_zy/config.py.demo"
 
 
 def _route(name: str, namespace: dict):
-    tree = ast.parse(WEB_APP.read_text(encoding="utf-8"))
-    create_app = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "create_app"
-    )
-    route = copy.deepcopy(
-        next(
-            node
-            for node in create_app.body
-            if isinstance(node, ast.FunctionDef) and node.name == name
-        )
-    )
-    route.decorator_list = []
-    module = ast.fix_missing_locations(ast.Module(body=[route], type_ignores=[]))
-    exec(compile(module, str(WEB_APP), "exec"), namespace)
-    return namespace[name]
+    return compile_route(name, namespace)
 
 
 class FakeArgs(dict):
@@ -281,8 +264,14 @@ def test_legacy_owner_migration_is_allowlisted_deduplicated_and_idempotent(tmp_p
 
 def test_config_and_startup_migration_are_explicit() -> None:
     config_source = CONFIG_DEMO.read_text(encoding="utf-8")
-    web_source = WEB_APP.read_text(encoding="utf-8")
+    factory_source = (
+        ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
+    ).read_text(encoding="utf-8")
+    auth_source = (
+        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/auth.py"
+    ).read_text(encoding="utf-8")
     assert "WEB_AUTH_PRINCIPAL = 'tradingview_zy'" in config_source
     assert "TV_STORAGE_LEGACY_USER_IDS = ['999']" in config_source
-    assert "db.migrate_tv_storage_legacy_owners(" in web_source
-    assert "user_id = storage_principal" in web_source
+    assert "db.migrate_tv_storage_legacy_owners(" in factory_source
+    assert "LoginUser(services.storage_principal)" in auth_source
+    assert "user_id == services.storage_principal" in auth_source

@@ -1,119 +1,38 @@
-import datetime
-import json
-import os
-import time
-import traceback
-import uuid
 import importlib
-from io import BytesIO
 
-import pinyin
-from flask import Flask, redirect, render_template, request, send_file, session
-from flask_login import (
-    LoginManager,
-    UserMixin,
-    current_user,
-    login_required,
-    login_user,
-    logout_user,
-)
+from flask import Flask
 
 from tradingview_zy import config, fun
-from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange import get_exchange
-from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
-from tradingview_zy.footprint import SUB_FREQUENCY_MAP, TTLCache, aggregate_footprint
+from tradingview_zy.footprint import TTLCache
+from tradingview_zy.history_request_tracker import HistoryRequestTracker
 from tradingview_zy.market_metadata import (
-    all_market_frequencies,
     default_market_value,
     market_catalog,
     market_default_codes,
     market_frequencies,
-    market_ui_metadata,
-    tradingview_symbol_metadata,
 )
-from tradingview_zy.web_payloads import (
-    KlinePayloadError,
-    datetime_to_timestamp_seconds,
-    filter_klines_by_timestamp_range,
-    klines_to_tv_history,
-    prepare_klines_for_market,
-    market_timezone as resolve_market_timezone,
-)
-from tradingview_zy.zixuan import ZiXuan
-from tradingview_zy.strategies.loader import (
-    StrategyRegistryError,
-    find_registered_strategy_id_by_path,
-    registered_strategy_choices,
-    validate_registered_strategy,
+from tradingview_zy.scheduler_runtime import SchedulerStatusStore
+from tradingview_zy.secret_store import ManagedSecretStore
+from tradingview_zy.tick_request import BoundedProviderCaller, SlidingWindowLimiter
+from tradingview_zy.tv_storage import (
+    normalize_legacy_owner_ids,
+    normalize_storage_principal,
 )
 from tradingview_zy.web_security import (
     LoginAttemptLimiter,
-    get_csrf_token,
     is_loopback_host,
     resolve_login_credentials,
     resolve_web_secret_key,
-    rotate_csrf_token,
-    validate_csrf_request,
     validate_web_access,
-    verify_login_password,
 )
-from tradingview_zy.watchlist_transfer import (
-    WatchlistTransferError,
-    export_watchlist_text,
-    parse_watchlist_stream,
-)
-from tradingview_zy.web_api_validation import (
-    WebParameterError,
-    parse_bounded_text,
-    parse_int,
-    parse_market,
-    parse_positive_int,
-    parse_resolution,
-    parse_strict_bool,
-    parse_symbol,
-    parse_time_range,
-)
-from tradingview_zy.scheduler_status import SchedulerStatusStore
-from tradingview_zy.history_request_tracker import (
-    HistoryRequestTracker,
-    history_request_key,
-)
-from tradingview_zy.alert_strategy_storage import (
-    StrategyStorageValidationError,
-    build_strategy_config,
-    normalize_strategy_memo,
-    parse_strategy_kwargs,
-    parse_strategy_parameters,
-)
-from tradingview_zy.data_contracts import StrategyParameters
-from tradingview_zy.secret_store import ManagedSecretStore
-from tradingview_zy.settings_security import (
-    feishu_secret_is_configured,
-    merge_feishu_settings,
-    migrate_feishu_settings,
-    retire_superseded_feishu_secret,
-)
-from tradingview_zy.tv_storage import (
-    TVStorageError,
-    normalize_chart_payload,
-    normalize_drawing_payload,
-    normalize_legacy_owner_ids,
-    normalize_storage_principal,
-    resolve_storage_owner,
-)
-from tradingview_zy.tick_request import (
-    BoundedProviderCaller,
-    SlidingWindowLimiter,
-    TickProviderBusyError,
-    TickProviderCallError,
-    TickProviderTimeoutError,
-    TickRateLimitError,
-    TickRequestError,
-    parse_tick_request,
-)
+from tradingview_zy.zixuan import ZiXuan
+
+from .blueprints import register_blueprints
+from .stocks_bkgn import StocksBKGN
+from .web_services import WebAppServices, install_web_services
 
 
 def create_app(test_config=None):
@@ -151,14 +70,17 @@ def create_app(test_config=None):
     )
     if isinstance(csrf_trusted_origins, str):
         csrf_trusted_origins = tuple(
-            value.strip() for value in csrf_trusted_origins.split(",") if value.strip()
+            value.strip()
+            for value in csrf_trusted_origins.split(",")
+            if value.strip()
         )
     else:
         csrf_trusted_origins = tuple(csrf_trusted_origins or ())
 
     max_upload_bytes = int(
         security_overrides.get(
-            "WEB_MAX_UPLOAD_BYTES", getattr(config, "WEB_MAX_UPLOAD_BYTES", 1_048_576)
+            "WEB_MAX_UPLOAD_BYTES",
+            getattr(config, "WEB_MAX_UPLOAD_BYTES", 1_048_576),
         )
     )
     max_watchlist_lines = int(
@@ -175,15 +97,39 @@ def create_app(test_config=None):
     )
 
     tick_rate_limiter = SlidingWindowLimiter(
-        max_requests=int(security_overrides.get("WEB_TICKS_RATE_LIMIT", getattr(config, "WEB_TICKS_RATE_LIMIT", 30))),
-        window_seconds=float(security_overrides.get("WEB_TICKS_RATE_WINDOW_SECONDS", getattr(config, "WEB_TICKS_RATE_WINDOW_SECONDS", 60))),
-        max_keys=int(security_overrides.get("WEB_TICKS_RATE_MAX_KEYS", getattr(config, "WEB_TICKS_RATE_MAX_KEYS", 1024))),
+        max_requests=int(
+            security_overrides.get(
+                "WEB_TICKS_RATE_LIMIT",
+                getattr(config, "WEB_TICKS_RATE_LIMIT", 30),
+            )
+        ),
+        window_seconds=float(
+            security_overrides.get(
+                "WEB_TICKS_RATE_WINDOW_SECONDS",
+                getattr(config, "WEB_TICKS_RATE_WINDOW_SECONDS", 60),
+            )
+        ),
+        max_keys=int(
+            security_overrides.get(
+                "WEB_TICKS_RATE_MAX_KEYS",
+                getattr(config, "WEB_TICKS_RATE_MAX_KEYS", 1024),
+            )
+        ),
     )
     tick_provider_caller = BoundedProviderCaller(
-        max_concurrent=int(security_overrides.get("WEB_TICKS_PROVIDER_MAX_CONCURRENT", getattr(config, "WEB_TICKS_PROVIDER_MAX_CONCURRENT", 8))),
-        timeout_seconds=float(security_overrides.get("WEB_TICKS_PROVIDER_TIMEOUT_SECONDS", getattr(config, "WEB_TICKS_PROVIDER_TIMEOUT_SECONDS", 5))),
+        max_concurrent=int(
+            security_overrides.get(
+                "WEB_TICKS_PROVIDER_MAX_CONCURRENT",
+                getattr(config, "WEB_TICKS_PROVIDER_MAX_CONCURRENT", 8),
+            )
+        ),
+        timeout_seconds=float(
+            security_overrides.get(
+                "WEB_TICKS_PROVIDER_TIMEOUT_SECONDS",
+                getattr(config, "WEB_TICKS_PROVIDER_TIMEOUT_SECONDS", 5),
+            )
+        ),
     )
-
     login_limiter = LoginAttemptLimiter(
         max_attempts=int(
             security_overrides.get(
@@ -198,8 +144,6 @@ def create_app(test_config=None):
             )
         ),
     )
-
-    scheduler_status_store = SchedulerStatusStore()
     history_request_tracker = HistoryRequestTracker(
         max_entries=int(
             security_overrides.get(
@@ -226,8 +170,8 @@ def create_app(test_config=None):
             )
         ),
     )
+    scheduler_status_store = SchedulerStatusStore()
 
-    # 项目中的周期与 tv 的周期对应表
     frequency_maps = {
         "10s": "10S",
         "30s": "30S",
@@ -248,52 +192,55 @@ def create_app(test_config=None):
         "m": "1M",
         "y": "12M",
     }
-
     resolution_maps = dict(zip(frequency_maps.values(), frequency_maps.keys()))
-
-    # Web 元数据来自无副作用静态注册表；provider 仅在具体请求时惰性构造。
-    market_frequencys = market_frequencies()
-    market_default_codes = market_default_codes()
+    market_frequency_map = market_frequencies()
+    market_default_code_map = market_default_codes()
     market_catalog_items = market_catalog()
     default_market_key = default_market_value()
+    logger = fun.get_logger()
 
-    __log = fun.get_logger()
-
-    def _unavailable_task_message():
+    def unavailable_task_message():
         return "监控/选股任务将在策略接入后可用：旧缠论依赖已移除"
 
-    _REMOVED_LEGACY_MODULE_PREFIXES = (
+    removed_legacy_module_prefixes = (
         "tradingview_zy.cl",
         "tradingview_zy.kcharts",
         "tradingview_zy.monitor",
         "tradingview_zy.xuangu",
     )
-    _REMOVED_LEGACY_IMPORT_NAMES = ("cl", "cl_interface", "cl_utils", "kcharts", "monitor", "xuangu")
+    removed_legacy_import_names = (
+        "cl",
+        "cl_interface",
+        "cl_utils",
+        "kcharts",
+        "monitor",
+        "xuangu",
+    )
 
-    def _is_removed_legacy_import_error(error: ImportError):
+    def is_removed_legacy_import_error(error: ImportError):
         missing_name = getattr(error, "name", None) or ""
         if any(
             missing_name == prefix or missing_name.startswith(f"{prefix}.")
-            for prefix in _REMOVED_LEGACY_MODULE_PREFIXES
+            for prefix in removed_legacy_module_prefixes
         ):
             return True
-
         message = str(error)
-        if any(prefix in message for prefix in _REMOVED_LEGACY_MODULE_PREFIXES):
+        if any(prefix in message for prefix in removed_legacy_module_prefixes):
             return True
         return missing_name == "tradingview_zy" and any(
-            f"'{import_name}'" in message for import_name in _REMOVED_LEGACY_IMPORT_NAMES
+            f"'{import_name}'" in message
+            for import_name in removed_legacy_import_names
         )
 
-    class _UnavailableTasks:
+    class UnavailableTasks:
         def __init__(self, module_name: str, error: ImportError):
             self.module_name = module_name
             self.error = error
 
         def __getattr__(self, name):
-            raise RuntimeError(_unavailable_task_message()) from self.error
+            raise RuntimeError(unavailable_task_message()) from self.error
 
-    class _LazyTasks:
+    class LazyTasks:
         def __init__(self, module_name: str, class_name: str, on_load=None):
             self.module_name = module_name
             self.class_name = class_name
@@ -308,12 +255,12 @@ def create_app(test_config=None):
         def _load(self):
             if self._task_obj is not None or self._task_error is not None:
                 return self._task_obj
-
-            task_cls, task_error = _load_task_class(self.module_name, self.class_name)
+            task_cls, task_error = load_task_class(
+                self.module_name, self.class_name
+            )
             if task_error is not None:
                 self._task_error = task_error
                 return None
-
             self._task_obj = task_cls(None)
             if self.on_load is not None:
                 self.on_load(self._task_obj)
@@ -322,41 +269,47 @@ def create_app(test_config=None):
         def __getattr__(self, name):
             task_obj = self._load()
             if task_obj is None:
-                raise RuntimeError(_unavailable_task_message()) from self._task_error
+                raise RuntimeError(unavailable_task_message()) from self._task_error
             return getattr(task_obj, name)
 
-    def _load_task_class(module_name: str, class_name: str):
+    def load_task_class(module_name: str, class_name: str):
         try:
             module = importlib.import_module(f"{__package__}.{module_name}")
             return getattr(module, class_name), None
-        except (ImportError, ModuleNotFoundError) as e:
-            if _is_removed_legacy_import_error(e):
-                __log.warning(
+        except (ImportError, ModuleNotFoundError) as error:
+            if is_removed_legacy_import_error(error):
+                logger.warning(
                     "%s 依赖的旧缠论模块已移除，任务将在策略接入后可用：%s",
                     module_name,
-                    e,
+                    error,
                 )
-                return None, e
-            __log.exception("%s 导入异常", module_name)
+                return None, error
+            logger.exception("%s 导入异常", module_name)
             raise
 
-    def _task_error_response(error: Exception = None):
-        msg = _unavailable_task_message()
+    def task_error_response(error: Exception | None = None):
+        message = unavailable_task_message()
         if error is not None:
-            msg = f"{msg}：{error}"
-        return {"ok": False, "msg": msg}
+            message = f"{message}：{error}"
+        return {"ok": False, "msg": message}
 
-    _alert_tasks = _LazyTasks("alert_tasks", "AlertTasks")
-    _xuangu_tasks = _LazyTasks("xuangu_tasks", "XuanguTasks")
+    alert_tasks = LazyTasks("alert_tasks", "AlertTasks")
+    xuangu_tasks = LazyTasks("xuangu_tasks", "XuanguTasks")
 
-    # create and configure the app
+    def guard_task(task_obj):
+        if isinstance(task_obj, UnavailableTasks):
+            return task_error_response(task_obj.error)
+        if isinstance(task_obj, LazyTasks):
+            task_obj._load()
+            if task_obj.error is not None:
+                return task_error_response(task_obj.error)
+        return None
+
     app = Flask(__name__, instance_relative_config=True)
     app.extensions["scheduler_mode"] = "external-process"
     app.extensions["history_request_tracker"] = history_request_tracker
     if test_config:
         app.config.update(test_config)
-    # Security-critical values are derived from the dedicated WEB_* settings above and
-    # cannot be weakened accidentally by a generic Flask config override.
     app.config.update(
         SECRET_KEY=web_secret_key,
         SESSION_COOKIE_HTTPONLY=True,
@@ -369,20 +322,7 @@ def create_app(test_config=None):
     )
     app.logger.addFilter(
         lambda record: "/static/" not in record.getMessage().lower()
-    )  # 过滤静态资源请求日志
-
-    @app.errorhandler(413)
-    def request_too_large(_error):
-        return {
-            "status": "error",
-            "error": "request_too_large",
-            "message": "request body exceeds the configured limit",
-        }, 413
-
-    login_manager = LoginManager()
-    login_manager.session_protection = "basic"
-    login_manager.init_app(app)
-    login_manager.login_view = "login_opt"
+    )
 
     storage_principal = normalize_storage_principal(
         security_overrides.get(
@@ -400,1235 +340,49 @@ def create_app(test_config=None):
     db.migrate_tv_storage_legacy_owners(
         storage_principal, storage_legacy_owner_ids
     )
-
-    @app.context_processor
-    def inject_csrf_token():
-        return {"csrf_token": lambda: get_csrf_token(session)}
-
-    @app.before_request
-    def protect_unsafe_requests():
-        valid, reason = validate_csrf_request(
-            request, session, trusted_origins=csrf_trusted_origins
-        )
-        if valid:
-            return None
-        app.logger.warning(
-            "CSRF request rejected endpoint=%s reason=%s", request.endpoint, reason
-        )
-        return {
-            "ok": False,
-            "error": "csrf_failed",
-            "msg": "请求安全校验失败，请刷新页面后重试",
-        }, 403
-
-    class LoginUser(UserMixin):
-        user_id = storage_principal
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.id = self.user_id
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        return LoginUser() if user_id == LoginUser.user_id else None
-
     auto_login = (
         login_password == ""
         and login_password_hash == ""
         and is_loopback_host(web_host)
     )
 
-    @app.route("/login", methods=["GET", "POST"])
-    def login_opt():
-        if auto_login:
-            login_user(LoginUser(), remember=False)
-            return redirect("/")
-
-        emsg = ""
-        if request.method == "POST":
-            remote_key = request.remote_addr or "unknown"
-            if not login_limiter.is_allowed(remote_key):
-                return render_template(
-                    "login.html", emsg="登录失败次数过多，请稍后再试"
-                ), 429
-
-            password = request.form.get("password")
-            if verify_login_password(password, login_password, login_password_hash):
-                login_limiter.reset(remote_key)
-                login_user(
-                    LoginUser(),
-                    remember=remember_days > 0,
-                    duration=datetime.timedelta(days=max(remember_days, 1)),
-                )
-                rotate_csrf_token(session)
-                return redirect("/")
-
-            login_limiter.record_failure(remote_key)
-            emsg = "密码错误"
-
-        return render_template("login.html", emsg=emsg)
-
-    @app.route("/logout", methods=["POST"])
-    @login_required
-    def logout_opt():
-        logout_user()
-        rotate_csrf_token(session)
-        return redirect("/login")
-
-    @app.route("/")
-    @login_required
-    def index_show():
-        """
-        首页
-        """
-
-        return render_template(
-            "index.html",
-            market_default_codes=market_default_codes,
-            market_frequencys=market_frequencys,
-            market_catalog=market_catalog_items,
-            default_market=default_market_key,
-        )
-
-    @app.route("/tv/config")
-    @login_required
-    def tv_config():
-        """
-        配置项
-        """
-        frequencys = all_market_frequencies(market_frequencys)
-        supportedResolutions = [v for k, v in frequency_maps.items() if k in frequencys]
-        return {
-            "supports_search": True,
-            "supports_group_request": False,
-            "supported_resolutions": supportedResolutions,
-            "supports_marks": True,
-            "supports_timescale_marks": True,
-            "supports_time": False,
-            "exchanges": [
-                {
-                    "value": item["value"],
-                    "name": item["name"],
-                    "desc": item["desc"],
-                }
-                for item in market_catalog_items
-            ],
-        }
-
-    @app.route("/tv/symbol_info")
-    @login_required
-    def tv_symbol_info():
-        try:
-            group = parse_market(
-                request.args.get("group"), allowed_markets=market_frequencys.keys(), field="group"
-            )
-        except WebParameterError as exc:
-            return {"s": "error", "errmsg": str(exc)}
-        ex = get_exchange(Market(group))
-        all_symbols = ex.all_stocks()
-        return {
-            "symbol": [stock["code"] for stock in all_symbols],
-            "description": [stock["name"] for stock in all_symbols],
-            "exchange-listed": group,
-            "exchange-traded": group,
-        }
-
-    @app.route("/tv/symbols")
-    @login_required
-    def tv_symbols():
-        try:
-            market, code = parse_symbol(
-                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
-            )
-        except WebParameterError as exc:
-            return {"s": "error", "errmsg": str(exc)}
-
-        ex = get_exchange(Market(market))
-        stocks = ex.stock_info(code)
-        symbol_metadata = tradingview_symbol_metadata(market, stocks["code"])
-        sector = ""
-        industry = ""
-        ui_metadata = market_ui_metadata(market)
-        if ui_metadata["plate_panel"]:
-            try:
-                gnbk = ex.stock_owner_plate(code)
-                sector = " / ".join([item["name"] for item in gnbk["GN"]])
-                industry = " / ".join([item["name"] for item in gnbk["HY"]])
-            except Exception:
-                pass
-        return {
-            "name": stocks["code"],
-            "ticker": f"{market}:{stocks['code']}",
-            "full_name": f"{market}:{stocks['code']}",
-            "description": stocks["name"],
-            "exchange": market,
-            **symbol_metadata,
-            "pricescale": stocks.get("precision", 1000),
-            "visible_plots_set": "ohlcv",
-            "supported_resolutions": [
-                value for key, value in frequency_maps.items() if key in market_frequencys[market]
-            ],
-            "intraday_multipliers": ["1", "2", "3", "5", "10", "15", "20", "30", "60", "120", "240"],
-            "seconds_multipliers": ["1", "2", "3", "5", "10", "15", "20", "30", "40", "50", "60"],
-            "daily_multipliers": ["1", "2"],
-            "minmov": 1,
-            "minmov2": 0,
-            "has_intraday": True,
-            "has_seconds": ui_metadata["has_seconds"],
-            "has_daily": True,
-            "has_weekly_and_monthly": True,
-            "sector": sector,
-            "industry": industry,
-        }
-
-    @app.route("/tv/search")
-    @login_required
-    def tv_search():
-        try:
-            query = parse_bounded_text(
-                request.args.get("query", ""), field="query", max_chars=100, allow_empty=True
-            )
-            type_value = parse_bounded_text(
-                request.args.get("type", ""), field="type", max_chars=32, allow_empty=True
-            ).lower()
-            exchange = parse_market(
-                request.args.get("exchange"), allowed_markets=market_frequencys.keys(), field="exchange"
-            )
-            limit = parse_int(request.args.get("limit", "30"), field="limit", minimum=1, maximum=100)
-        except WebParameterError as exc:
-            return {"error": "invalid_search_request", "message": str(exc)}, 422
-
-        authoritative_type = tradingview_symbol_metadata(exchange)["type"]
-        if type_value and type_value != authoritative_type:
-            return []
-
-        ex = get_exchange(Market(exchange))
-        all_stocks = ex.all_stocks()
-        query_lower = query.lower()
-        ui_metadata = market_ui_metadata(exchange)
-        if not ui_metadata["search_name"]:
-            res_stocks = [stock for stock in all_stocks if query_lower in stock["code"].lower()]
-        else:
-            res_stocks = [
-                stock
-                for stock in all_stocks
-                if query_lower in stock["code"].lower()
-                or query_lower in stock["name"].lower()
-                or query_lower in "".join([pinyin.get_initial(char)[0] for char in stock["name"]]).lower()
-            ]
-        infos = []
-        for stock in res_stocks[:limit]:
-            symbol_metadata = tradingview_symbol_metadata(exchange, stock["code"])
-            infos.append({
-                "symbol": stock["code"],
-                "name": stock["code"],
-                "full_name": f"{exchange}:{stock['code']}",
-                "description": stock["name"],
-                "exchange": exchange,
-                "ticker": f"{exchange}:{stock['code']}",
-                **symbol_metadata,
-                "supported_resolutions": [
-                    value for key, value in frequency_maps.items() if key in market_frequencys[exchange]
-                ],
-            })
-        return infos
-
-    @app.route("/tv/history")
-    @login_required
-    def tv_history():
-        try:
-            market, code = parse_symbol(
-                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
-            )
-            resolution, frequency = parse_resolution(
-                request.args.get("resolution"), resolution_map=resolution_maps
-            )
-            first_data_request = parse_strict_bool(
-                request.args.get("firstDataRequest", "false"), field="firstDataRequest"
-            )
-            from_timestamp, to_timestamp = parse_time_range(
-                request.args.get("from"), request.args.get("to")
-            )
-        except WebParameterError as exc:
-            return {"s": "error", "errmsg": str(exc)}
-
-        if from_timestamp < 0 and to_timestamp < 0:
-            return {"s": "no_data"}
-        symbol = f"{market}:{code}"
-        now_time = time.time()
-        status = "ok"
-        if not first_data_request:
-            status = history_request_tracker.record(
-                history_request_key(
-                    user_id=session.get("_user_id"),
-                    remote_addr=request.remote_addr,
-                    market=market,
-                    code=code,
-                    resolution=resolution,
-                )
-            )
-
-        ex = get_exchange(Market(market))
-        if (
-            not first_data_request
-            and from_timestamp >= int(now_time - (10 * 60))
-            and ex.now_trading(code) is False
-        ):
-            return {"s": "no_data", "nextTime": int(now_time + (10 * 60))}
-        klines = ex.klines(code, frequency)
-        if klines is None or len(klines) == 0:
-            return {"s": "no_data"}
-        try:
-            klines = prepare_klines_for_market(
-                klines,
-                market,
-                expected_code=code,
-                expected_frequency=frequency,
-            )
-            if to_timestamp < datetime_to_timestamp_seconds(klines.iloc[0]["date"]):
-                return {"s": "no_data"}
-            if not first_data_request:
-                klines = filter_klines_by_timestamp_range(
-                    klines, from_timestamp, to_timestamp, market=market
-                )
-                if klines is None or len(klines) == 0:
-                    return {"s": "no_data"}
-            return klines_to_tv_history(
-                klines, update=not first_data_request, status=status, market=market
-            )
-        except KlinePayloadError:
-            return {"s": "error", "errmsg": "invalid_kline_payload"}
-
-    # (symbol, frequency) -> 全量足迹聚合结果，TTL 内直接复用，按请求窗口切片返回
-    __footprint_cache = TTLCache(ttl_seconds=10.0)
-
-    @app.route("/tv/footprint")
-    @login_required
-    def tv_footprint():
-        try:
-            market, code = parse_symbol(
-                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
-            )
-            resolution, frequency = parse_resolution(
-                request.args.get("resolution"), resolution_map=resolution_maps
-            )
-            from_timestamp, to_timestamp = parse_time_range(
-                request.args.get("from"), request.args.get("to")
-            )
-        except WebParameterError as exc:
-            return {"s": "error", "errmsg": str(exc)}
-        sub_frequency = SUB_FREQUENCY_MAP.get(frequency)
-        ex = get_exchange(Market(market))
-        if sub_frequency is None or sub_frequency not in ex.support_frequencys():
-            return {"s": "no_data"}
-        symbol = f"{market}:{code}"
-        cache_key = (symbol, frequency)
-        footprint_bars = __footprint_cache.get(cache_key)
-        if footprint_bars is None:
-            display_klines = ex.klines(code, frequency)
-            sub_klines = ex.klines(code, sub_frequency)
-            footprint_bars = aggregate_footprint(display_klines, sub_klines)
-            __footprint_cache.set(cache_key, footprint_bars)
-        return {
-            "s": "ok",
-            "bars": {
-                timestamp: bar
-                for timestamp, bar in footprint_bars.items()
-                if from_timestamp <= timestamp <= to_timestamp
-            },
-        }
-
-    @app.route("/tv/timescale_marks")
-    @login_required
-    def tv_timescale_marks():
-        try:
-            market, code = parse_symbol(
-                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
-            )
-            _, frequency = parse_resolution(
-                request.args.get("resolution"), resolution_map=resolution_maps
-            )
-            from_timestamp, to_timestamp = parse_time_range(
-                request.args.get("from"), request.args.get("to")
-            )
-        except WebParameterError as exc:
-            return {"s": "error", "errmsg": str(exc)}
-        order_type_maps = {
-            "buy": "买入", "sell": "卖出", "open_long": "买入开多",
-            "open_short": "买入开空", "close_long": "卖出平多", "close_short": "买入平空",
-        }
-        marks = []
-        orders = db.order_query_by_code(market, code)
-        for index, order in enumerate(orders):
-            timestamp = fun.datetime_to_int(
-                order["datetime"], assume_tz=resolve_market_timezone(market)
-            )
-            if from_timestamp <= timestamp <= to_timestamp:
-                is_buy = order["type"] in ["buy", "open_long", "close_short"]
-                marks.append({
-                    "id": index, "time": timestamp, "color": "red" if is_buy else "green",
-                    "label": "B" if is_buy else "S",
-                    "tooltip": [
-                        f"{order_type_maps[order['type']]}[{order['price']}/{order['amount']}]",
-                        f"{'' if 'info' not in order else order['info']}",
-                    ],
-                    "shape": "earningUp" if is_buy else "earningDown",
-                })
-        for index, mark in enumerate(db.marks_query(market, code)):
-            if (mark.frequency == "" or mark.frequency == frequency) and from_timestamp <= mark.mark_time <= to_timestamp:
-                marks.append({
-                    "id": f"m-{index}", "time": int(mark.mark_time), "color": mark.mark_color,
-                    "label": mark.mark_label, "tooltip": mark.mark_tooltip, "shape": mark.mark_shape,
-                })
-        return marks
-
-    @app.route("/tv/marks")
-    @login_required
-    def tv_marks():
-        try:
-            market, code = parse_symbol(
-                request.args.get("symbol"), allowed_markets=market_frequencys.keys()
-            )
-            _, frequency = parse_resolution(
-                request.args.get("resolution"), resolution_map=resolution_maps
-            )
-            from_timestamp, to_timestamp = parse_time_range(
-                request.args.get("from"), request.args.get("to")
-            )
-        except WebParameterError as exc:
-            return {"s": "error", "errmsg": str(exc)}
-        marks = []
-        price_marks = db.marks_query_by_price(market, code, start_date=from_timestamp)
-        for index, mark in enumerate(price_marks):
-            if (mark.frequency == "" or mark.frequency == frequency) and from_timestamp <= mark.mark_time <= to_timestamp:
-                marks.append({
-                    "id": f"m-{index}", "time": int(mark.mark_time), "color": mark.mark_color,
-                    "text": mark.mark_text, "label": mark.mark_label,
-                    "labelFontColor": mark.mark_label_font_color, "minSize": mark.mark_min_size,
-                })
-        return marks
-
-    @app.route("/tv/del_marks", methods=["POST"])
-    @login_required
-    def tv_del_marks():
-        try:
-            market, code = parse_symbol(
-                request.form.get("symbol"), allowed_markets=market_frequencys.keys()
-            )
-        except WebParameterError as exc:
-            return {"error": "invalid_marks_request", "message": str(exc)}, 422
-        db.marks_del_all_by_code(market, code)
-        return {"status": "ok"}
-
-    @app.route("/tv/time")
-    @login_required
-    def tv_time():
-        """
-        服务器时间
-        """
-        return fun.datetime_to_int(datetime.datetime.now(datetime.timezone.utc))
-
-    @app.route("/tv/<version>/charts", methods=["GET", "POST", "DELETE"])
-    @login_required
-    def tv_charts(version):
-        """TradingView chart layout storage."""
-        try:
-            client_id, user_id = resolve_storage_owner(
-                request.args.get("client"),
-                request.args.get("user"),
-                current_user.get_id(),
-            )
-        except TVStorageError as error:
-            return {"status": "error", "error": error.code, "message": str(error)}, 422
-        raw_chart_id = request.args.get("chart")
-
-        if request.method == "GET":
-            if raw_chart_id is None:
-                chart_list = db.tv_chart_list("chart", client_id, user_id)
-                return {
-                    "status": "ok",
-                    "data": [
-                        {
-                            "timestamp": chart.timestamp,
-                            "symbol": chart.symbol,
-                            "resolution": chart.resolution,
-                            "id": chart.id,
-                            "name": chart.name,
-                        }
-                        for chart in chart_list
-                    ],
-                }
-            try:
-                chart_id = parse_positive_int(raw_chart_id, field="chart")
-            except WebParameterError as exc:
-                return {"status": "error", "error": "invalid_chart_id", "message": str(exc)}, 422
-            chart = db.tv_chart_get("chart", chart_id, client_id, user_id)
-            if chart is None:
-                return {"status": "error", "error": "chart_not_found"}, 404
-            return {
-                "status": "ok",
-                "data": {
-                    "content": chart.content,
-                    "timestamp": chart.timestamp,
-                    "name": chart.name,
-                    "id": chart.id,
-                },
-            }
-
-        if request.method == "DELETE":
-            try:
-                chart_id = parse_positive_int(raw_chart_id, field="chart")
-            except WebParameterError as exc:
-                return {"status": "error", "error": "invalid_chart_id", "message": str(exc)}, 422
-            db.tv_chart_del("chart", chart_id, client_id, user_id)
-            return {"status": "ok"}
-
-        # Validate an update identifier before reading the potentially large form body.
-        chart_id = None
-        if raw_chart_id is not None:
-            try:
-                chart_id = parse_positive_int(raw_chart_id, field="chart")
-            except WebParameterError as exc:
-                return {"status": "error", "error": "invalid_chart_id", "message": str(exc)}, 422
-        try:
-            payload = normalize_chart_payload(
-                db.tv_storage_policy,
-                chart_type="chart",
-                client_id=client_id,
-                user_id=user_id,
-                name=request.form.get("name"),
-                content=request.form.get("content"),
-                symbol=request.form.get("symbol"),
-                resolution=request.form.get("resolution"),
-            )
-            if chart_id is None:
-                saved_id = db.tv_chart_save(**payload)
-                return {"status": "ok", "id": saved_id}
-            updated = db.tv_chart_update(id=chart_id, **payload)
-            if updated is not True:
-                return {"status": "error", "error": "chart_not_found"}, 404
-            return {"status": "ok"}
-        except TVStorageError as error:
-            return {"status": "error", "error": error.code, "message": str(error)}, 422
-
-    @app.route("/tv/<version>/study_templates", methods=["GET", "POST", "DELETE"])
-    @login_required
-    def tv_study_templates(version):
-        """TradingView indicator template storage."""
-        try:
-            client_id, user_id = resolve_storage_owner(
-                request.args.get("client"),
-                request.args.get("user"),
-                current_user.get_id(),
-            )
-        except TVStorageError as error:
-            return {"status": "error", "error": error.code, "message": str(error)}, 422
-
-        if request.method == "GET":
-            raw_name = request.args.get("template")
-            if raw_name is None:
-                template_list = db.tv_chart_list("template", client_id, user_id)
-                return {
-                    "status": "ok",
-                    "data": [{"name": template.name} for template in template_list],
-                }
-            try:
-                name = parse_bounded_text(raw_name, field="template", max_chars=200)
-            except WebParameterError as exc:
-                return {"status": "error", "error": "invalid_template_name", "message": str(exc)}, 422
-            template = db.tv_chart_get_by_name("template", name, client_id, user_id)
-            if template is None:
-                return {"status": "error", "error": "template_not_found"}, 404
-            return {
-                "status": "ok",
-                "data": {"name": template.name, "content": template.content},
-            }
-
-        if request.method == "DELETE":
-            try:
-                name = parse_bounded_text(
-                    request.args.get("template"), field="template", max_chars=200
-                )
-            except WebParameterError as exc:
-                return {"status": "error", "error": "invalid_template_name", "message": str(exc)}, 422
-            db.tv_chart_del_by_name("template", name, client_id, user_id)
-            return {"status": "ok"}
-
-        try:
-            payload = normalize_chart_payload(
-                db.tv_storage_policy,
-                chart_type="template",
-                client_id=client_id,
-                user_id=user_id,
-                name=request.form.get("name"),
-                content=request.form.get("content"),
-                symbol="",
-                resolution="",
-            )
-            saved_id = db.tv_chart_save(**payload)
-        except TVStorageError as error:
-            return {"status": "error", "error": error.code, "message": str(error)}, 422
-        return {"status": "ok", "id": saved_id}
-
-    @app.route("/tv/<version>/drawings", methods=["GET", "POST"])
-    @login_required
-    def tv_drawings(version):
-        """TradingView drawing persistence with explicit failure semantics."""
-        protocol_client_id = str(request.args.get("client") or "")
-        protocol_user_id = str(request.args.get("user") or "")
-        chart_id = str(request.args.get("chart") or "")
-        layout_id = str(request.args.get("layout") or "")
-        symbol = str(request.args.get("symbol") or "")
-
-        if request.method == "GET":
-            if (
-                protocol_client_id == ""
-                or protocol_user_id == ""
-                or chart_id == ""
-                or layout_id == ""
-            ):
-                return {"status": "ok", "data": {"state": ""}}
-            try:
-                client_id, user_id = resolve_storage_owner(
-                    protocol_client_id, protocol_user_id, current_user.get_id()
-                )
-            except TVStorageError as error:
-                return {
-                    "status": "error",
-                    "error": error.code,
-                    "message": str(error),
-                }, 422
-            state = db.tv_drawing_get(client_id, user_id, layout_id, chart_id, symbol)
-            return {"status": "ok", "data": {"state": state or ""}}
-
-        state = request.form.get("state")
-        if state is None:
-            data = request.get_json(silent=True) or {}
-            state = data.get("state")
-
-        if state is not None and symbol == "":
-            try:
-                state_obj = json.loads(state) if isinstance(state, str) else state
-                if isinstance(state_obj, dict):
-                    symbol = str(state_obj.get("symbol") or "")
-            except (TypeError, ValueError, json.JSONDecodeError):
-                symbol = ""
-
-        if (
-            protocol_client_id == ""
-            or protocol_user_id == ""
-            or chart_id == ""
-            or layout_id == ""
-            or state is None
-        ):
-            return {
-                "status": "error",
-                "error": "invalid_drawing_request",
-                "message": "client, user, chart, layout and state are required",
-            }, 422
-
-        try:
-            client_id, user_id = resolve_storage_owner(
-                protocol_client_id, protocol_user_id, current_user.get_id()
-            )
-            payload = normalize_drawing_payload(
-                db.tv_storage_policy,
-                client_id=client_id,
-                user_id=user_id,
-                layout_id=layout_id,
-                chart_id=chart_id,
-                symbol=symbol,
-                state=state,
-            )
-        except TVStorageError as error:
-            return {"status": "error", "error": error.code, "message": str(error)}, 422
-
-        request_id = uuid.uuid4().hex
-        try:
-            saved = db.tv_drawing_save_or_update(**payload)
-        except TVStorageError as error:
-            return {"status": "error", "error": error.code, "message": str(error)}, 422
-        except Exception:
-            __log.exception("drawing save failed request_id=%s", request_id)
-            return {
-                "status": "error",
-                "error": "drawing_save_failed",
-                "request_id": request_id,
-            }, 500
-        if saved is not True:
-            __log.error("drawing save was not confirmed request_id=%s", request_id)
-            return {
-                "status": "error",
-                "error": "drawing_save_failed",
-                "request_id": request_id,
-            }, 500
-        return {"status": "ok"}
-
-    # 股票涨跌幅
-    @app.route("/ticks", methods=["POST"])
-    @login_required
-    def ticks():
-        try:
-            tick_request = parse_tick_request(
-                request.form.get("market"),
-                request.form.get("codes"),
-                allowed_markets=market_frequencys.keys(),
-                max_codes=int(security_overrides.get("WEB_TICKS_MAX_CODES", getattr(config, "WEB_TICKS_MAX_CODES", 200))),
-                max_code_bytes=int(security_overrides.get("WEB_TICKS_MAX_CODE_BYTES", getattr(config, "WEB_TICKS_MAX_CODE_BYTES", 128))),
-            )
-            tick_rate_limiter.check(request.remote_addr or "unknown")
-        except TickRateLimitError as exc:
-            return {"error": exc.code, "message": str(exc)}, exc.http_status
-        except TickRequestError as exc:
-            return {"error": exc.code, "message": str(exc)}, exc.http_status
-
-        try:
-            ex = get_exchange(Market(tick_request.market))
-            stock_ticks = tick_provider_caller.call(ex.ticks, list(tick_request.codes))
-            now_trading = any(
-                ex.now_trading(code) for code in tick_request.codes
-            )
-            res_ticks = [
-                {
-                    "code": code,
-                    "price": tick.last,
-                    "rate": (
-                        None
-                        if tick.rate is None
-                        else round(float(tick.rate), 2)
-                    ),
-                }
-                for code, tick in stock_ticks.items()
-            ]
-            return {"now_trading": now_trading, "ticks": res_ticks}
-        except (TickProviderBusyError, TickProviderTimeoutError) as exc:
-            return {"error": exc.code, "message": str(exc), "now_trading": False, "ticks": []}, exc.http_status
-        except TickProviderCallError as exc:
-            __log.exception("tick provider call failed")
-            return {"error": exc.code, "message": "tick provider call failed", "now_trading": False, "ticks": []}, exc.http_status
-        except Exception:
-            __log.exception("tick response conversion failed")
-            return {"error": "tick_provider_failed", "message": "tick provider call failed", "now_trading": False, "ticks": []}, 502
-
-    # 获取自选组列表
-    @app.route("/get_zixuan_groups/<market>")
-    @login_required
-    def get_zixuan_groups(market):
-        zx = ZiXuan(market)
-        groups = zx.get_zx_groups()
-        return groups
-
-    # 获取自选组的股票
-    @app.route("/get_zixuan_stocks/<market>/<group_name>")
-    @login_required
-    def get_zixuan_stocks(market, group_name):
-        zx = ZiXuan(market)
-        stock_list = zx.zx_stocks(group_name)
-        return {"code": 0, "msg": "", "count": len(stock_list), "data": stock_list}
-
-    @app.route("/get_stock_zixuan/<market>/<code>")
-    @login_required
-    def get_stock_zixuan(market, code: str):
-        code = code.replace("__", "/")  # 数字货币特殊处理
-        zx = ZiXuan(market)
-        zx_groups = zx.query_code_zx_names(code)
-        return zx_groups
-
-    @app.route("/zixuan_group/<market>", methods=["GET"])
-    @login_required
-    def zixuan_group_view(market):
-        zx = ZiXuan(market)
-        zx_groups = zx.get_zx_groups()
-        return render_template("zixuan.html", market=market, zx_groups=zx_groups)
-
-    @app.route("/opt_zixuan_group/<market>", methods=["POST"])
-    @login_required
-    def opt_zixuan_group(market):
-        """
-        操作自选组
-        """
-        opt = request.form["opt"]
-        zx_group = request.form["zx_group"]
-        zx = ZiXuan(market)
-        if opt == "DEL":
-            return {"ok": zx.del_zx_group(zx_group)}
-        else:
-            return {"ok": zx.add_zx_group(zx_group)}
-
-    @app.route("/zixuan_opt_export", methods=["GET"])
-    @login_required
-    def opt_zixuan_export():
-        """导出自选组；响应使用请求私有内存流，不写共享临时文件。"""
-        market = request.args.get("market")
-        zx_group = request.args.get("zx_group")
-        zx = ZiXuan(market)
-        output = export_watchlist_text(zx.zx_stocks(zx_group)).encode("utf-8")
-        return send_file(
-            BytesIO(output),
-            mimetype="text/plain; charset=utf-8",
-            as_attachment=True,
-            download_name="zixuan_export.txt",
-            max_age=0,
-        )
-
-    @app.route("/zixuan_opt_import", methods=["POST"])
-    @login_required
-    def opt_zixuan_import():
-        """导入经过大小、编码、行数与字段边界校验的 UTF-8 文本。"""
-        market = request.form.get("market", "")
-        zx_group = request.form.get("zx_group", "").strip()
-        upload = request.files.get("file")
-        if upload is None or not upload.filename:
-            return {"ok": False, "msg": "请选择导入文件"}, 400
-        if not upload.filename.lower().endswith(".txt"):
-            return {"ok": False, "msg": "只允许上传 .txt 文件"}, 422
-        if not zx_group or len(zx_group) > 100:
-            return {"ok": False, "msg": "自选组名称无效"}, 422
-        try:
-            ex = get_exchange(Market(market))
-            market_all_stocks = ex.all_stocks()
-            entries = parse_watchlist_stream(
-                upload.stream,
-                market=market,
-                available_codes=(stock["code"] for stock in market_all_stocks),
-                max_bytes=max_upload_bytes,
-                max_lines=max_watchlist_lines,
-                max_line_bytes=max_watchlist_line_bytes,
-            )
-        except (ValueError, KeyError, WatchlistTransferError) as exc:
-            status_code = getattr(exc, "status_code", 422)
-            return {"ok": False, "msg": str(exc) or "导入文件无效"}, status_code
-
-        zx = ZiXuan(market)
-        for entry in entries:
-            zx.add_stock(zx_group, entry.code, entry.name)
-        return {"ok": True, "msg": f"成功导入 {len(entries)} 条记录"}
-
-    # 设置股票的自选组
-    @app.route("/set_stock_zixuan", methods=["POST"])
-    @login_required
-    def set_stock_zixuan():
-        market = request.form["market"]
-        opt = request.form["opt"]
-        group_name = request.form["group_name"]
-        code = request.form["code"]
-        zx = ZiXuan(market)
-        if opt == "DEL":
-            res = zx.del_stock(group_name, code)
-        elif opt == "ADD":
-            res = zx.add_stock(group_name, code, None)
-        elif opt == "COLOR":
-            color = request.form["color"]
-            res = zx.color_stock(group_name, code, color)
-        elif opt == "SORT":
-            direction = request.form["direction"]
-            if direction == "top":
-                res = zx.sort_top_stock(group_name, code)
-            else:
-                res = zx.sort_bottom_stock(group_name, code)
-        else:
-            res = False
-
-        return {"ok": res}
-
-    def _guard_task(task_obj):
-        if isinstance(task_obj, _UnavailableTasks):
-            return _task_error_response(task_obj.error)
-        if isinstance(task_obj, _LazyTasks):
-            task_obj._load()
-            if task_obj.error is not None:
-                return _task_error_response(task_obj.error)
-        return None
-
-    # 警报提醒列表
-    @app.route("/alert_list/<market>")
-    @login_required
-    def alert_list(market):
-        task_error = _guard_task(_alert_tasks)
-        if task_error is not None:
-            return {"code": 1, "msg": task_error["msg"], "count": 0, "data": []}
-        al = _alert_tasks.task_list(market)
-        al = [
-            {
-                "id": _l.id,
-                "market": _l.market,
-                "task_name": _l.task_name,
-                "zx_group": _l.zx_group,
-                "interval_minutes": _l.interval_minutes,
-                "frequency": _l.frequency,
-                "strategy_config": _l.strategy_config,
-                "strategy_memo": _l.strategy_memo,
-                "is_send_msg": _l.is_send_msg,
-                "is_run": _l.is_run,
-            }
-            for _l in al
-        ]
-        return {"code": 0, "msg": "", "count": len(al), "data": al}
-
-    # 警报编辑页面
-    @app.route("/alert_edit/<market>/<id>")
-    @login_required
-    def alert_edit(market, id):
-        task_error = _guard_task(_alert_tasks)
-        if task_error is not None:
-            return task_error
-
-        strategy_registry = getattr(config, "ALERT_STRATEGIES", {})
-        try:
-            alert_strategies = registered_strategy_choices(strategy_registry)
-        except (StrategyRegistryError, ValueError, TypeError) as error:
-            return {"ok": False, "msg": f"ALERT_STRATEGIES 配置错误：{error}"}
-
-        default_strategy_id = (
-            alert_strategies[0].strategy_id if alert_strategies else ""
-        )
-        alert_config = {
-            "id": "",
-            "market": market,
-            "task_name": "",
-            "zx_group": "我的关注",
-            "interval_minutes": 5,
-            "frequency": "5m",
-            "strategy_id": default_strategy_id,
-            "strategy_kwargs": "{}",
-            "strategy_memo": "",
-            "legacy_strategy_path": "",
-            "unavailable_strategy_id": "",
-            "is_send_msg": 1,
-            "is_run": 1,
-        }
-        if id != "0":
-            _alert_config = _alert_tasks.alert_get(id)
-            if _alert_config is not None:
-                try:
-                    parameters = parse_strategy_parameters(
-                        _alert_config.strategy_config or "{}"
-                    )
-                except StrategyStorageValidationError:
-                    parameters = StrategyParameters()
-
-                strategy_id = parameters.strategy_id
-                legacy_strategy_path = parameters.strategy_path
-                unavailable_strategy_id = ""
-                if strategy_id and strategy_id not in strategy_registry:
-                    unavailable_strategy_id = str(strategy_id)
-                    strategy_id = ""
-                if not strategy_id and legacy_strategy_path:
-                    strategy_id = (
-                        find_registered_strategy_id_by_path(
-                            strategy_registry, legacy_strategy_path
-                        )
-                        or ""
-                    )
-                alert_config = {
-                    "id": _alert_config.id,
-                    "market": _alert_config.market,
-                    "task_name": _alert_config.task_name,
-                    "zx_group": _alert_config.zx_group,
-                    "interval_minutes": _alert_config.interval_minutes,
-                    "frequency": _alert_config.frequency,
-                    "strategy_id": strategy_id,
-                    "strategy_kwargs": json.dumps(
-                        parameters.kwargs, ensure_ascii=False
-                    ),
-                    "strategy_memo": _alert_config.strategy_memo,
-                    "legacy_strategy_path": (
-                        legacy_strategy_path if not strategy_id else ""
-                    ),
-                    "unavailable_strategy_id": unavailable_strategy_id,
-                    "is_send_msg": _alert_config.is_send_msg,
-                    "is_run": _alert_config.is_run,
-                }
-
-        zx = ZiXuan(market)
-        zixuan_groups = zx.zixuan_list
-        frequencys = get_exchange(Market(market)).support_frequencys()
-
-        return render_template(
-            "alert.html",
-            zixuan_groups=zixuan_groups,
-            frequencys=frequencys,
-            alert_strategies=alert_strategies,
-            **alert_config,
-        )
-
-    @app.route("/alert_save", methods=["POST"])
-    @login_required
-    def alert_save():
-        task_error = _guard_task(_alert_tasks)
-        if task_error is not None:
-            return task_error
-
-        strategy_id = request.form.get("strategy_id", "").strip()
-        if strategy_id == "":
-            return {"ok": False, "msg": "请选择已注册策略"}
-
-        try:
-            strategy_kwargs = parse_strategy_kwargs(request.form.get("strategy_kwargs"))
-        except StrategyStorageValidationError as error:
-            return {"ok": False, "msg": str(error)}
-
-        strategy_registry = getattr(config, "ALERT_STRATEGIES", {})
-        try:
-            validate_registered_strategy(
-                strategy_registry, strategy_id, strategy_kwargs
-            )
-        except Exception as error:
-            # Validation may import a trusted registry module. Surface any configuration
-            # or import failure as a form error instead of returning a 500 response.
-            return {"ok": False, "msg": f"策略配置无效：{error}"}
-
-        try:
-            interval_minutes = int(request.form.get("interval_minutes", "5"))
-            is_send_msg = int(request.form.get("is_send_msg", "1"))
-            is_run = int(request.form.get("is_run", "1"))
-        except ValueError as error:
-            return {"ok": False, "msg": f"数值字段格式错误：{error}"}
-
-        try:
-            strategy_config = build_strategy_config(strategy_id, strategy_kwargs)
-            strategy_memo = normalize_strategy_memo(
-                request.form.get("strategy_memo", "")
-            )
-        except StrategyStorageValidationError as error:
-            return {"ok": False, "msg": str(error)}
-        alert_config = {
-            "id": request.form.get("id", ""),
-            "market": request.form.get("market", ""),
-            "task_name": request.form.get("task_name", ""),
-            "interval_minutes": interval_minutes,
-            "zx_group": request.form.get("zx_group", ""),
-            "frequency": request.form.get("frequency", ""),
-            "strategy_config": strategy_config,
-            "strategy_memo": strategy_memo,
-            "is_send_msg": is_send_msg,
-            "is_run": is_run,
-        }
-        _alert_tasks.alert_save(alert_config)
-        return {"ok": True}
-
-    @app.route("/alert_del/<id>", methods=["POST"])
-    @login_required
-    def alert_del(id):
-        task_error = _guard_task(_alert_tasks)
-        if task_error is not None:
-            return task_error
-        res = _alert_tasks.alert_del(id)
-        return {"ok": res}
-
-    @app.route("/alert_records/<market>")
-    @login_required
-    def alert_records(market):
-        task_name = request.args.get("task_name")
-        records = db.alert_record_query(market, task_name)
-        rls = [
-            {
-                "event_type": _r.event_type,
-                "action": _r.action,
-                "score": _r.score,
-                "event_time": _r.event_time,
-                "msg": _r.alert_msg,
-                "code": _r.stock_code,
-                "name": _r.stock_name,
-                "frequency": _r.frequency,
-                "task_name": _r.task_name,
-                "datetime_str": fun.datetime_to_str(_r.alert_dt),
-            }
-            for _r in records
-        ]
-        return {
-            "code": 0,
-            "msg": "",
-            "count": len(rls),
-            "data": rls,
-        }
-
-    @app.route("/jobs")
-    @login_required
-    def jobs():
-        return render_template("jobs.html", jobs=scheduler_status_store.read())
-
-    @app.route("/xuangu/task_list/<market>")
-    @login_required
-    def xuangu_task_list(market):
-        task_error = _guard_task(_xuangu_tasks)
-        if task_error is not None:
-            return task_error
-        # 获取自选组
-        zx = ZiXuan(market)
-        zixuan_groups = zx.zixuan_list
-
-        # 交易所支持周期
-        frequencys = get_exchange(Market(market)).support_frequencys()
-
-        # 选股配置
-        xuangu_task_configs = _xuangu_tasks.xuangu_task_config_list()
-        xuangu_task_list = {
-            _k: {**_v, "name": _v.get("name", _k)}
-            for _k, _v in xuangu_task_configs.items()
-        }
-
-        # task_memo
-        task_infos = {
-            _k: {
-                "task_memo": _v.get("task_memo", _v.get("description", "")),
-                "frequency_memo": _v.get("frequency_memo", "自定义策略周期"),
-            }
-            for _k, _v in xuangu_task_list.items()
-        }
-
-        return render_template(
-            "xuangu_list.html",
-            market=market,
-            tasks=xuangu_task_list,
-            task_infos=task_infos,
-            zixuan_groups=zixuan_groups,
-            frequencys=frequencys,
-        )
-
-    @app.route("/xuangu/task_add", methods=["POST"])
-    @login_required
-    def xuangu_task_add():
-        task_error = _guard_task(_xuangu_tasks)
-        if task_error is not None:
-            return task_error
-        market = request.form["market"]
-        task_name = request.form["task_name"]
-        frequencys = request.form["frequencys"]
-        src_zx_group = request.form["src_zx_group"]
-        target_zx_group = request.form.get("target_zx_group", "").strip()
-        frequencys = frequencys.split(",")
-        if task_name not in _xuangu_tasks.xuangu_task_config_list().keys():
-            return {"ok": False, "msg": "选股任务不存在"}
-
-        allow_freq_num = _xuangu_tasks.xuangu_task_config_list()[task_name].get(
-            "frequency_num", len(frequencys)
-        )
-        if len(frequencys) != allow_freq_num:
-            return {
-                "ok": False,
-                "msg": f"选股周期错误，该任务可选周期数量 : {allow_freq_num}",
-            }
-
-        run_res = _xuangu_tasks.run_xuangu(
-            market, task_name, frequencys, src_zx_group, target_zx_group
-        )
-
-        return {
-            "ok": run_res,
-            "msg": "选股任务已存在，请在当前任务中查看任务" if run_res is False else "",
-        }
-
-    @app.route("/setting", methods=["GET"])
-    @login_required
-    def setting():
-        # Never send a stored secret back to the browser.  The page only receives a
-        # boolean so it can explain that leaving the password field blank keeps it.
-        proxy = db.cache_get("req_proxy")
-        secret_store = ManagedSecretStore(get_data_path())
-        fs_setting, migrated = migrate_feishu_settings(
-            db.cache_get("fs_keys"),
-            store=secret_store,
-        )
-        if migrated:
-            db.cache_set("fs_keys", fs_setting)
-        set_config = {
-            "fs_app_id": fs_setting.get("fs_app_id", ""),
-            "fs_app_secret_configured": feishu_secret_is_configured(
-                fs_setting, store=secret_store
-            ),
-            "fs_user_id": fs_setting.get("fs_user_id", ""),
-            "proxy_host": proxy.get("host", "") if proxy else "",
-            "proxy_port": proxy.get("port", "") if proxy else "",
-        }
-        return (
-            render_template("setting.html", **set_config),
-            200,
-            {"Cache-Control": "no-store", "Pragma": "no-cache"},
-        )
-
-    @app.route("/setting/save", methods=["POST"])
-    @login_required
-    def setting_save():
-        proxy = {
-            "host": request.form.get("proxy_host", "").strip(),
-            "port": request.form.get("proxy_port", "").strip(),
-        }
-        secret_store = ManagedSecretStore(get_data_path())
-        existing, migrated = migrate_feishu_settings(
-            db.cache_get("fs_keys"), store=secret_store
-        )
-        if migrated:
-            db.cache_set("fs_keys", existing)
-        fs_keys, superseded_reference = merge_feishu_settings(
-            existing,
-            app_id=request.form.get("fs_app_id"),
-            app_secret=request.form.get("fs_app_secret"),
-            user_id=request.form.get("fs_user_id"),
-            store=secret_store,
-        )
-        db.cache_set("req_proxy", proxy)
-        db.cache_set("fs_keys", fs_keys)
-        retire_superseded_feishu_secret(secret_store, superseded_reference)
-
-        return {"ok": True}, 200, {"Cache-Control": "no-store"}
-
-    @app.route("/a/bkgn_list", methods=["GET"])
-    @login_required
-    def a_bkgn_list():
-        """
-        获取沪深a股市场的板块列表
-        """
-        stock_bkgn = StocksBKGN()
-        bkgn_infos = stock_bkgn.file_bkgns()
-        all_hy_names = bkgn_infos["hys"]
-        all_gn_names = bkgn_infos["gns"]
-
-        res_bkgn_list = []
-        for _hy in all_hy_names:
-            res_bkgn_list.append(
-                {
-                    "type": "hy",
-                    "bkgn_name": f"行业:{_hy}",
-                    "bkgn_code": _hy,
-                }
-            )
-        for _gn in all_gn_names:
-            res_bkgn_list.append(
-                {
-                    "type": "gn",
-                    "bkgn_name": f"概念:{_gn}",
-                    "bkgn_code": _gn,
-                }
-            )
-        return {
-            "code": 0,
-            "msg": "",
-            "data": res_bkgn_list,
-            "count": len(res_bkgn_list),
-        }
-
-    @app.route("/a/bkgn_codes", methods=["POST"])
-    @login_required
-    def a_bkgn_codes():
-        bkgn_type = request.form["bkgn_type"]
-        bkgn_code = request.form["bkgn_code"]
-        stock_bkgn = StocksBKGN()
-
-        if bkgn_type == "hy":
-            codes = stock_bkgn.ths_to_tdx_codes(stock_bkgn.get_codes_by_hy(bkgn_code))
-        elif bkgn_type == "gn":
-            codes = stock_bkgn.ths_to_tdx_codes(stock_bkgn.get_codes_by_gn(bkgn_code))
-        else:
-            codes = []
-
-        ex = get_exchange(Market.A)
-        stocks = {}
-        for _code in codes:
-            _stock = ex.stock_info(_code)
-            if _stock is not None:
-                stocks[_code] = _stock
-
-        return {"code": 0, "msg": "", "data": stocks, "count": len(stocks)}
-
+    services = WebAppServices.create(
+        web_host=web_host,
+        login_password=login_password,
+        login_password_hash=login_password_hash,
+        remember_days=remember_days,
+        auto_login=auto_login,
+        csrf_trusted_origins=csrf_trusted_origins,
+        login_limiter=login_limiter,
+        storage_principal=storage_principal,
+        max_upload_bytes=max_upload_bytes,
+        max_watchlist_lines=max_watchlist_lines,
+        max_watchlist_line_bytes=max_watchlist_line_bytes,
+        tick_rate_limiter=tick_rate_limiter,
+        tick_provider_caller=tick_provider_caller,
+        scheduler_status_store=scheduler_status_store,
+        history_request_tracker=history_request_tracker,
+        footprint_cache=TTLCache(ttl_seconds=10.0),
+        frequency_maps=frequency_maps,
+        resolution_maps=resolution_maps,
+        market_frequencies=market_frequency_map,
+        market_default_codes=market_default_code_map,
+        market_catalog=market_catalog_items,
+        default_market=default_market_key,
+        logger=logger,
+        alert_tasks=alert_tasks,
+        xuangu_tasks=xuangu_tasks,
+        guard_task=guard_task,
+        security_overrides=security_overrides,
+        database=db,
+        get_exchange=get_exchange,
+        config=config,
+        fun=fun,
+        zixuan_factory=ZiXuan,
+        stocks_bkgn_factory=StocksBKGN,
+        secret_store_factory=ManagedSecretStore,
+        get_data_path=get_data_path,
+    )
+    install_web_services(app, services)
+    register_blueprints(app)
     return app

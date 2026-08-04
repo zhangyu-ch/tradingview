@@ -553,3 +553,17 @@
 - ProviderBarPayload 负责源字段成组校验，KlineBar 负责规范化后的 code/time/OHLCV 不变量；二者分层避免在 timestamp 尚未转换时伪装成 canonical bar。
 - OrderRequest 必须明确声明它只是意图而非权限；TradeDecision→OrderRequest 仍要求调用方显式提供数量/价格，不能从 score 或 position_rate 猜出真实委托。
 - Fill/OrderState 的不可变 apply_fill 可固定部分成交和加权均价语义，但不替代持久化券商对账状态机；CR-03 的实盘 fail-closed 不变。
+
+
+## LO-01 app factory 职责基线
+- 当前工厂 1,516 行、35 个路由/钩子，真正的 divergent change 不是 Flask 对象创建本身，而是路由实现、业务依赖所有权和生命周期同时藏在同一闭包。
+- 蓝图拆分必须保持 URL/HTTP 契约，依赖通过 `app.extensions` 中的单一 service container 获取，避免蓝图重新直接构造 scheduler、限流器、任务或 metadata。
+- 第 81 条 MX-12 与任务 lazy fallback 有依赖关系，但需保持独立提交：LO-01 只移动/注入现有任务服务，MX-12 再删除模块专用遗留分支。
+
+
+## LO-01 Flask composition root 最终边界
+- Blueprint 的价值不是换文件名，而是让每个功能路由拥有稳定模块边界；所有跨功能协作者通过每个 app 独立的 extension 容器访问，禁止 Blueprint 重新 import/构造全局 DB、provider 或任务对象。
+- `frozen` dataclass 只冻结属性赋值，不能冻结嵌套 list/dict；共享市场 metadata 需要 MappingProxyType + tuple 的深度投影，避免测试或多 app 后续修改输入对象污染运行状态。
+- 工厂可以保留配置/安全/生命周期装配，但不应持有业务 route/hook。测试必须验证真实 Blueprint 函数，而不是为了兼容旧测试把路由再复制回工厂。
+- 可选搜索依赖 `pinyin` 应在实际搜索调用点惰性导入；应用启动不应因未使用功能的依赖缺失而失败。
+- Secret/质量门禁也必须跟随职责迁移：以 AST 定位 settings Blueprint 的 `setting()`，而不是依赖旧 route 文本边界。

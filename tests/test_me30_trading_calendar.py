@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from test_support.web_routes import route_source
+
 ROOT = Path(__file__).resolve().parents[1]
 CALENDAR = ROOT / "src/tradingview_zy/trading_calendar.py"
 EXCHANGE_ROOT = ROOT / "src/tradingview_zy/exchange"
@@ -213,7 +215,7 @@ def test_all_reachable_providers_expose_instrument_aware_bool_contract() -> None
 
 
 def test_web_and_monitoring_callers_pass_concrete_codes_and_keep_bad_targets() -> None:
-    web_source = WEB_APP.read_text(encoding="utf-8")
+    web_source = route_source("tv_history") + route_source("ticks")
     alert_source = ALERT_TASKS.read_text(encoding="utf-8")
 
     assert "ex.now_trading(code) is False" in web_source

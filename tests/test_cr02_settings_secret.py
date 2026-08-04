@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.web_routes import route_source
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
@@ -105,9 +107,7 @@ def test_blank_feishu_secret_preserves_reference_and_non_blank_rotates(tmp_path)
 
 
 def test_setting_page_source_never_embeds_or_logs_the_saved_secret():
-    app_source = (
-        ROOT / "web" / "tradingview_zy_chart" / "cl_app" / "__init__.py"
-    ).read_text(encoding="utf-8")
+    get_block = route_source("setting")
     template_source = (
         ROOT
         / "web"
@@ -117,13 +117,11 @@ def test_setting_page_source_never_embeds_or_logs_the_saved_secret():
         / "setting.html"
     ).read_text(encoding="utf-8")
 
-    get_start = app_source.index('def setting():')
-    save_route = app_source.index('@app.route("/setting/save"', get_start)
-    get_block = app_source[get_start:save_route]
-
     assert '"fs_app_secret":' not in get_block
     assert "fs_app_secret_configured" in get_block
-    assert '"Cache-Control": "no-store"' in get_block
+    normalized_get_block = get_block.replace("'", '"')
+    assert '"Cache-Control": "no-store"' in normalized_get_block
+    assert '"Pragma": "no-cache"' in normalized_get_block
     assert 'type="password" name="fs_app_secret" value=""' in template_source
     assert "{{ fs_app_secret }}" not in template_source
     assert "console.log(data.field)" not in template_source

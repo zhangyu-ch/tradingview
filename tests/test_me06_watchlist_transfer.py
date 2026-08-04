@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.web_routes import route_source
+
 from tradingview_zy.watchlist_transfer import (
     WatchlistTooLargeError,
     WatchlistTransferError,
@@ -47,7 +49,7 @@ def test_import_rejects_size_line_count_line_length_and_encoding() -> None:
 
 def test_web_route_uses_no_shared_file_or_unbounded_read() -> None:
     source = (ROOT / "web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
-    route = source[source.index('@app.route("/zixuan_opt_export"'):source.index("# 设置股票的自选组")]
+    route = route_source("opt_zixuan_export") + route_source("opt_zixuan_import")
     assert "zx.txt" not in route
     assert ".save(" not in route
     assert ".readlines(" not in route

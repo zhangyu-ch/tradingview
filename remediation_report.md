@@ -90,7 +90,7 @@
 |77|`LO-08`|低|Documentation|🟡 部分修复|已完成（运行事实、支持矩阵与历史研究目录已对齐）|通过（7 项文档专项、50 项严格相邻及 626 项可运行仓库回归通过；文档漂移已变成 CI 可执行失败）|`docs(LO-08)`|
 |78|`LO-03`|低|Domain Model|🟡 部分修复|已完成（市场、周期与订单代码统一领域化）|通过（11 项专项、193 项严格相邻、637 项可运行仓库回归及全部静态门禁通过）|`refactor(LO-03)`|
 |79|`LO-04`|低|Domain Model|🟡 部分修复|已完成（不可变 provider、策略与订单数据契约）|通过（9 项专项、142 项严格相邻与 646 项可运行仓库回归通过；环境阻断已单独记录）|`refactor(LO-04)`|
-|80|`LO-01`|低|Maintainability|🟡 部分修复|待处理|—|—|
+|80|`LO-01`|低|Maintainability|🟡 部分修复|已完成（Flask 工厂拆分为功能蓝图与 app-scoped 服务容器）|通过（5 项结构专项、214 项严格相邻、651 项可运行仓库回归及全部静态门禁通过）|`refactor(LO-01)`|
 |81|`MX-12`|低|Architecture / Spec|🟡 部分修复|待处理|—|—|
 
 ## 逐条记录
@@ -1986,16 +1986,23 @@
 ### 80. LO-01 · Flask app factory 承担过多职责（Divergent Change）
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 低 / Maintainability
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（Flask 工厂拆分为功能蓝图与 app-scoped 服务容器）
+- **问题是否存在：** 是。修复前 `cl_app/__init__.py` 有 1,516 行，`create_app()` 内嵌认证、页面、UDF、TradingView 存储、自选、监控/选股、设置、CSRF、限流和调度状态等 35 个路由/钩子，并通过闭包直接捕获 DB、provider、任务与缓存对象。
+- **a. 这个问题是什么？** 认证、行情、存储、任务和设置任一功能变化都必须修改同一个工厂；路由依赖既不是构造参数也不是 app extension，测试只能解析工厂内部函数。结果是职责边界模糊、启动副作用难隔离、同进程多 app 共享状态风险和大量 Shotgun/Divergent Change。
+- **b. 我是怎么修复的？** 新增 `WebAppServices`，以 `frozen=True, slots=True` 容器通过 `app.extensions` 显式发布数据库、provider factory、任务代理、限流器、市场元数据和安全策略，并深度冻结共享市场映射/catalog。把 37 个公开路由拆到 `core/auth/pages/udf/storage/watchlist/tasks/settings` 八个真实 Flask Blueprint；`create_app()` 只负责配置、安全边界、协作者装配、服务发布和 Blueprint 注册，降到 351 行且不再内嵌 route/hook。`pinyin` 只在 search 路由调用时惰性导入。新增 `test_support.web_routes`，让历史契约测试直接定位和隔离执行真实 Blueprint 路由；Secret checker 改为 AST 审计 settings Blueprint。
+- **c. 修复后是否验证？** 是。
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 5 项 LO-01 专项验证工厂行数、零内嵌路由/钩子、37 个路由八蓝图归属、Blueprint 不直接构造 DB/provider/ZiXuan/StocksBKGN，以及 service container 安装与深度不可变元数据。
+  - 把 UDF、存储、授权、CSRF、Secret、自选、监控/选股、交易日历、限流和 payload 的既有测试迁移到 Blueprint 路由；严格相邻组合 214 passed（`-W error`）。
+  - 受控临时 config 下运行全部可运行仓库回归：651 passed、5 skipped、8 deselected；8 个节点仍因当前容器缺少 `pinyin` 在旧 package-import 测试入口阻断，完整回测收集仍受缺少 `empyrical` 限制。
+  - 执行 compileall、repository/readability/quality、Secret exposure/reference、dependency/supply-chain、FIFO、Node、JSON、diff 与历史 CRLF 门禁，全部通过。
+- **e. 验证是否通过？** 通过。工厂从业务路由宿主收敛为 composition root；功能边界、依赖所有权和测试入口均已显式化。
+- **提交：** refactor(LO-01): split Flask app into feature blueprints
+- **修改文件：** `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/web_services.py`, `web/tradingview_zy_chart/cl_app/blueprints/`, `test_support/web_routes.py`, `script/remediation/check_secret_exposure.py`, `tests/test_lo01_app_factory_blueprints.py` 及迁移到 Blueprint 路由的历史 Web 契约测试，另含规划/台账文件。
+- **验证限制：**
+  - 当前容器没有 Flask/Flask-Login/APScheduler/pinyin，未运行真实 WSGI/浏览器启动；路由隔离执行和托管 CI 完整环境负责补充，未把环境阻断伪报为通过。
+  - 工厂仍暂时保留 legacy task fallback helper/class，严格留给下一条 MX-12 独立提交处理。
+  - 可变数据库、任务和限流协作者按设计由 app 独占引用；只有共享元数据被深度冻结。
 - **原报告最新结论：** cl_app/__init__.py 继续集中认证、调度、UDF、存储、自选、监控和选股；文件职责没有拆分。
 - **原报告建议：** 按 auth/udf/storage/watchlist/tasks/health 蓝图拆分；依赖通过 app extensions 注入。
 

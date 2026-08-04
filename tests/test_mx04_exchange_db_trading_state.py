@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from test_support.web_routes import route_source
+
 ROOT = Path(__file__).resolve().parents[1]
 EXCHANGE_DB = ROOT / "src/tradingview_zy/exchange/exchange_db.py"
 
@@ -54,9 +56,7 @@ def test_callers_share_the_same_false_semantics() -> None:
     alert_source = (
         ROOT / "web/tradingview_zy_chart/cl_app/alert_tasks.py"
     ).read_text(encoding="utf-8")
-    web_source = (
-        ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
-    ).read_text(encoding="utf-8")
+    web_source = route_source("tv_history") + route_source("ticks")
     frontend_source = (
         ROOT / "web/tradingview_zy_chart/cl_app/static/js/zixuan.js"
     ).read_text(encoding="utf-8")

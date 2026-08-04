@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -36,24 +37,28 @@ def validate(app_source: str, template_source: str) -> list[str]:
         errors.append("setting form fields are written to the browser console")
 
     try:
-        get_start = app_source.index("def setting():")
-        save_start = app_source.index('@app.route("/setting/save"', get_start)
-        get_block = app_source[get_start:save_start]
-    except ValueError:
-        errors.append("cannot locate setting GET/save route boundary")
+        tree = ast.parse(app_source)
+        setting_function = next(
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "setting"
+        )
+        get_block = ast.get_source_segment(app_source, setting_function) or ""
+    except (SyntaxError, StopIteration):
+        errors.append("cannot locate setting GET route")
     else:
         if re.search(r'["\']fs_app_secret["\']\s*:', get_block):
             errors.append("setting GET route returns fs_app_secret")
         if "fs_app_secret_configured" not in get_block:
             errors.append("setting GET route must expose only configured/not-configured state")
-        if '"Cache-Control": "no-store"' not in get_block:
+        normalized_get_block = get_block.replace("'", '"')
+        if '"Cache-Control": "no-store"' not in normalized_get_block:
             errors.append("setting GET response must be non-cacheable")
 
     return errors
 
 
 def validate_root(root: Path) -> list[str]:
-    app = root / "web/tradingview_zy_chart/cl_app/__init__.py"
+    app = root / "web/tradingview_zy_chart/cl_app/blueprints/settings.py"
     template = root / "web/tradingview_zy_chart/cl_app/templates/setting.html"
     return validate(
         app.read_text(encoding="utf-8"),

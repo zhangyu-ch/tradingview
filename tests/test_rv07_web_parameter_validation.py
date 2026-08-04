@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.web_routes import route_source
+
 from tradingview_zy.web_api_validation import (
     WebParameterError,
     parse_bounded_text,
@@ -84,14 +86,11 @@ def test_search_text_allows_empty_query_but_bounds_controls_and_length():
     ],
 )
 def test_public_routes_use_shared_validation_before_side_effects(route_name, required_token):
-    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
-    start = source.index(f"    def {route_name}(")
-    candidates = [position for marker in ("\n    @app.route", "\n    # ") if (position := source.find(marker, start + 10)) != -1]
-    block = source[start:min(candidates)]
+    block = route_source(route_name)
     assert required_token in block
     side_effect_positions = [
         position
-        for token in ("get_exchange(", "db.")
+        for token in ("services.get_exchange(", "services.database.")
         if (position := block.find(token)) != -1
     ]
     assert side_effect_positions
@@ -100,7 +99,16 @@ def test_public_routes_use_shared_validation_before_side_effects(route_name, req
 
 
 def test_routes_expose_stable_udf_and_regular_api_errors():
-    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
+    source = (
+        route_source("tv_symbol_info")
+        + route_source("tv_symbols")
+        + route_source("tv_search")
+        + route_source("tv_history")
+        + route_source("tv_footprint")
+        + route_source("tv_timescale_marks")
+        + route_source("tv_marks")
+        + route_source("tv_del_marks")
+    ).replace("'", '"')
     assert 'return {"s": "error", "errmsg": str(exc)}' in source
     assert '"invalid_search_request"' in source
     assert '"invalid_marks_request"' in source

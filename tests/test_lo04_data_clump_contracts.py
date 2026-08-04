@@ -45,7 +45,7 @@ sys.modules[_US_HISTORY_SPEC.name] = _US_HISTORY
 _US_HISTORY_SPEC.loader.exec_module(_US_HISTORY)
 build_us_history_frame = _US_HISTORY.build_us_history_frame
 ALERT_TASKS = ROOT / "web/tradingview_zy_chart/cl_app/alert_tasks.py"
-WEB_APP = ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
+WEB_TASKS = ROOT / "web/tradingview_zy_chart/cl_app/blueprints/tasks.py"
 
 
 def test_provider_bar_payload_replaces_repeated_ohlcv_dicts_and_is_immutable() -> None:
@@ -158,7 +158,7 @@ def test_alert_runtime_and_web_edit_parse_strategy_parameters_once() -> None:
     assert "parse_strategy_parameters(" in task_source
     assert "parameters.kwargs" in task_source
     assert "json.loads(alert_config.strategy_config" not in task_source
-    web_source = WEB_APP.read_text(encoding="utf-8")
+    web_source = WEB_TASKS.read_text(encoding="utf-8")
     assert "parameters = parse_strategy_parameters(" in web_source
     assert "parameters.kwargs" in web_source
     assert "strategy_config.get(\"strategy_kwargs\"" not in web_source

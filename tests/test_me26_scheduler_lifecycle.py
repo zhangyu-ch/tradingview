@@ -136,7 +136,8 @@ def test_flask_factory_has_no_scheduler_lifecycle_side_effects() -> None:
     assert "scheduler.start()" not in source
     assert "task_cls(None)" in source
     assert "SchedulerStatusStore()" in source
-    assert "scheduler_status_store.read()" in source
+    tasks_source = (WEB / "cl_app" / "blueprints" / "tasks.py").read_text(encoding="utf-8")
+    assert "services.scheduler_status_store.read()" in tasks_source
     assert 'app.extensions["scheduler_mode"] = "external-process"' in source
     assert not any(
         isinstance(node, ast.Call)
