@@ -667,3 +667,11 @@
 - 七处统一改为 `field`，不改变 API、标题或模板语义；字段集合、可排序列与 Node 语法均纳入测试。
 - MX-07/MX-05/HI-06 组合 12 passed（-W error），CRLF 与 diff 门禁通过。
 - 待提交主题：`fix(MX-07): correct alert table field bindings`。
+
+### 问题 66：MX-10（恢复重建）
+- **状态：** complete
+- 验证结论：Charts.show_tv_chart 的实现只有 id 一个参数，但模板六个调用点仍传高度，JavaScript 静默忽略且留下无效尺寸变量，问题存在。
+- 修复：六个调用统一为单参数，删除 win_width/chart_height；容器继续持有 flex、百分比和显式高度，widget 保持 autosize；JSDoc 固化公开签名。
+- 验证：Node vm 断言运行时 arity=1，node --check、布局静态契约、CRLF 与 diff 门禁通过；MX-10/MX-05 组合 7 passed（-W error）。
+- 过程修正：首次引用不存在的 test_mx05_watchlist_timer.py，按当前目录改为 test_mx05_rate_timer.py 后复验。
+- 待提交主题：`fix(MX-10): align chart display call contract`。

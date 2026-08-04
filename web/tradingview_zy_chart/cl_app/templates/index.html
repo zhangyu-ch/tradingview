@@ -564,7 +564,6 @@
         let charts_area = $("#tv_charts_area");
         charts_area.empty();
         let win_height = window.innerHeight;
-        let win_width = charts_area.width() || window.innerWidth;
         let chart_configs = [];
         if (chart_layout_type === "single") {
           chart_configs = [{ id: "1", style: "flex:1;" }];
@@ -613,8 +612,8 @@
               win_height * 0.3 +
               'px;"></div>'
           );
-          chart_widgets.push(Charts.show_tv_chart("1", win_height * 0.7));
-          chart_widgets.push(Charts.show_tv_chart("2", win_height * 0.3));
+          chart_widgets.push(Charts.show_tv_chart("1"));
+          chart_widgets.push(Charts.show_tv_chart("2"));
         } else if (chart_layout_type === "three") {
           // 上面一行两个图
           let rowDiv = $(
@@ -635,9 +634,9 @@
               win_height / 2 +
               'px;"></div>'
           );
-          chart_widgets.push(Charts.show_tv_chart("1", win_height / 2));
-          chart_widgets.push(Charts.show_tv_chart("2", win_height / 2));
-          chart_widgets.push(Charts.show_tv_chart("3", win_height / 2));
+          chart_widgets.push(Charts.show_tv_chart("1"));
+          chart_widgets.push(Charts.show_tv_chart("2"));
+          chart_widgets.push(Charts.show_tv_chart("3"));
         } else {
           chart_configs.forEach(function (cfg, idx) {
             let div_id = "tv_chart_container_" + cfg.id;
@@ -648,17 +647,7 @@
                 (cfg.style || "") +
                 '"></div>'
             );
-            // 计算每个图表的高度/宽度
-            let chart_height =
-              chart_layout_type === "single"
-                ? win_height
-                : chart_layout_type === "vertical-2" ||
-                  chart_layout_type === "horizontal-2"
-                ? win_height / 2
-                : chart_layout_type === "four"
-                ? win_height / 2
-                : win_height;
-            chart_widgets.push(Charts.show_tv_chart(cfg.id, chart_height));
+            chart_widgets.push(Charts.show_tv_chart(cfg.id));
           });
         }
         ZiXuan.render_zixuan_opts();

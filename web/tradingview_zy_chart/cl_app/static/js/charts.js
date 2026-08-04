@@ -204,7 +204,11 @@ class ChartManager {
 
 var Charts = (function () {
   return {
-    // 图表展示
+    /**
+     * Display one autosized TradingView widget in an already-sized container.
+     * @param {string} id Stable chart/container identifier.
+     * @returns {object} The TradingView widget instance.
+     */
     show_tv_chart: function (id) {
       const chartManager = new ChartManager(id).init();
       return chartManager.widget;

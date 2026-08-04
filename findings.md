@@ -427,3 +427,8 @@
 ## MX-07 Layui 列契约
 - templet 直接读取行对象会掩盖 `field` 拼写错误；页面能显示不代表排序、字段元数据和后续组件绑定正确。
 - 前端门禁应同时校验字段集合、同一列内的 sort 绑定和 JavaScript 语法。
+
+## MX-10 图表展示参数契约
+- JavaScript 允许多余实参会掩盖调用方与实现漂移；仅靠页面“还能显示”不能证明尺寸参数生效。
+- TradingView widget 使用 autosize 时，尺寸应由已创建的容器布局负责；API 不应同时接收一个未使用的高度。
+- 前端契约门禁应同时检查调用点实参数量、运行时 function.length、容器尺寸来源和 JavaScript 语法。

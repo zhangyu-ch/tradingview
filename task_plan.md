@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 8（第 65 条 MX-07 已重建并验证，下一条为第 66 条 MX-10）
+阶段 8（第 66 条 MX-10 已重建并验证，下一条为第 67 条 NX-09）
 
 ## 各阶段
 
@@ -75,7 +75,7 @@
 - [x] 63. ME-03
 - [x] 64. MX-11
 - [x] 65. MX-07
-- [ ] 66. MX-10
+- [x] 66. MX-10
 - [ ] 67. NX-09
 - [ ] 68. NX-18
 - [ ] 69. NX-17
@@ -196,6 +196,7 @@
 | ME-01 首轮严格组合中 NX-15 旧 AST 测试未关闭源码文件，`-W error` 将 ResourceWarning 升级为 5 项失败 | 1 | 改用 `Path.read_text()` 自动关闭文件；产品实现与 4 项 ME-01 专项均未失败，随后重新执行相同组合 |
 
 | ME-03 相邻测试命令引用此前临时工作区的 `test_v6_market_registry.py`，当前权威归档不存在该文件；直接运行 ME-10 又被归档外 config.py 阻断 | 1 | 按当前测试目录改用 `test_me10_exchange_contracts.py` 与 `test_new06_db_capability_guard.py`，并仅在测试期间复制受控 `config.py.demo` |
+| MX-10 首次相邻测试命令引用不存在的 `test_mx05_watchlist_timer.py` | 1 | 对照当前测试目录改用真实 `test_mx05_rate_timer.py`，随后 7 项组合以 warnings-as-errors 通过 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

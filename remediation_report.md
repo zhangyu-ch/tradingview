@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 65
-- **待处理：** 16
+- **已完成：** 66
+- **待处理：** 15
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -76,7 +76,7 @@
 |63|`ME-03`|低|Web UDF|❌ 未修复|已完成（UDF 周期并集动态覆盖全部市场）|通过（独有纽约期货周期故障注入、真实路由 AST 及 17 项元数据/注册表相邻测试通过）|`fix(ME-03)`|
 |64|`MX-11`|低|Configuration|❌ 未修复|已完成（具体 IB 账户已移出模板）|通过（仓库受检运行路径不再含具体 IB 账户，3 项专项与 11 项 Secret 相邻测试固定防回归）|`test(MX-11)`|
 |65|`MX-07`|低|Frontend|❌ 未修复|已完成（Layui 列字段绑定修正）|通过（七处错误键全部消失，排序字段绑定、JS 语法及 12 项相邻测试通过）|`fix(MX-07)`|
-|66|`MX-10`|低|Frontend|❌ 未修复|待处理|—|—|
+|66|`MX-10`|低|Frontend|❌ 未修复|已完成（图表展示契约统一）|通过（六个调用点、运行时函数元数、布局尺寸、JavaScript 语法及 7 项相邻测试全部通过）|`fix(MX-10)`|
 |67|`NX-09`|低|Backtesting Fees|❌ 未修复|待处理|—|—|
 |68|`NX-18`|低|Frontend|❌ 未修复|待处理|—|—|
 |69|`NX-17`|低|Web UDF|❌ 未修复|待处理|—|—|
@@ -1634,16 +1634,21 @@
 ### 66. MX-10 · 图表显示函数参数契约漂移
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Frontend
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（图表展示契约统一）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** Charts.show_tv_chart 只接收一个 id 参数并依赖 TradingView autosize，但 index.html 的六个调用点继续传入第二个高度参数；JavaScript 会静默忽略该实参，同时留下未使用的 win_width 和 chart_height 计算，使调用方和实现的公开契约发生漂移。
+- **b. 我是怎么修复的？** 把六个调用点统一为单参数 Charts.show_tv_chart(id)，删除无效的 win_width/chart_height 计算；保留容器原有 flex、百分比及 7:3/三图高度布局，由容器负责尺寸、TradingView widget 继续使用 autosize。为公开方法增加 JSDoc，明确单参数和返回 widget 的契约。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 静态解析 index.html 中全部六个 Charts.show_tv_chart 调用，确认每处只有一个实参，且 chart_height/win_width 均已删除。
+  - 验证 tv_charts_area 的 100% 高度、flex 布局、四图 50% 尺寸以及 7:3/三图容器高度仍然存在，尺寸责任没有丢失。
+  - 在 Node vm 中加载真实 charts.js，断言 Charts.show_tv_chart.length === 1，并执行 node --check。
+  - 运行 MX-10 与 MX-05 前端相邻测试，结果 7 passed（-W error）；两个历史 CRLF 文件 bare-LF=0，git diff --check 通过。
+- **e. 验证是否通过？** 通过（六个调用点、运行时函数元数、布局尺寸、JavaScript 语法及 7 项相邻测试全部通过）
+- **提交：** fix(MX-10): align chart display call contract
+- **修改文件：** `web/tradingview_zy_chart/cl_app/static/js/charts.js`, `web/tradingview_zy_chart/cl_app/templates/index.html`, `tests/test_mx10_chart_display_contract.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器未启动真实 TradingView Charting Library 页面；公开函数 arity、容器尺寸来源和脚本执行契约已验证，完整浏览器 autosize/resize 行为由 ME-29 的 Chromium CI 门禁承担。
 - **原报告最新结论：** 当前 master 的相关实现路径（web/tradingview_zy_chart/cl_app/static/js/charts.js、web/tradingview_zy_chart/cl_app/templates/index.html）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 删除无效参数或让函数显式应用高度；用 TypeScript/JSDoc 固化签名。
 
