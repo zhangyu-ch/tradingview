@@ -4827,16 +4827,47 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（市场、周期与订单代码统一领域化）",
+      "problem_verified": true,
+      "problem_summary": "实际重建仓库中 Market 仍为普通 Enum，Frequency、OrderSide、PositionSide、OrderOffset、OrderStatus 等报告曾提及的领域类型并不存在；provider、策略、回测和数据库公共边界继续接受任意 market、frequency、operation 字符串。未知拼写与控制字符可能进入 SDK 或 SQL，Operation 依赖 open/close 到 buy/sell 的临时字典，provider 周期 metadata 也没有穷尽校验。问题真实存在。",
+      "fix_summary": "把 Market 改为可稳定 JSON/SQL 序列化的 StrEnum，并新增 Frequency、OrderSide、PositionSide、OrderOffset、OrderStatus、OperationAction、TradeMode 及严格 parser，覆盖当前全部 provider 周期代码和必要旧别名。MarketRegistry 启动时穷尽验证所有展示/同步周期；get_exchange 与 ContractedExchange 在 provider 构造或 SDK 调用前规范化市场和周期，并拒绝未声明周期。策略 target/context/signal、Web UDF resolution、回测 Operation/MarketDatas/Trader/费用入口以及 DB K 线表路由、查询、写入与删除统一在边界解析为领域代码，向 JSON、SDK 与 SQL 只输出稳定 `.value`；空值、非字符串、控制字符、未知拼写和未来未登记周期全部 fail-closed。",
+      "verification_performed": true,
+      "verification_method": [
+        "新增 LO-03 专项 11 项并以 warnings-as-errors 执行：验证 Market/Frequency 稳定字符串与 JSON 序列化、所有 provider support_frequencys AST 字面量均可解析、控制字符/未知值/非字符串拒绝，以及订单方向、仓位、开平、状态、操作和模式的允许别名。",
+        "使用 fake raw provider 验证非法或未支持 frequency 在 raw SDK 的 klines() 前失败；构造重复或非法 metadata 时 ContractedExchange 在 facade 发布前拒绝。",
+        "验证 strategy_target_from_stock、StrategySignal canonicalization/to_payload、未知市场 target 阶段拒绝、Web resolution 解析与 Registry 周期穷尽校验；策略和 provider 不会在非法代码上执行。",
+        "隔离加载真实 backtesting/base.py，验证 Operation、MarketDatas、Trader 和 fee_a 的兼容序列化及非法操作/市场/模式前置拒绝；完整历史回测收集仍由当前环境缺少 empyrical 阻断。",
+        "使用真实 SQLite DB 执行 K 线插入和查询，确认市场与周期按稳定 value 落库；非法市场/周期在建表、查询或写入前失败且不产生记录。",
+        "运行 LO-03 与 LO-02、LO-05、LO-07、ME-10、ME-18、ME-20、MX-18、NX-17、NX-23、RV-07 严格组合：193 passed（-W error）。",
+        "临时准备受控 config 后执行仓库级可运行回归：637 passed、5 skipped、8 deselected；8 个节点均因当前容器缺少 pinyin 在 cl_app 导入阶段阻断，完整套件另有缺少 empyrical 的回测收集阻断。",
+        "执行 compileall、支持矩阵、quality/repository/readability/dependency、Secret、supply-chain、FIFO、JSON、git diff 与全部变更 CRLF 门禁，全部通过。"
+      ],
+      "verification_result": "通过（11 项专项、193 项严格相邻、637 项可运行仓库回归及全部静态门禁通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/base.py",
+        "src/tradingview_zy/domain.py",
+        "src/tradingview_zy/market_registry.py",
+        "src/tradingview_zy/exchange/__init__.py",
+        "src/tradingview_zy/exchange/contracted.py",
+        "src/tradingview_zy/strategies/base.py",
+        "src/tradingview_zy/backtesting/base.py",
+        "src/tradingview_zy/db.py",
+        "src/tradingview_zy/web_api_validation.py",
+        "tests/test_lo03_domain_codes.py",
+        "tests/test_me18_strategy_runner_contracts.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "本条只统一公共输入、领域协议、SDK/JSON/SQL 序列化边界；第三方 SDK 内部 payload 和历史 DataFrame/dict 结构将在第 79 条 LO-04 的 Data Clumps 边界继续治理。",
+        "PositionSide 与 OrderStatus 已建立严格领域代码，但所有实盘下单仍由 CR-03 无条件 fail-closed；未执行券商状态映射或真实交易联调。",
+        "当前容器缺少 pinyin 与 empyrical；相关节点在进入本条产品断言前阻断，托管 Python 3.11 锁定环境仍要求完整 pytest。"
+      ],
+      "commit_subject": "refactor(LO-03): enforce typed market and order codes"
     }
   },
   {

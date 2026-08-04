@@ -527,3 +527,21 @@
 - README 的能力声明属于可执行安全边界：当 `order()` 全部 fail-closed 时，继续宣称“下单、撤单、交易执行”会误导部署和验收，必须改为明确“仅市场数据/研究/监控/回测，实盘关闭”。
 - 顶层 `joinquant/` 仍会被读者和工具当作活跃模块，且其中直接导入已移除的 `cl`。历史研究材料应确定性归档到 `archive/`，运行树与默认测试扫描不再看到它。
 - 手写 provider 文档会随 Registry 漂移；支持矩阵应从 `MarketSpec.providers` 和 `Capability` 生成，提交确定性 Markdown，并由无依赖 CI `--check` 拒绝 stale 文档。
+
+
+## LO-03 领域代码与序列化边界初步盘点
+- Exchange 配置模块身份应在 package import 时稳定绑定；临时改成 `get_exchange()` 内惰性解析后，测试隔离中同名 config 模块替换会让调用方 monkeypatch 与工厂读取不同对象。LO-03 仅规范化值，不改变依赖所有权；app 依赖注入留给 LO-01。
+- 未知市场现在由 `strategy_target_from_stock()` 在 target 阶段拒绝，而不是等到 K 线时区规范化后才作为 input failure；这是更早、更精确的失败域，且保证 strategy/provider 不执行。
+- 当前重建仓库的 `domain.py` 只保留 Capability/领域异常；原报告提到的 OrderSide、PositionSide、OrderStatus 等类型在实际运行树中不存在，LO-03 仍真实存在。
+- `Market` 仍是普通 Enum；策略上下文/信号/目标、回测 Operation/POSITION/Trader、DB 和 provider 调用边界大量接受任意 market/frequency/order 字符串。
+- 可闭环边界不是把所有 DataFrame/SDK 内部值对象化，而是在公共输入、注册表、策略协议、回测交易协议、DB 序列化和 provider facade 统一解析为稳定领域代码；内部仍可在序列化边界使用 `.value`。
+- 兼容策略：采用 `StrEnum`，使现有与字符串的相等比较和 JSON 序列化尽量保持；未知、控制字符、非字符串及非法状态必须在进入 SDK/SQL 前明确拒绝。
+- 当前注册表实际周期集合为 15 个稳定代码：10m、120m、15m、1m、2m、30m、3m、4h、5m、60m、d、m、q、w、y。
+
+
+## LO-03 领域代码统一最终结论
+- Primitive Obsession 的可验收边界不是把所有内部变量都改成对象，而是保证外部输入、注册表、策略协议、回测协议、provider facade 与数据库序列化只接受一组穷尽的领域代码。
+- `StrEnum` 保留旧字符串比较和 JSON 兼容，同时允许类型检查与统一 parser；在 SDK/SQL 边界输出 `.value`，避免 ORM 或第三方库依赖 Enum 实现细节。
+- 控制字符必须在 `strip()` 前拒绝，否则 `"d\n"` 会被清洗成合法周期并掩盖输入错误。
+- provider metadata 本身也属于不可信配置：重复、未知或未来周期必须在 facade 构造时失败，不能等到某次行情调用。
+- 更早失败属于正确行为：未知市场从后续 K 线 input failure 前移到 target construction failure，确保策略、provider 和数据库均未执行。

@@ -240,7 +240,7 @@ def test_optional_code_and_frequency_columns_must_match_target() -> None:
     assert "frequency" in batch.failures[1].message
 
 
-def test_unknown_market_fails_at_input_stage_without_running_strategy() -> None:
+def test_unknown_market_fails_at_target_stage_without_running_strategy() -> None:
     calls = []
 
     class Strategy:
@@ -253,7 +253,7 @@ def test_unknown_market_fails_at_input_stage_without_running_strategy() -> None:
     )
 
     assert [(failure.code, failure.stage) for failure in batch.failures] == [
-        ("X", "input")
+        ("X", "target")
     ]
     assert calls == []
 

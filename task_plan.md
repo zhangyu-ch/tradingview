@@ -92,7 +92,7 @@
 - [x] 75. LO-05
 - [x] 76. LO-07
 - [x] 77. LO-08
-- [ ] 78. LO-03
+- [x] 78. LO-03
 - [ ] 79. LO-04
 - [ ] 80. LO-01
 - [ ] 完成 71–80
@@ -253,3 +253,10 @@
 | NX-11 可运行全仓回归在 `-W error` 下触发 3 个历史测试自身的未关闭文件/SQLite ResourceWarning | 1 | 不在 NX-11 提交夹带无关测试清理；保留 105 项直接相邻严格告警门禁，全仓按项目原告警策略执行并记录结果 |
 | LO-05 render_template 调用搜索使用过窄的单行正则且无命中，命令因 `set -e` 中止 | 1 | 改用简单模板文件名搜索和上下文定位；模板选项证据已成功读取 |
 | LO-05 测试文件循环把 `2>/dev/null` 误放进 for 列表，shell 语法错误 | 1 | 去除列表内重定向，逐文件先判断存在再读取；未修改仓库产品文件 |
+
+| LO-03 首次相邻测试命令引用不存在的 `test_me10_exchange_capabilities.py`，pytest 未收集任何测试 | 1 | 对照实际 tests 目录改用现有 ME-10/registry/provider 测试文件；不重复原命令 |
+| LO-03 相邻组合包含 `test_backtesting_base_generic.py`，收集时被当前环境缺少 `empyrical` 阻断 | 1 | 保留既有环境限制；回测领域边界用无副作用文件隔离加载测试，其他相邻组合排除该文件后运行 |
+| LO-03 新专项测试直接导入 `tradingview_zy.exchange.contracted` 时，exchange 包先读取归档外 `config.py` 导致收集失败 | 1 | 在测试导入纯 facade 前注入不含 Secret 的最小 config 模块；产品代码不依赖测试配置，DB 测试仍使用独立 SQLite 配置 |
+| LO-03 顶层最小 config 测试桩污染后续 ME-10 测试，导致真实生成配置未被导入 | 1 | 删除顶层测试桩；将 exchange 配置导入改为 `get_exchange()` 调用时惰性加载，使纯 facade/package 导入无配置副作用 |
+| LO-03 相邻测试仍受 config 污染：不是顶层导入，而是 SQLite helper 在测试结束后保留临时模块 | 1 | helper 改用 pytest monkeypatch 事务化替换/恢复 `config/db/fun` 和 package 属性，确保测试隔离 |
+| LO-03 恢复稳定 config 绑定的脚本先检测到函数内旧 import，随后删除旧 import，导致未补顶层绑定并产生 NameError | 1 | 改为删除后单独断言顶层 import 存在；编译并执行 CR-05/ME-10/MX-02 工厂测试 |

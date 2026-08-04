@@ -35,6 +35,8 @@ from tradingview_zy.alert_strategy_storage import (
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.database_catalog import list_market_kline_codes
+from tradingview_zy.domain import Frequency, parse_frequency
+from tradingview_zy.market_registry import kline_table_name, parse_market
 from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.monitoring_events import (
     MonitoringEventType,
@@ -787,30 +789,9 @@ class DB(object):
 
         self.__cache_tables = {}
 
-    def klines_tables(self, market: str, stock_code: str):
-        stock_code = (
-            stock_code.replace(".", "_")
-            .replace("-", "_")
-            .replace("/", "_")
-            .replace("@", "_")
-            .lower()
-        )
-        if market == Market.HK.value:
-            table_name = f"{market}_klines_{stock_code[-3:]}"
-        elif market == Market.A.value:
-            table_name = f"{market}_klines_{stock_code[:7]}"
-        elif market == Market.US.value:
-            table_name = f"{market}_klines_{stock_code[0]}"
-        elif market == Market.FX.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.CURRENCY.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.CURRENCY_SPOT.value:
-            table_name = f"{market}_klines_{stock_code}"
-        elif market == Market.FUTURES.value:
-            table_name = f"{market}_klines_{stock_code}"
-        else:
-            raise Exception(f"市场错误：{market}")
+    def klines_tables(self, market: Market | str, stock_code: str):
+        market_code = parse_market(market)
+        table_name = kline_table_name(market_code, stock_code)
 
         if table_name in self.__cache_tables:
             return self.__cache_tables[table_name]
@@ -835,7 +816,7 @@ class DB(object):
                 "mysql_collate": "utf8mb4_general_ci",
             }
 
-        if market == Market.FUTURES.value:
+        if market_code is Market.FUTURES:
             # 期货市场，添加持仓列
             TableByKlines.p = Column(Float, comment="持仓量")
 
@@ -843,9 +824,9 @@ class DB(object):
         Base.metadata.create_all(self.engine)
         return TableByKlines
 
-    def klines_codes(self, market: str) -> List[str]:
+    def klines_codes(self, market: Market | str) -> List[str]:
         """Return the distinct instrument codes already stored for a market."""
-        return list_market_kline_codes(self.engine, market)
+        return list_market_kline_codes(self.engine, parse_market(market).value)
 
     def klines_query(
         self,
@@ -868,10 +849,12 @@ class DB(object):
         :param order:
         :return:
         """
+        market_code = parse_market(market)
+        frequency_code = parse_frequency(frequency)
         with self.Session() as session:
-            table = self.klines_tables(market, code)
+            table = self.klines_tables(market_code, code)
             # 查询数据库
-            filter = (table.code == code, table.f == frequency)
+            filter = (table.code == code, table.f == frequency_code.value)
             if start_date is not None:
                 filter += (table.dt >= start_date,)
             if end_date is not None:
@@ -893,18 +876,20 @@ class DB(object):
         :param frequency:
         :return:
         """
+        market_code = parse_market(market)
+        frequency_code = parse_frequency(frequency)
         with self.Session() as session:
-            table = self.klines_tables(market, code)
+            table = self.klines_tables(market_code, code)
             last_date = (
                 session.query(table.dt)
                 .filter(table.code == code)
-                .filter(table.f == frequency)
+                .filter(table.f == frequency_code.value)
                 .order_by(table.dt.desc())
                 .first()
             )
             if last_date is None:
                 return None
-            if market == "a":
+            if market_code is Market.A:
                 return last_date[0].strftime("%Y-%m-%d")
             else:
                 return last_date[0].strftime("%Y-%m-%d %H:%M:%S")
@@ -920,15 +905,17 @@ class DB(object):
         :param klines:
         :return:
         """
+        market_code = parse_market(market)
+        frequency_code = parse_frequency(frequency)
         with self.Session() as session:
-            table = self.klines_tables(market, code)
+            table = self.klines_tables(market_code, code)
 
             # 如果是 sqlite ，则慢慢更新吧
             if config.DB_TYPE == "sqlite":
                 for _, _k in klines.iterrows():
                     _in_k = {
                         "code": code,
-                        "f": frequency,
+                        "f": frequency_code.value,
                         "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
                         "o": _k["open"],
                         "c": _k["close"],
@@ -942,7 +929,7 @@ class DB(object):
                         session.query(table)
                         .filter(
                             table.code == code,
-                            table.f == frequency,
+                            table.f == frequency_code.value,
                             table.dt == _in_k["dt"],
                         )
                         .first()
@@ -952,7 +939,7 @@ class DB(object):
                     else:
                         session.query(table).filter(
                             table.code == code,
-                            table.f == frequency,
+                            table.f == frequency_code.value,
                             table.dt == _in_k["dt"],
                         ).update(_in_k)
                 session.commit()
@@ -970,7 +957,7 @@ class DB(object):
                     _insert_k = {
                         "code": code,
                         "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "f": frequency,
+                        "f": frequency_code.value,
                         "o": _k["open"],
                         "c": _k["close"],
                         "h": _k["high"],
@@ -1008,11 +995,15 @@ class DB(object):
         :param dt:
         :return:
         """
+        market_code = parse_market(market)
+        frequency_code: Frequency | None = (
+            parse_frequency(frequency) if frequency is not None else None
+        )
         with self.Session() as session:
-            table = self.klines_tables(market, code)
+            table = self.klines_tables(market_code, code)
             q = session.query(table).filter(table.code == code)
-            if frequency is not None:
-                q = q.filter(table.f == frequency)
+            if frequency_code is not None:
+                q = q.filter(table.f == frequency_code.value)
             if dt is not None:
                 q = q.filter(table.dt == dt)
             q.delete()

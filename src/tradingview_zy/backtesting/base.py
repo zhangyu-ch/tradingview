@@ -5,6 +5,16 @@ from typing import Dict, List, Union
 
 import pandas as pd
 
+from tradingview_zy.domain import (
+    Frequency,
+    OperationAction,
+    TradeMode,
+    parse_frequency,
+    parse_operation_action,
+    parse_trade_mode,
+)
+from tradingview_zy.market_registry import parse_market
+
 
 class POSITION:
     """
@@ -126,15 +136,8 @@ class Operation:
         open_uid: str = None,
         close_uid: str = "clear",
     ):
-        # TODO 历史原因，后期 opt 值修改为 open  close ，分别表示 开仓与平仓
-        # TODO 但是为了兼容之前的  buy sell ，这里单独做个转换，内部还是使用 buy sell 进行判断开平仓
-        opt_map = {
-            "open": "buy",
-            "close": "sell",
-        }
-        # 旧的 操作指示  buy  买入  sell  卖出 （buy 表示开仓 sell 表示平仓，新的用 open  close 进行表示了）
-        # 新的 操作指示  open 开仓  close  平仓
-        self.opt: str = opt if opt not in opt_map.keys() else opt_map[opt]
+        # Canonical enum retains the historical persisted values ``buy``/``sell``.
+        self.opt: OperationAction = parse_operation_action(opt)
 
         # 触发指示的
         # 买卖点 例如：1buy 2buy l2buy 3buy l3buy  1sell 2sell l2sell 3sell l3sell down_pz_bc_buy
@@ -166,8 +169,10 @@ class MarketDatas(ABC):
         """
         初始化
         """
-        self.market = market
-        self.frequencys = frequencys
+        self.market = parse_market(market)
+        self.frequencys: List[Frequency] = [
+            parse_frequency(frequency) for frequency in frequencys
+        ]
 
     @abstractmethod
     def klines(self, code, frequency) -> pd.DataFrame:
@@ -203,8 +208,8 @@ class Trader(ABC):
     ):
         # 策略基本信息
         self.name = name
-        self.mode = mode
-        self.market = market
+        self.mode: TradeMode = parse_trade_mode(mode)
+        self.market = parse_market(market)
         self.max_pos = max_pos
 
     @abstractmethod
@@ -309,7 +314,7 @@ class Strategy(ABC):
 
 
 
-def fee_a(opt: str, price: float, amount: float):
+def fee_a(opt: OperationAction | str, price: float, amount: float):
     """
     A 股交易所费用计算方法
     """
@@ -318,9 +323,10 @@ def fee_a(opt: str, price: float, amount: float):
     yhs_rate = 0.1  # 印花税 单位 % 出让方（卖出）收取
     ghf_rate = 0.02  # 过户费 单位 % 双向收取
 
+    operation = parse_operation_action(opt)
     trade_volume = price * amount
     fee_sum = max([min_fee, trade_volume * fee_rate / 100])
-    if opt == "sell":
+    if operation is OperationAction.CLOSE:
         fee_sum += trade_volume * yhs_rate / 100
     fee_sum += trade_volume * ghf_rate / 100
     return fee_sum

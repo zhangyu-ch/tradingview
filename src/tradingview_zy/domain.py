@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeVar, runtime_checkable
+
+from tradingview_zy.base import Market
 
 
 class Capability(StrEnum):
@@ -18,6 +20,163 @@ class Capability(StrEnum):
     ACCOUNT_BALANCE = "account_balance"
     POSITIONS = "positions"
     LIVE_ORDERS = "live_orders"
+
+
+class Frequency(StrEnum):
+    """Canonical internal K-line frequency codes."""
+
+    YEAR = "y"
+    QUARTER = "q"
+    MONTH = "m"
+    WEEK = "w"
+    DAY = "d"
+    HOUR_12 = "12h"
+    HOUR_8 = "8h"
+    HOUR_6 = "6h"
+    HOUR_4 = "4h"
+    HOUR_3 = "3h"
+    MINUTE_120 = "120m"
+    MINUTE_60 = "60m"
+    MINUTE_30 = "30m"
+    MINUTE_15 = "15m"
+    MINUTE_10 = "10m"
+    MINUTE_6 = "6m"
+    MINUTE_5 = "5m"
+    MINUTE_3 = "3m"
+    MINUTE_2 = "2m"
+    MINUTE_1 = "1m"
+    SECOND_30 = "30s"
+    SECOND_10 = "10s"
+
+
+class OrderSide(StrEnum):
+    BUY = "buy"
+    SELL = "sell"
+
+
+class PositionSide(StrEnum):
+    LONG = "long"
+    SHORT = "short"
+
+
+class OrderOffset(StrEnum):
+    OPEN = "open"
+    CLOSE = "close"
+    CLOSE_TODAY = "close_today"
+
+
+class OrderStatus(StrEnum):
+    PENDING = "pending"
+    SUBMITTED = "submitted"
+    PARTIALLY_FILLED = "partially_filled"
+    FILLED = "filled"
+    CANCELED = "canceled"
+    REJECTED = "rejected"
+
+
+class OperationAction(StrEnum):
+    """Legacy backtest operation semantics with stable persisted values.
+
+    The historical runtime uses ``buy`` for open and ``sell`` for close even
+    when the position itself is short.  The enum names expose the actual
+    semantics while retaining byte-compatible values.
+    """
+
+    OPEN = "buy"
+    CLOSE = "sell"
+
+
+class TradeMode(StrEnum):
+    SIGNAL = "signal"
+    TRADE = "trade"
+
+
+_DomainCode = TypeVar("_DomainCode", bound=StrEnum)
+
+
+def _normalise_domain_code(value: Any, *, field: str, max_length: int = 32) -> str:
+    if isinstance(value, StrEnum):
+        value = value.value
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string or enum")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError(f"{field} contains control characters")
+    token = value.strip().lower()
+    if not token:
+        raise ValueError(f"{field} must not be empty")
+    if len(token) > max_length:
+        raise ValueError(f"{field} exceeds {max_length} characters")
+    return token
+
+
+def _parse_domain_code(
+    value: Any, enum_type: type[_DomainCode], *, field: str, aliases: dict[str, _DomainCode] | None = None
+) -> _DomainCode:
+    if isinstance(value, enum_type):
+        return value
+    token = _normalise_domain_code(value, field=field)
+    if aliases and token in aliases:
+        return aliases[token]
+    try:
+        return enum_type(token)
+    except ValueError as error:
+        raise ValueError(f"unsupported {field}: {token!r}") from error
+
+
+def parse_frequency(value: Any) -> Frequency:
+    return _parse_domain_code(value, Frequency, field="frequency")
+
+
+def parse_order_side(value: Any) -> OrderSide:
+    return _parse_domain_code(value, OrderSide, field="order side")
+
+
+def parse_position_side(value: Any) -> PositionSide:
+    return _parse_domain_code(
+        value,
+        PositionSide,
+        field="position side",
+        aliases={"做多": PositionSide.LONG, "做空": PositionSide.SHORT},
+    )
+
+
+def parse_order_offset(value: Any) -> OrderOffset:
+    return _parse_domain_code(
+        value,
+        OrderOffset,
+        field="order offset",
+        aliases={"closetoday": OrderOffset.CLOSE_TODAY},
+    )
+
+
+def parse_order_status(value: Any) -> OrderStatus:
+    return _parse_domain_code(
+        value,
+        OrderStatus,
+        field="order status",
+        aliases={
+            "cancelled": OrderStatus.CANCELED,
+            "partial_filled": OrderStatus.PARTIALLY_FILLED,
+        },
+    )
+
+
+def parse_operation_action(value: Any) -> OperationAction:
+    return _parse_domain_code(
+        value,
+        OperationAction,
+        field="operation action",
+        aliases={
+            "open": OperationAction.OPEN,
+            "buy": OperationAction.OPEN,
+            "close": OperationAction.CLOSE,
+            "sell": OperationAction.CLOSE,
+        },
+    )
+
+
+def parse_trade_mode(value: Any) -> TradeMode:
+    return _parse_domain_code(value, TradeMode, field="trade mode")
 
 
 CAPABILITY_METHODS: dict[Capability, tuple[str, ...]] = {

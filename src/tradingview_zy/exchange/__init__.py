@@ -16,6 +16,7 @@ from tradingview_zy.domain import (
 )
 from tradingview_zy.exchange.exchange import Exchange
 from tradingview_zy.market_registry import (
+    parse_market,
     provider_capabilities,
     selected_provider,
     provider_spec,
@@ -56,7 +57,7 @@ def _translate_constructor_error(provider_name: str, error: BaseException) -> Ex
 
 def get_exchange(market: Market | str) -> ContractedExchange:
     """Return a lazily constructed, capability-bound provider facade."""
-    market = market if isinstance(market, Market) else Market(str(market))
+    market = parse_market(market)
     provider_name = selected_provider(market, config)
 
     # Tombstones must run before provider import or cache mutation.

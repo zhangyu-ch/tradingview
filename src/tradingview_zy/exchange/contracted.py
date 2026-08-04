@@ -13,9 +13,11 @@ from tradingview_zy.domain import (
     CAPABILITY_METHODS,
     Capability,
     ExchangeError,
+    InvalidRequestError,
     ProviderResponseError,
     ProviderUnavailableError,
     UnsupportedCapabilityError,
+    parse_frequency,
 )
 from tradingview_zy.market_registry import ProviderSpec
 
@@ -89,17 +91,36 @@ class ContractedExchange:
         value = self._call(Capability.METADATA, "support_frequencys")
         if not isinstance(value, Mapping) or not value:
             raise ProviderResponseError("周期元数据响应无效", provider=self.provider_name)
-        result = dict(value)
-        if not all(isinstance(k, str) and k and isinstance(v, str) and v for k, v in result.items()):
-            raise ProviderResponseError("周期元数据响应无效", provider=self.provider_name)
+        result: dict[str, str] = {}
+        try:
+            for raw_frequency, label in value.items():
+                frequency = parse_frequency(raw_frequency).value
+                if frequency in result or not isinstance(label, str) or not label.strip():
+                    raise ValueError("invalid or duplicate frequency metadata")
+                result[frequency] = label
+        except (TypeError, ValueError) as error:
+            raise ProviderResponseError(
+                "周期元数据响应无效", provider=self.provider_name
+            ) from error
         return result
 
     def klines(self, code: str, frequency: str, start_date=None, end_date=None, args=None):
+        try:
+            canonical_frequency = parse_frequency(frequency).value
+        except (TypeError, ValueError) as error:
+            raise InvalidRequestError(
+                "K 线周期无效", provider=self.provider_name
+            ) from error
+        if canonical_frequency not in self.support_frequencys():
+            raise InvalidRequestError(
+                f"{self.market.value}/{self.provider_name} 不支持周期 {canonical_frequency}",
+                provider=self.provider_name,
+            )
         value = self._call(
             Capability.MARKET_DATA,
             "klines",
             code,
-            frequency,
+            canonical_frequency,
             start_date=start_date,
             end_date=end_date,
             args=args,

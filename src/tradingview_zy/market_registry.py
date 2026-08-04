@@ -10,6 +10,7 @@ from tradingview_zy.domain import (
     CAPABILITY_METHODS,
     Capability,
     InvalidRequestError,
+    parse_frequency,
     UnsupportedCapabilityError,
     UnsupportedProviderError,
 )
@@ -574,8 +575,15 @@ MARKET_REGISTRY: Mapping[Market, MarketSpec] = MappingProxyType(
 def parse_market(value: Market | str) -> Market:
     if isinstance(value, Market):
         return value
+    if not isinstance(value, str):
+        raise InvalidRequestError("市场必须是字符串或 Market 枚举")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise InvalidRequestError("市场包含控制字符")
+    token = value.strip().lower()
+    if not token or len(token) > 32:
+        raise InvalidRequestError("不支持的市场")
     try:
-        return Market(str(value).strip().lower())
+        return Market(token)
     except ValueError as error:
         raise InvalidRequestError("不支持的市场") from error
 
@@ -731,11 +739,25 @@ def validate_market_registry(
             raise RuntimeError(f"默认交易时段不存在：{value}")
         if not spec.payload_timezone or not spec.db_partition(spec.default_code):
             raise RuntimeError(f"市场数据路由不完整：{value}")
+        try:
+            canonical_frequencies = [
+                parse_frequency(frequency).value for frequency in spec.frequencies
+            ]
+            canonical_sync_frequencies = [
+                parse_frequency(frequency).value
+                for frequency in spec.additional_sync_frequencies
+            ]
+        except (TypeError, ValueError) as error:
+            raise RuntimeError(f"周期元数据无效：{value}") from error
+        if len(set(canonical_frequencies)) != len(canonical_frequencies):
+            raise RuntimeError(f"周期元数据重复：{value}")
         if not all(
-            isinstance(frequency, str) and frequency.strip()
-            for frequency in spec.additional_sync_frequencies
+            isinstance(label, str) and label.strip()
+            for label in spec.frequencies.values()
         ):
-            raise RuntimeError(f"同步周期元数据无效：{value}")
+            raise RuntimeError(f"周期展示名称无效：{value}")
+        if len(set(canonical_sync_frequencies)) != len(canonical_sync_frequencies):
+            raise RuntimeError(f"同步周期元数据重复：{value}")
         for name, provider in spec.providers.items():
             if Capability.LIVE_ORDERS in provider.capabilities:
                 raise RuntimeError(f"未验收实盘能力不得声明：{value}/{name}")

@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class Market(Enum):
+class Market(StrEnum):
     """
     交易市场
     """

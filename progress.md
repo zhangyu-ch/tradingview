@@ -828,3 +828,25 @@
 - 7 项专项、50 项严格相邻、626 项可运行仓库回归通过；所有文档生成、质量、供应链、Secret、FIFO、diff 与 CRLF 门禁通过。
 - 提交主题：`docs(LO-08): generate support truth and archive legacy research`。
 - 下一条：78. LO-03。
+
+
+### 问题 78：LO-03（进行中）
+- 恢复 config 稳定绑定的首次脚本因检测顺序漏加顶层 import，仓库回归出现 3 个 NameError；已补齐顶层绑定并将三个工厂测试纳入立即复验。
+- 仓库回归发现惰性 config 导入会在模块替换测试中读取不同配置对象；已恢复稳定的 package 级 config 绑定，LO-03 保持只改值语义，依赖注入留到 LO-01。
+- 严格矩阵发现旧 ME-18 测试仍期待未知市场在 input 阶段失败；新领域 parser 已在 target 阶段 fail-closed，更新测试以固定更早的拒绝边界。
+- 相邻复验显示剩余污染来自 SQLite helper 未恢复临时 config；helper 已改为 pytest monkeypatch 事务化模块替换，测试结束自动恢复真实配置模块。
+- 顶层 config 测试桩会污染相邻 ME-10 测试；已改为产品 package 仅在 `get_exchange()` 调用时惰性导入配置，并删除测试桩，纯 facade 导入因此无配置副作用。
+- 新专项首次收集被 exchange 包的归档外 `config.py` 依赖阻断；改为在测试导入纯 facade 前注入最小无 Secret 配置，不修改产品运行边界。
+- 回测完整基础测试仍在收集阶段被缺少 `empyrical` 阻断；LO-03 将用文件隔离方式执行真实 `backtesting/base.py`，其他相邻测试不再重复该阻断命令。
+- 首次相邻测试命令引用不存在的历史 ME-10 测试文件，pytest 在收集前退出；已记录错误，改按实际文件名重组，不重复原命令。
+- 已确认问题存在：Market/Frequency/订单方向与状态仍广泛使用裸字符串，且实际仓库缺失报告曾提及的订单领域枚举。
+- 拟定修复范围：新增稳定领域枚举和 parser；在 MarketRegistry、ContractedExchange、策略协议、回测 Operation/POSITION 与 DB K 线边界统一 canonicalize；补 SQLite 往返、provider 前置拒绝和序列化故障注入。
+
+
+### 问题 78：LO-03 完成
+- Market 改为 StrEnum，并新增 Frequency、订单方向、仓位方向、开平、状态、回测操作和模式领域枚举与严格 parser。
+- Registry、provider facade、策略协议、Web resolution、回测和 DB K 线边界统一 canonicalize；非法代码在 SDK/SQL 前 fail-closed。
+- 11 项专项、193 项严格相邻、637 项可运行仓库回归通过；5 skipped、8 个 pinyin 环境节点 deselect，empyrical 收集限制单独记录。
+- 全部编译、支持矩阵、质量、供应链、Secret、FIFO、JSON、diff 与 CRLF 门禁通过。
+- 提交主题：`refactor(LO-03): enforce typed market and order codes`。
+- 下一条：79. LO-04。

@@ -4,6 +4,8 @@ import re
 from collections.abc import Mapping, Iterable
 from typing import Any
 
+from tradingview_zy.domain import Frequency, parse_frequency
+
 _POSITIVE_INT_RE = re.compile(r"[1-9][0-9]*\Z")
 _CANONICAL_INT_RE = re.compile(r"-?(?:0|[1-9][0-9]*)\Z")
 
@@ -131,11 +133,15 @@ def parse_resolution(
     *,
     resolution_map: Mapping[str, str],
     field: str = "resolution",
-) -> tuple[str, str]:
+) -> tuple[str, Frequency]:
     resolution = parse_bounded_text(value, field=field, max_chars=16)
     if resolution not in resolution_map:
         raise WebParameterError(field, "unsupported resolution")
-    return resolution, resolution_map[resolution]
+    try:
+        frequency = parse_frequency(resolution_map[resolution])
+    except (TypeError, ValueError) as error:
+        raise WebParameterError(field, "unsupported internal frequency") from error
+    return resolution, frequency
 
 
 def parse_time_range(from_value: Any, to_value: Any) -> tuple[int, int]:

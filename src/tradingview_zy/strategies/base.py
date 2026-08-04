@@ -11,6 +11,9 @@ from typing import Any, Literal
 
 import pandas as pd
 
+from tradingview_zy.base import Market
+from tradingview_zy.domain import Frequency, parse_frequency
+from tradingview_zy.market_registry import parse_market
 from tradingview_zy.web_payloads import market_timezone, normalize_klines_for_market
 
 StrategyRunStage = Literal["target", "provider", "input", "strategy", "output"]
@@ -59,10 +62,10 @@ _ALLOWED_ACTIONS: dict[StrategyPurpose, frozenset[StrategyAction]] = {
 
 @dataclass(frozen=True)
 class StrategyContext:
-    market: str
+    market: Market | str
     code: str
     name: str
-    frequency: str
+    frequency: Frequency | str
     klines: pd.DataFrame
     now: dt.datetime
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -75,7 +78,7 @@ class StrategySignal:
     action: StrategyAction | str
     score: float
     message: str
-    frequency: str
+    frequency: Frequency | str
     event_time: dt.datetime
     metadata: dict[str, Any] = field(default_factory=dict)
     schema_version: int = SIGNAL_SCHEMA_VERSION
@@ -89,7 +92,11 @@ class StrategySignal:
             "action": action,
             "score": self.score,
             "message": self.message,
-            "frequency": self.frequency,
+            "frequency": (
+                self.frequency.value
+                if isinstance(self.frequency, Frequency)
+                else str(self.frequency)
+            ),
             "event_time": self.event_time.isoformat(),
             "metadata": copy.deepcopy(self.metadata),
         }
@@ -97,10 +104,10 @@ class StrategySignal:
 
 @dataclass(frozen=True)
 class StrategyRunTarget:
-    market: str
+    market: Market | str
     code: str
     name: str
-    frequency: str
+    frequency: Frequency | str
 
 
 @dataclass(frozen=True)
@@ -112,7 +119,7 @@ class StrategyRunFailure:
 
     @property
     def market(self) -> str:
-        return self.target.market
+        return self.target.market.value if isinstance(self.target.market, Market) else self.target.market
 
     @property
     def code(self) -> str:
@@ -124,7 +131,11 @@ class StrategyRunFailure:
 
     @property
     def frequency(self) -> str:
-        return self.target.frequency
+        return (
+            self.target.frequency.value
+            if isinstance(self.target.frequency, Frequency)
+            else self.target.frequency
+        )
 
 
 @dataclass
@@ -233,11 +244,13 @@ def strategy_target_from_stock(
 ) -> StrategyRunTarget:
     if not isinstance(stock, Mapping):
         raise TypeError("strategy target must be an object")
-    market_value = _validate_text(market, "market", 32)
+    market_value = parse_market(_validate_text(market, "market", 32))
     code = _validate_text(stock.get("code"), "code", 128)
     raw_name = stock.get("name", code)
     name = _validate_text(raw_name, "name", 256)
-    frequency_value = _validate_text(frequency, "frequency", 32)
+    frequency_value = parse_frequency(
+        _validate_text(frequency, "frequency", 32)
+    )
     return StrategyRunTarget(
         market=market_value,
         code=code,
@@ -406,12 +419,18 @@ def _canonical_signal(
         raise StrategyOutputError("strategy signal schema_version is unsupported")
     code = _validate_text(signal.code, "strategy signal code", 128)
     name = _validate_text(signal.name, "strategy signal name", 256)
-    frequency = _validate_text(signal.frequency, "strategy signal frequency", 32)
+    try:
+        frequency = parse_frequency(
+            _validate_text(signal.frequency, "strategy signal frequency", 32)
+        )
+        target_frequency = parse_frequency(target.frequency)
+    except (TypeError, ValueError) as error:
+        raise StrategyOutputError("strategy signal frequency is unsupported") from error
     if code != target.code:
         raise StrategyOutputError("strategy signal code does not match the target")
     if name != target.name:
         raise StrategyOutputError("strategy signal name does not match the target")
-    if frequency != target.frequency:
+    if frequency is not target_frequency:
         raise StrategyOutputError("strategy signal frequency does not match the target")
     try:
         action = StrategyAction(signal.action)
