@@ -537,3 +537,13 @@
 - 验证：14 项 warnings-as-errors 专项、39 项 NX-14/NX-15 聚焦、106 项直接相邻、371 项可运行仓库回归通过，3 skipped；SQLite 双线程竞态只允许一条写入。
 - 环境限制：15 个 selection_monitoring 测试在导入 cl_app 时缺 Flask/pinyin；另有 empyrical 与既有 footprint 私有导入阻断，均发生在产品断言前。
 - 提交：`fix(RV-06): bound TradingView storage`。
+
+
+### 问题 53：ME-15
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：Futu quote/trade 使用无锁模块级全局对象，随机清订阅，失败不失效重建，且无 close/fork 所有权，问题存在。
+- 修复：新增独立 `FutuContextManager`；quote/trade 独立 RLock 与状态、有界重建、只发布完整对象、失败隔离、PID/at-fork 重置、无秘密 health、幂等 close/atexit；adapter 删除全局/随机/tenacity/wildcard 路径并统一 RET_OK 边界，缓存改为实例级防御性副本。
+- 验证：9 项 warnings-as-errors 专项和 52 项直接相邻通过；20 线程同类操作最大并发严格为 1，quote/trade 可独立并发。广泛回归中 377 项执行通过、3 skipped；其余在产品断言前被缺失 pinyin、归档外 config.py、empyrical 或既有 footprint 私有导入阻断。
+- 限制：未连接真实 Futu OpenD；单次 SDK 阻塞 deadline 与真实订阅、断线回调和服务器重启需沙箱联调。
+- 提交：`fix(ME-15): manage Futu context lifecycle`。

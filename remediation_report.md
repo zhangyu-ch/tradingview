@@ -1313,16 +1313,28 @@
 ### 53. ME-15 · Futu 全局上下文缺少生命周期、并发和失败隔离
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Futu
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `exchange_futu.py` 以模块级 `g_ctx/g_ttx` 懒创建行情和交易上下文，没有锁、所有权或关闭协议。并发首次调用可能创建多个 SDK 对象；同一个上下文会被多个线程无序调用；业务失败或异常后坏连接仍被缓存。`CTX()` 还用随机数触发全局 `unsubscribe_all()`，使任意请求带有不可预测的跨请求副作用。进程退出和 fork 后都没有确定性资源处理。
+- **b. 我是怎么修复的？** 新增无 Futu SDK 依赖的 `FutuContextManager`，分别持有 quote/trade 上下文与独立 `RLock`；构造候选只有成功返回后才发布，同类操作串行，quote 与 trade 可独立并发，行情失败只关闭/降级行情上下文而不污染交易上下文。每个逻辑操作最多两次尝试，失败缓存被关闭并清除，下一次可恢复；空 `FUTU_HOST` 与已关闭 manager 明确 fail-closed。manager 记录无秘密的 ready/degraded/closed、generation、最近成功和错误类型，检测 PID 变化并丢弃 fork 继承连接，同时注册 at-fork child 与 atexit，`close()` 幂等。`ExchangeFutu` 删除 `g_ctx/g_ttx`、随机清订阅、tenacity 和 wildcard import，所有 SDK 调用经统一 quote/trade 运行边界与 `RET_OK` 检查；增加 `close()/health()`，目录缓存改为实例级防御性副本。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_me15_futu_context_lifecycle.py`：9 项专项通过。
+  - 20 线程并发故障注入确认同一个 quote context 只创建一次、同类 SDK 操作最大并发为 1，全部线程在 2 秒内结束；另验证 quote 与 trade 能通过各自锁同时进入。
+  - 构造器持续异常最多调用两次且 generation 保持 0；quote 操作失败会关闭旧 quote 并创建新 generation，同时已创建的 trade context 不关闭、不重建。
+  - 验证空 host 不调用工厂、`close()` 幂等、关闭后拒绝继续使用、PID 变化关闭继承对象并重新创建、health 不含 host/账户/原始错误消息且可观测 degraded。
+  - 源码 AST 门禁确认不存在 wildcard import、`g_ctx/g_ttx`、随机清订阅与 `@retry`；adapter 显式使用 `FutuContextManager`、`close`、`health` 及 quote/trade 边界。
+  - 运行 ME-15、ME-30、ME-05、NEW-06、ME-12、ME-14 相邻组合：52 passed。
+  - 尝试仓库级回归：完整收集被缺失 `empyrical`、归档外 `config.py` 和既有 footprint 私有导入阻断；排除四个收集阻断后有 377 passed、3 skipped，另 11 项旧集成测试在业务断言前被缺失 `pinyin/config.py` 阻断。
+  - 执行 `py_compile`、`git diff --check` 和 `exchange_futu.py` CRLF bare-LF=0 门禁。
+- **e. 验证是否通过？** 通过（9 项专项和 52 项直接相邻全部通过；并发、失败隔离、有界重建、fork/PID 与关闭生命周期均有自动化证明；广泛回归中 377 项执行成功、3 项既有跳过，环境/基线阻断已单独记录）
+- **提交：** `fix(ME-15): manage Futu context lifecycle`
+- **修改文件：** `src/tradingview_zy/futu_context.py`, `src/tradingview_zy/exchange/exchange_futu.py`, `tests/test_me15_futu_context_lifecycle.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器未安装 `futu-api`，也未连接 Futu OpenD；真实 SDK 线程、连接断开回调、服务器重启和订阅配额需在沙箱 OpenD 联调。
+  - Python 无法强杀已经阻塞在第三方 C 扩展/网络调用中的线程；本条串行化生命周期并有界重建，但单次 SDK 调用 deadline 仍取决于 Futu SDK/OpenD。
+  - quote 与 trade 分别串行，优先保证 SDK 状态安全；若未来证明 SDK 支持更高并发，应通过连接池与官方契约测试扩展，而不是共享同一对象无锁调用。
+  - `ExchangeFutu` 仍使用项目 singleton 保持一个 adapter；manager 已处理线程和 fork 边界，跨进程连接仍各进程独立。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_futu.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** Context manager + connection pool/lock；健康状态和重连状态机；显式 imports；进程退出钩子。
 
