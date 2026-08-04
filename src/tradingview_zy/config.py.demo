@@ -35,6 +35,9 @@ WEB_TICKS_RATE_MAX_KEYS = 1024
 WEB_TICKS_PROVIDER_TIMEOUT_SECONDS = 5
 WEB_TICKS_PROVIDER_MAX_CONCURRENT = 8
 
+# 独立监控调度进程重新读取数据库任务的周期，运行时限制为 5–3600 秒。
+SCHEDULER_RECONCILE_SECONDS = 30
+
 # 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来
 DATA_PATH = ".chanlun_pro"
 

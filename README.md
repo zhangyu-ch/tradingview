@@ -41,6 +41,18 @@ PYTHONPATH="$PWD/src" uv run python check_env.py
 PYTHONPATH="$PWD/src" uv run python web/tradingview_zy_chart/app.py nobrowser
 ```
 
+启动独立监控调度进程（只运行一个实例）：
+
+```bash
+PYTHONPATH="$PWD/src" uv run python web/tradingview_zy_chart/scheduler.py
+```
+
+Web worker 不再启动 APScheduler。多个 Web worker 可以共享同一数据库；监控任务只由
+上述独立进程执行。调度进程使用 `DATA_PATH/scheduler/leader.lock` 防止本机重复启动，
+第二个实例会以退出码 2 结束。配置保存后最多等待
+`SCHEDULER_RECONCILE_SECONDS`（默认 30 秒）同步到实际任务。`/jobs` 页面读取调度进程
+写入的原子状态快照；快照缺失或损坏时显示为空，不会在 Web 进程补启动调度器。
+
 ## Web 安全配置
 
 ### 本机单机使用

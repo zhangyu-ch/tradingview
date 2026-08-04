@@ -1,12 +1,10 @@
 import datetime
 
-from apscheduler.schedulers.background import BackgroundScheduler
-
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 
 
 class OtherTasks:
-    def __init__(self, scheduler: BackgroundScheduler):
+    def __init__(self, scheduler=None):
         self.scheduler = scheduler
 
         self.stock_bkgn = StocksBKGN()

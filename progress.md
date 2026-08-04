@@ -416,3 +416,13 @@
 - 当前容器无 xtquant/MiniQMT；测试只注入官方参数与返回结构一致的协议桩，并为缺失 `tzlocal` 注入 UTC 最小桩，实际 adapter 产品逻辑未替换。
 - 限制：默认读取不再自动下载是有意契约变化；SDK 单次调用强制 deadline 留给统一 adapter 可靠性治理。
 - 提交：`fix(ME-17): validate QMT ranges and payloads`。
+
+
+### 问题 44：ME-26（恢复重建）
+- **状态：** complete
+- 验证结论：Flask factory 内构造、监听并立即启动 TornadoScheduler，reloader/多 worker 会各自执行同一持久任务，问题存在。
+- 修复：移除 Web 的全部 APScheduler 生命周期；新增独立 BlockingScheduler CLI、跨进程 leader lock、启动及周期任务 reconcile、安全原子状态快照；Web 保存配置后由 runner 最终一致同步，`/jobs` 只读快照。
+- 专项及相邻测试：9 项 ME-26、23 项组合通过；真实 POSIX 锁验证排他/释放/PID/0700/0600，协议 scheduler 验证 build 不启动、runner 只 start 一次、重复 CLI 返回 2。
+- 当前容器缺 Flask、Flask-Login、APScheduler、pinyin、tzlocal；未启动真实长驻进程，限制已写入 a–e 报告。
+- 独立 CLI 首次使用 package import 会先执行 Flask app 包；已改为直接惰性导入 `cl_app` 目录中的 runtime，避免无关 Web 依赖。
+- 提交：`fix(ME-26): move scheduler out of Flask factory`。

@@ -1,7 +1,5 @@
 import datetime
 
-from apscheduler.schedulers.background import BackgroundScheduler
-
 from tradingview_zy import config
 from tradingview_zy.exchange import Market, get_exchange
 from tradingview_zy.selection import SelectionRunner
@@ -10,7 +8,7 @@ from tradingview_zy.zixuan import ZiXuan
 
 
 class XuanguTasks(object):
-    def __init__(self, scheduler: BackgroundScheduler):
+    def __init__(self, scheduler=None):
         self.scheduler = scheduler
         self.running_tasks = {}
 

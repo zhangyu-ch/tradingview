@@ -1,7 +1,6 @@
 import json
 from typing import Dict, List
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from tqdm.auto import tqdm
 
 from tradingview_zy import config, fun
@@ -17,11 +16,11 @@ from tradingview_zy.zixuan import ZiXuan
 
 
 class AlertTasks(object):
-    def __init__(self, scheduler: BackgroundScheduler):
+    def __init__(self, scheduler=None):
         """
         异步执行后台定时任务
         """
-        self.scheduler: BackgroundScheduler = scheduler
+        self.scheduler = scheduler
         self.task_ids = []
         self.log = fun.get_logger()
 
@@ -30,8 +29,14 @@ class AlertTasks(object):
         return getattr(config, "ALERT_STRATEGIES", {})
 
     def run(self):
+        # Web workers persist task configuration only.  The dedicated scheduler
+        # runner supplies the scheduler instance and owns reconciliation.
+        if self.scheduler is None:
+            return True
+
         for _id in self.task_ids:
-            self.scheduler.remove_job(_id)
+            if self.scheduler.get_job(_id) is not None:
+                self.scheduler.remove_job(_id)
         self.task_ids = []
 
         task_list = self.task_list()
@@ -43,7 +48,7 @@ class AlertTasks(object):
                     _job = self.scheduler.add_job(
                         func=self.alert_run,
                         trigger="cron",
-                        args={_t.id},
+                        args=(_t.id,),
                         id=str(_t.id),
                         name=f"监控-{_t.task_name}",
                         minute=f"*/{_t.interval_minutes}",
@@ -55,7 +60,7 @@ class AlertTasks(object):
                     _job = self.scheduler.add_job(
                         func=self.alert_run,
                         trigger="cron",
-                        args={_t.id},
+                        args=(_t.id,),
                         id=str(_t.id),
                         name=f"监控-{_t.task_name}",
                         hour=f"*/{hours}",

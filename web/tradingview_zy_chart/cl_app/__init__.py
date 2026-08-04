@@ -8,24 +8,6 @@ import importlib
 from io import BytesIO
 
 import pinyin
-import pytz
-from apscheduler.events import (
-    EVENT_ALL,
-    EVENT_EXECUTOR_ADDED,
-    EVENT_EXECUTOR_REMOVED,
-    EVENT_JOB_ADDED,
-    EVENT_JOB_ERROR,
-    EVENT_JOB_EXECUTED,
-    EVENT_JOB_MAX_INSTANCES,
-    EVENT_JOB_MISSED,
-    EVENT_JOB_MODIFIED,
-    EVENT_JOB_REMOVED,
-    EVENT_JOB_SUBMITTED,
-    EVENT_JOBSTORE_ADDED,
-    EVENT_JOBSTORE_REMOVED,
-)
-from apscheduler.executors.tornado import TornadoExecutor
-from apscheduler.schedulers.tornado import TornadoScheduler
 from flask import Flask, redirect, render_template, request, send_file, session
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
 from tzlocal import get_localzone
@@ -78,6 +60,7 @@ from tradingview_zy.web_api_validation import (
     parse_symbol,
     parse_time_range,
 )
+from tradingview_zy.scheduler_status import SchedulerStatusStore
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
@@ -177,53 +160,7 @@ def create_app(test_config=None):
         ),
     )
 
-    # 任务对象
-    scheduler = TornadoScheduler(timezone=pytz.timezone("Asia/Shanghai"))
-    scheduler.add_executor(TornadoExecutor())
-    scheduler.my_task_list = {}
-
-    def run_tasks_listener(event):
-        state_map = {
-            EVENT_EXECUTOR_ADDED: "已添加",
-            EVENT_EXECUTOR_REMOVED: "删除调度",
-            EVENT_JOBSTORE_ADDED: "已添加",
-            EVENT_JOBSTORE_REMOVED: "删除存储",
-            EVENT_JOB_ADDED: "已添加",
-            EVENT_JOB_REMOVED: "删除作业",
-            EVENT_JOB_MODIFIED: "修改作业",
-            EVENT_JOB_SUBMITTED: "运行中",
-            EVENT_JOB_MAX_INSTANCES: "等待运行",
-            EVENT_JOB_EXECUTED: "已完成",
-            EVENT_JOB_ERROR: "执行异常",
-            EVENT_JOB_MISSED: "未执行",
-        }
-        if event.code not in state_map.keys():
-            return
-        if hasattr(event, "job_id"):
-            job_id = event.job_id
-            if job_id not in scheduler.my_task_list.keys():
-                scheduler.my_task_list[job_id] = {
-                    "id": job_id,
-                    "name": "--",
-                    "update_dt": fun.datetime_to_str(datetime.datetime.now()),
-                    "next_run_dt": "--",
-                    "state": "未知",
-                }
-            scheduler.my_task_list[job_id]["update_dt"] = fun.datetime_to_str(
-                datetime.datetime.now()
-            )
-            job = scheduler.get_job(event.job_id)
-            if job is not None:
-                scheduler.my_task_list[job_id]["name"] = job.name
-                scheduler.my_task_list[job_id]["next_run_dt"] = fun.datetime_to_str(
-                    job.next_run_time
-                )
-            scheduler.my_task_list[job_id]["state"] = state_map[event.code]
-            # print('任务更新', task_list[job_id])
-        return
-
-    scheduler.add_listener(run_tasks_listener, EVENT_ALL)
-    scheduler.start()
+    scheduler_status_store = SchedulerStatusStore()
 
     # 项目中的周期与 tv 的周期对应表
     frequency_maps = {
@@ -348,7 +285,7 @@ def create_app(test_config=None):
                 self._task_error = task_error
                 return None
 
-            self._task_obj = task_cls(scheduler)
+            self._task_obj = task_cls(None)
             if self.on_load is not None:
                 self.on_load(self._task_obj)
             return self._task_obj
@@ -380,12 +317,13 @@ def create_app(test_config=None):
             msg = f"{msg}：{error}"
         return {"ok": False, "msg": msg}
 
-    _alert_tasks = _LazyTasks("alert_tasks", "AlertTasks", lambda task: task.run())
+    _alert_tasks = _LazyTasks("alert_tasks", "AlertTasks")
     _xuangu_tasks = _LazyTasks("xuangu_tasks", "XuanguTasks")
     _other_tasks = _LazyTasks("other_tasks", "OtherTasks")
 
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
+    app.extensions["scheduler_mode"] = "external-process"
     if test_config:
         app.config.update(test_config)
     # Security-critical values are derived from the dedicated WEB_* settings above and
@@ -1391,7 +1329,7 @@ def create_app(test_config=None):
     @app.route("/jobs")
     @login_required
     def jobs():
-        return render_template("jobs.html", jobs=list(scheduler.my_task_list.values()))
+        return render_template("jobs.html", jobs=scheduler_status_store.read())
 
     @app.route("/xuangu/task_list/<market>")
     @login_required

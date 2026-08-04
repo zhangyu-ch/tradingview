@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 43
-- **待处理：** 38
+- **已完成：** 44
+- **待处理：** 37
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -54,7 +54,7 @@
 |41|`ME-23`|中|Backtesting Config|❌ 未修复|已完成|通过（7 项 ME-23 专项、30 项相邻组合通过；版本/生效区间/品种覆盖、交易器注入、保存快照、加载完整性和篡改失败路径均已验证）|`fix(ME-23): `|
 |42|`HI-16`|中|File Cache|❌ 未修复|已完成|通过（9 项 HI-16 专项、44 项相邻组合通过；原子失败、损坏隔离、暂时 I/O、旧 pickle 不执行、真实交易器安全状态和除权 CSV 路径均已验证）|`fix(HI-16): `|
 |43|`ME-17`|中|QMT Market Data|❌ 未修复|已完成|通过（8 项 ME-17 专项、55 项相邻组合通过；范围、下载隔离、空/畸形数据、实例状态与 Tick 边界均已动态验证）|`fix(ME-17): `|
-|44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|待处理|—|—|
+|44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|已完成|通过（9 项 ME-26 专项、23 项可执行相邻组合通过；factory 零调度副作用、leader 唯一性、reconcile、状态快照和 CLI 退出码均已验证）|`fix(ME-26): `|
 |45|`ME-19`|中|Selection Tasks|❌ 未修复|待处理|—|—|
 |46|`ME-18`|中|Strategy Runners|❌ 未修复|待处理|—|—|
 |47|`ME-14`|中|TDX US|❌ 未修复|待处理|—|—|
@@ -1069,16 +1069,27 @@
 ### 44. ME-26 · 调度器在 Flask app factory 内立即 start，可能在多 worker/reloader 中重复运行
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Scheduler Lifecycle
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `create_app()` 每次调用都会构造 `TornadoScheduler`、添加 executor/listener 并立即 `start()`；测试应用、开发 reloader、多个 WSGI worker 或重复 factory 调用会各自启动独立线程和内存 job store。同一数据库任务可能被重复执行，而 `/jobs` 只能看到当前 worker 的局部状态。监控配置虽然已持久化在数据库，Web 保存/删除路径仍直接重建本进程 scheduler，缺少进程级唯一 owner 和确定性启动边界。
+- **b. 我是怎么修复的？** 彻底把 APScheduler 从 Flask factory 移出：Web 模块不再导入、构造或启动任何 scheduler，任务对象统一以 `scheduler=None` 惰性加载；AlertTasks 在 Web 侧只持久化配置并立即返回，已有 XuanguTasks 无 scheduler 同步路径继续用于一次性选股。新增独立 `scheduler.py` CLI 和 `scheduler_runtime.py`：使用 BlockingScheduler，由同数据目录的跨进程非阻塞 leader lock 保证唯一 owner，启动时读取数据库监控任务，并按 `SCHEDULER_RECONCILE_SECONDS` 的有界区间周期性 reconcile。重复 runner 明确返回退出码 2。调度事件写入 issue 42 的安全原子 JSON 状态缓存，Web `/jobs` 只读该快照，损坏或缺失时安全返回空列表。leader 目录/文件尽力设置 0700/0600；README 和配置模板增加独立进程启动说明。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前逐行检查 Web factory：确认 `TornadoScheduler(...)`、`add_executor`、`add_listener` 和 `scheduler.start()` 均位于 `create_app()` 内，问题可直接复现。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me26_scheduler_lifecycle.py`，9 项专项测试通过；AST 门禁确认 factory 不含 apscheduler import、scheduler 构造或 `.start()` 调用。
+  - 用真实 `fcntl` 文件锁动态验证第一个 owner 持锁时第二个 owner 抛 `SchedulerAlreadyRunningError`，释放后可重新取得；POSIX 权限验证目录 0700、锁文件 0600、PID 内容正确。
+  - 通过注入符合 APScheduler API 的最小 scheduler 动态执行 `build_scheduler()` 和 `run_scheduler()`：确认 build 只注册 listener 不启动，初次 reconcile 一次、只添加一个 `system:alert-reconcile` job、BlockingScheduler 只启动一次，重复 runner CLI 返回 2。
+  - 故障注入状态缓存缺失、畸形内容和读取异常，确认 `/jobs` 数据源安全降级为空；验证状态字段白名单、字符串化和按 id 稳定排序。
+  - 运行 ME-26、HI-06 CSRF、ME-05 Web 启动静态元数据及不依赖 Flask 的选股/监控相邻测试，共 23 passed。
+  - 执行 `compileall`、`git diff --check`，并验证 README、config demo、4 个历史 Web Python 文件和 jobs 模板保持纯 CRLF（bare LF=0）。
+- **e. 验证是否通过？** 通过（9 项 ME-26 专项、23 项可执行相邻组合通过；factory 零调度副作用、leader 唯一性、reconcile、状态快照和 CLI 退出码均已验证）
+- **提交：** `fix(ME-26): move scheduler out of Flask factory`
+- **修改文件：** `README.md`, `src/tradingview_zy/config.py.demo`, `src/tradingview_zy/scheduler_status.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `web/tradingview_zy_chart/cl_app/xuangu_tasks.py`, `web/tradingview_zy_chart/cl_app/other_tasks.py`, `web/tradingview_zy_chart/cl_app/scheduler_runtime.py`, `web/tradingview_zy_chart/cl_app/templates/jobs.html`, `web/tradingview_zy_chart/scheduler.py`, `tests/test_me26_scheduler_lifecycle.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前离线容器未安装 Flask、Flask-Login、APScheduler、pinyin 和 tzlocal，因此未在本容器启动真实 Flask/BlockingScheduler 长驻进程。核心 factory 边界以 AST/源码契约验证，调度构建、listener、runner 和锁以真实本地锁加协议一致 scheduler 桩动态验证。
+  - leader lock 的排他语义依赖所有 scheduler 实例共享同一个本地数据目录。POSIX 本地文件锁已动态验证并提供 Windows `msvcrt` 实现；对不保证 flock/locking 语义的某些网络文件系统，应改用数据库 advisory lock 或分布式 lease。
+  - Web 保存或删除监控配置后，独立 runner 最多在 reconcile interval 后反映到实际 jobs；默认 30 秒。这是用持久化配置换取多 worker 唯一执行的有意最终一致性。
+  - 一次性选股任务仍按现有契约在 Web 请求中同步执行；本条只迁移原来由 app factory 执行的持久化监控 scheduler，不把未持久化任务伪装成跨进程作业。
 - **原报告最新结论：** 最新 create_app() 仍在函数内创建并 scheduler.start()，进程内 job 状态设计没有变化。
 - **原报告建议：** 调度器独立进程或 leader election；Web 仅管理持久化 job store；app factory 不启动后台线程。
 

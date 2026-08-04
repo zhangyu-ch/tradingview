@@ -248,3 +248,12 @@
 - 迅投接口把下载与本地读取分开，`get_market_data_ex` 返回 `{stock_code: DataFrame}`。修复按该结构校验，并在 provider 返回后再次执行 timezone-aware 闭区间裁剪。
 - 空 DataFrame 是稳定的无数据结果；缺目标代码、非 DataFrame、缺 OHLCV、重复时间、非有限数值和空盘口分别返回明确 unavailable/schema 错误，不再泄漏 KeyError/IndexError。
 - 证券目录改为实例私有且返回防御性副本，订阅默认列表改为 `None`；默认 K 线读取不产生下载副作用，需要刷新时显式调用 `download_klines()` 或 `args={"download": True}`。
+
+
+## ME-26 Web 与调度器生命周期复核（恢复重建）
+- 旧 `create_app()` 每次都会创建并启动 TornadoScheduler；在 reloader、测试 factory 和多 worker 中没有共享 owner，重复执行由控制流直接成立。
+- 调度执行现由独立 BlockingScheduler CLI 持有；Web 只写数据库配置和读原子状态快照，保存路径不再重建本进程 job。
+- 本地 leader lock 在同一 `DATA_PATH` 上非阻塞抢占，写入 PID 并尽力使用 0700/0600 权限；第二 owner 明确失败，释放后可重启。
+- scheduler runtime 的 APScheduler 与 AlertTasks 导入均保持惰性。CLI 直接从 `cl_app` 文件目录导入 runtime，避免 Python 先执行含 Flask/pinyin 的 `cl_app/__init__.py`。
+- 任务配置采用默认 30 秒、强制收敛至 5–3600 秒的周期 reconcile；这是多 worker 唯一执行与配置即时生效之间的明确最终一致性边界。
+- `/jobs` 的状态只允许 id/name/update_dt/next_run_dt/state 五个字段，按 id 稳定排序；缺失、畸形或读取异常一律返回空列表，不在 Web 进程补启动 scheduler。
