@@ -11,6 +11,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from tradingview_zy.strategies.base import (
+    BatchRunResult,
+    StrategyRunFailure,
+    StrategyRunTarget,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 XUANGU_TASKS_PATH = ROOT / "web/tradingview_zy_chart/cl_app/xuangu_tasks.py"
@@ -226,8 +232,18 @@ def test_strategy_failure_performs_no_replace_and_keeps_previous_running_result(
 
         def run(self, market, stocks, frequency):
             if frequency == "60m":
-                raise RuntimeError("strategy failure")
-            return [_event("A1")]
+                target = StrategyRunTarget(market, "A2", "A2", frequency)
+                return BatchRunResult(
+                    failures=[
+                        StrategyRunFailure(
+                            target=target,
+                            stage="strategy",
+                            error_type="RuntimeError",
+                            message="strategy failure",
+                        )
+                    ]
+                )
+            return BatchRunResult(hits=[_event("A1")])
 
     monkeypatch.setattr(module, "ZiXuan", FakeZiXuan)
     monkeypatch.setattr(module, "SelectionRunner", FailingRunner)
@@ -235,11 +251,15 @@ def test_strategy_failure_performs_no_replace_and_keeps_previous_running_result(
     previous = [_event("OLD")]
     tasks.running_tasks[("a", "task1")] = previous
 
-    with pytest.raises(RuntimeError, match="strategy failure"):
-        tasks.run_xuangu("a", "task1", ["d", "60m"], "source", "target")
+    assert tasks.run_xuangu("a", "task1", ["d", "60m"], "source", "target") is False
 
     assert calls == []
     assert tasks.running_tasks[("a", "task1")] is previous
+    attempt = tasks.last_run_results[("a", "task1")]
+    assert [event.code for event in attempt.hits] == ["A1"]
+    assert [(failure.code, failure.stage) for failure in attempt.failures] == [
+        ("A2", "strategy")
+    ]
 
 
 def test_replace_failure_keeps_previous_running_result(monkeypatch) -> None:

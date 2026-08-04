@@ -435,3 +435,20 @@
 - 专项及相邻测试：7 项 ME-19、35 项组合通过；SQLite 第二条 INSERT 触发器失败验证旧快照完整回滚，成功路径 position=0..N-1，HK 同名组不变。
 - 限制：未连接真实 MySQL；临时 running_tasks 仍为进程内状态；跨频率 memo 使用最后一个信号。
 - 提交：`fix(ME-19): atomically replace selection results`。
+
+
+### 问题 46：ME-18（验证阶段）
+- **状态：** in_progress
+- **开始时间：** 2026-08-04
+- 静态验证确认问题存在：SelectionRunner/MonitoringRunner 没有逐标的结构化失败隔离；任务层无法区分 miss 与 failure；策略入口前没有统一 K 线 schema/时区/数据质量校验。
+- 已确定修复边界：新增 StrategyRunTarget/Failure/BatchRunResult 和共享阶段执行器，并更新选股/监控任务层的失败可观测性与原子替换条件。
+
+### 问题 46：ME-18
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：SelectionRunner/MonitoringRunner 的单标的异常会终止或只能由任务层宽泛捕获，且策略入口前没有统一 K 线协议，问题存在。
+- 修复：新增 target/provider/input/strategy/output 五阶段失败模型和 BatchRunResult；统一深拷贝、市场时区、date/OHLCV、唯一升序时间、有限值、非负 volume、OHLC、code/frequency 校验；选股与监控任务分别实现“失败不替换旧结果”和“正常命中继续保存、整批返回失败”。
+- 专项测试：`tests/test_me18_strategy_runner_contracts.py`，13 passed；相邻 ME-19/ME-12/Web payload/策略加载/安全选股监控组合共 52 passed。
+- 首轮测试 fixture 自身构造了 low>close 的无效 K 线，被新协议正确拒绝；修正 fixture 后产品实现未改。
+- 完整 cl_app 历史集成测试仍在 package import 前被容器缺失 pinyin 阻断；真实 AlertTasks 已通过最小依赖桩动态执行。
+- 提交：`fix(ME-18): isolate strategy batch failures`。

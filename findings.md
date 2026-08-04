@@ -265,3 +265,14 @@
 - 多频率同代码以首次出现位置为稳定顺序，最后一个信号更新名称与 memo；这适合自选组的一代码一行模型，并避免重复位置。
 - 任务只有在全部频率计算及可选 DB 替换成功后才更新内存状态，键由 task_name 改为 `(market, task_name)`；策略或写库失败不会覆盖上一轮内存结果。
 - 当前 StrategySignal 没有方向领域字段，`opt_type` 无法被正确消费。删除 UI、路由和 Python 参数比继续接受后忽略更诚实；需要方向筛选时应先扩展后续策略协议。
+
+
+## ME-18 策略批次失败隔离与 K 线输入协议复核（恢复重建）
+- 当前 SelectionRunner 在单一 for 循环中直接访问 stock 字段、调用 provider 和 strategy；任一 malformed target、行情异常、脏 DataFrame 或策略异常都会穿透并终止整批。
+- MonitoringRunner 仅提供单标的信号列表，任务层无法区分“合法未命中”与“执行失败”；AlertTasks 只能用宽泛异常日志近似隔离，无法保留结构化阶段和失败标的。
+- 统一边界应把 target/provider/input/strategy/output 五个阶段分别建模，并让 BatchRunResult 明确区分 hits、misses、failures；任务层只有无失败时才替换选股快照。
+- K 线进入策略前必须深拷贝并按市场时区规范化，再验证必需 date/OHLCV、唯一升序时间、有限数值、非负 volume、OHLC 一致性以及可选 code/frequency 列与目标一致。
+
+- BatchRunResult 保留对 hits 的 `__iter__/__len__/__getitem__` 兼容视图，旧的只读信号列表调用可平滑迁移，但任务层已显式读取 failures，不能再把部分失败当成整批成功。
+- 选股任务的 `last_run_results` 保存最近尝试（包括部分 hits 与 failures），而 `running_tasks` 只保存最后一次完整成功；这把“最新尝试”和“最后可发布结果”从同一状态中分离。
+- 监控任务在同一批次中会保存正常 hits，并对失败标的记录 code/stage/error；整批返回 False，避免调度器把部分失败误标为成功。

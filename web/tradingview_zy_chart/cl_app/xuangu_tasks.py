@@ -3,6 +3,7 @@ import datetime
 from tradingview_zy import config
 from tradingview_zy.exchange import Market, get_exchange
 from tradingview_zy.selection import SelectionRunner
+from tradingview_zy.strategies.base import BatchRunResult
 from tradingview_zy.strategies.loader import load_registered_strategy
 from tradingview_zy.zixuan import ZiXuan
 
@@ -11,6 +12,7 @@ class XuanguTasks(object):
     def __init__(self, scheduler=None):
         self.scheduler = scheduler
         self.running_tasks = {}
+        self.last_run_results = {}
 
     def xuangu_task_config_list(self):
         return getattr(config, "XUANGU_STRATEGIES", {})
@@ -30,6 +32,16 @@ class XuanguTasks(object):
             }
         return [by_code[code] for code in order]
 
+    @staticmethod
+    def _batch_result(value):
+        if isinstance(value, BatchRunResult):
+            return value
+        # Compatibility for trusted in-process callers that still return the old
+        # signal-list shape. Production runners always return BatchRunResult.
+        if isinstance(value, list):
+            return BatchRunResult(hits=value)
+        raise TypeError("selection runner must return BatchRunResult")
+
     def _run_xuangu_job(self, market, task_name, frequencys, zx_group, target_zx_group):
         registry = self.xuangu_task_config_list()
         strategy = load_registered_strategy(registry, task_name)
@@ -48,18 +60,25 @@ class XuanguTasks(object):
         else:
             stocks = zx.zx_stocks(zx_group)
         runner = SelectionRunner(exchange=ex, strategy=strategy)
-        results = []
+        batch = BatchRunResult()
         for frequency in frequencys:
-            results.extend(runner.run(market, stocks, frequency))
+            batch.extend(self._batch_result(runner.run(market, stocks, frequency)))
+
+        task_key = (market, task_name)
+        self.last_run_results[task_key] = batch
+        if not batch.ok:
+            # A partial strategy batch must not replace the last complete watchlist
+            # or overwrite the last successful in-memory result.
+            return False
 
         if target_zx_group:
-            snapshot = self._watchlist_snapshot(results)
+            snapshot = self._watchlist_snapshot(batch.hits)
             if zx.replace_stocks(target_zx_group, snapshot) is not True:
                 raise RuntimeError(f"target watchlist group is unavailable: {target_zx_group}")
 
         # Only publish the in-memory result after every strategy run and the optional
         # database replacement have completed successfully.
-        self.running_tasks[(market, task_name)] = results
+        self.running_tasks[task_key] = list(batch.hits)
         return True
 
     def run_xuangu(self, market, task_name, frequencys, zx_group, target_zx_group=None):

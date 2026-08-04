@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Iterable
+from collections.abc import Iterable
+from typing import Any
 
-from tradingview_zy.strategies.base import StrategyContext, StrategySignal, normalize_strategy_results
+from tradingview_zy.strategies.base import (
+    BatchRunResult,
+    failure_result,
+    placeholder_target,
+    run_strategy_target,
+    strategy_target_from_stock,
+)
 
 
 class SelectionRunner:
-    def __init__(self, exchange, strategy):
+    def __init__(self, exchange: Any, strategy: Any):
         self.exchange = exchange
         self.strategy = strategy
 
@@ -17,20 +24,27 @@ class SelectionRunner:
         stocks: Iterable[dict],
         frequency: str,
         now: dt.datetime | None = None,
-    ) -> list[StrategySignal]:
-        run_time = now or dt.datetime.now()
-        results: list[StrategySignal] = []
-        for stock in stocks:
-            code = stock["code"]
-            name = stock.get("name", code)
-            klines = self.exchange.klines(code, frequency)
-            context = StrategyContext(
-                market=market,
-                code=code,
-                name=name,
-                frequency=frequency,
-                klines=klines,
-                now=run_time,
+    ) -> BatchRunResult:
+        batch = BatchRunResult()
+        try:
+            iterator = iter(stocks)
+        except Exception as error:
+            target = placeholder_target(market, stocks, frequency)
+            return failure_result(target, "target", error)
+
+        for stock in iterator:
+            try:
+                target = strategy_target_from_stock(market, stock, frequency)
+            except Exception as error:
+                target = placeholder_target(market, stock, frequency)
+                batch.extend(failure_result(target, "target", error))
+                continue
+            batch.extend(
+                run_strategy_target(
+                    self.exchange,
+                    self.strategy,
+                    target,
+                    now=now,
+                )
             )
-            results.extend(normalize_strategy_results(self.strategy.run(context)))
-        return results
+        return batch

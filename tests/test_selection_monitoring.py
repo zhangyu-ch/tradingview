@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "web" / "tradingview_zy_chart"))
 
 from tradingview_zy.monitoring import MonitoringRunner
 from tradingview_zy.selection import SelectionRunner
-from tradingview_zy.strategies.base import StrategyContext, StrategySignal
+from tradingview_zy.strategies.base import BatchRunResult, StrategyContext, StrategySignal
 
 
 class FakeExchange:
@@ -68,8 +68,11 @@ def test_selection_runner_uses_plain_klines_only():
     )
 
     assert exchange.requested == [("SH.000001", "d")]
-    assert results[0].code == "SH.000001"
-    assert results[0].message == "close > open"
+    assert results.ok is True
+    assert results.failures == []
+    assert results.misses == []
+    assert results.hits[0].code == "SH.000001"
+    assert results.hits[0].message == "close > open"
 
 
 def test_monitoring_runner_returns_events_without_chanlun_data():
@@ -84,9 +87,11 @@ def test_monitoring_runner_returns_events_without_chanlun_data():
         now=dt.datetime(2026, 5, 3, 15, 0, 0),
     )
 
-    assert len(events) == 1
-    assert events[0].action == "select"
-    assert events[0].frequency == "d"
+    assert events.ok is True
+    assert events.failures == []
+    assert len(events.hits) == 1
+    assert events.hits[0].action == "select"
+    assert events.hits[0].frequency == "d"
 
 
 def test_alert_template_uses_strategy_form_without_legacy_fields():
@@ -175,7 +180,7 @@ def test_alert_tasks_use_generic_db_methods(monkeypatch):
         task_name="task1",
         zx_group="source",
         frequency="d",
-        strategy_config='{"strategy_path": "unused", "strategy_kwargs": {}}',
+        strategy_config='{"strategy_id": "demo", "strategy_kwargs": {}}',
     )
 
     monkeypatch.setattr(alert_tasks.AlertTasks, "alert_get", lambda self, alert_id: alert_config)
@@ -187,12 +192,13 @@ def test_alert_tasks_use_generic_db_methods(monkeypatch):
             zx_stocks=lambda group: [{"code": "SH.000001", "name": "上证指数"}]
         ),
     )
-    monkeypatch.setattr(alert_tasks, "load_strategy", lambda path, **kwargs: object())
+    monkeypatch.setattr(alert_tasks.AlertTasks, "strategy_registry", staticmethod(lambda: {"demo": {"strategy_path": "trusted:Demo"}}))
+    monkeypatch.setattr(alert_tasks, "load_registered_strategy", lambda registry, strategy_id, kwargs: object())
     monkeypatch.setattr(
         alert_tasks,
         "MonitoringRunner",
         lambda exchange, strategy: SimpleNamespace(
-            run_code=lambda *args, **kwargs: [event]
+            run=lambda *args, **kwargs: BatchRunResult(hits=[event])
         ),
     )
     monkeypatch.setattr(alert_tasks, "db", FakeAlertDb())

@@ -1,12 +1,11 @@
 import json
 from typing import Dict, List
 
-from tqdm.auto import tqdm
-
 from tradingview_zy import config, fun
 from tradingview_zy.db import TableByAlertTask, db
 from tradingview_zy.exchange import Market, get_exchange
 from tradingview_zy.monitoring import MonitoringRunner
+from tradingview_zy.strategies.base import BatchRunResult
 from tradingview_zy.strategies.loader import (
     StrategyRegistryError,
     find_registered_strategy_id_by_path,
@@ -23,6 +22,7 @@ class AlertTasks(object):
         self.scheduler = scheduler
         self.task_ids = []
         self.log = fun.get_logger()
+        self.last_batch_result = None
 
     @staticmethod
     def strategy_registry():
@@ -86,6 +86,14 @@ class AlertTasks(object):
             )
         return None
 
+    @staticmethod
+    def _batch_result(value):
+        if isinstance(value, BatchRunResult):
+            return value
+        if isinstance(value, list):
+            return BatchRunResult(hits=value)
+        raise TypeError("monitoring runner must return BatchRunResult")
+
     def alert_run(self, alert_id):
         alert_config = self.alert_get(alert_id)
         if alert_config is None:
@@ -134,31 +142,59 @@ class AlertTasks(object):
             return False
 
         runner = MonitoringRunner(exchange=ex, strategy=strategy)
-        for s in tqdm(stocks):
-            try:
-                events = runner.run_code(
+        if callable(getattr(runner, "run", None)):
+            batch = self._batch_result(
+                runner.run(
                     alert_config.market,
-                    s["code"],
-                    s["name"],
+                    stocks,
                     alert_config.frequency,
                 )
-                for event in events:
-                    db.alert_event_save(
-                        market=alert_config.market,
-                        task_name=alert_config.task_name,
-                        stock_code=event.code,
-                        stock_name=event.name,
-                        frequency=event.frequency,
-                        alert_msg=event.message,
-                        action=event.action,
-                        score=f"{event.score:.4g}"[:10],
-                        event_type="sig",
-                        event_time=event.event_time,
+            )
+        else:
+            # Temporary compatibility for trusted custom runners that have not yet
+            # implemented the batch method. Each result is still aggregated explicitly.
+            batch = BatchRunResult()
+            for stock in stocks:
+                batch.extend(
+                    self._batch_result(
+                        runner.run_code(
+                            alert_config.market,
+                            stock["code"],
+                            stock.get("name", stock["code"]),
+                            alert_config.frequency,
+                        )
                     )
-            except Exception as e:
-                self.log.error(f'run {s["code"]} alert exception {e}')
+                )
 
-        return True
+        self.last_batch_result = batch
+        persistence_ok = True
+        for event in batch.hits:
+            try:
+                db.alert_event_save(
+                    market=alert_config.market,
+                    task_name=alert_config.task_name,
+                    stock_code=event.code,
+                    stock_name=event.name,
+                    frequency=event.frequency,
+                    alert_msg=event.message,
+                    action=event.action,
+                    score=f"{event.score:.4g}"[:10],
+                    event_type="sig",
+                    event_time=event.event_time,
+                )
+            except Exception as error:
+                persistence_ok = False
+                self.log.error(
+                    f"保存 {event.code} 监控信号失败：{error.__class__.__name__}: {error}"
+                )
+
+        for failure in batch.failures:
+            self.log.error(
+                f"监控标的失败 code={failure.code} stage={failure.stage} "
+                f"error={failure.error_type}: {failure.message}"
+            )
+
+        return batch.ok and persistence_ok
 
     @staticmethod
     def task_list(market: str = None) -> List[TableByAlertTask]:

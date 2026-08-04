@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 45
-- **待处理：** 36
+- **已完成：** 46
+- **待处理：** 35
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -56,7 +56,7 @@
 |43|`ME-17`|中|QMT Market Data|❌ 未修复|已完成|通过（8 项 ME-17 专项、55 项相邻组合通过；范围、下载隔离、空/畸形数据、实例状态与 Tick 边界均已动态验证）|`fix(ME-17): `|
 |44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|已完成|通过（9 项 ME-26 专项、23 项可执行相邻组合通过；factory 零调度副作用、leader 唯一性、reconcile、状态快照和 CLI 退出码均已验证）|`fix(ME-26): `|
 |45|`ME-19`|中|Selection Tasks|❌ 未修复|已完成|通过（7 项 ME-19 专项、35 项相邻组合通过；第 N 条写入失败回滚、完整快照替换、零写入失败路径、跨市场状态隔离和 opt_type 删除均已验证）|`fix(ME-19): `|
-|46|`ME-18`|中|Strategy Runners|❌ 未修复|待处理|—|—|
+|46|`ME-18`|中|Strategy Runners|❌ 未修复|已完成|通过（13 项 ME-18 专项、52 项相邻组合通过；逐标的隔离、输入协议、命中/未命中/失败三态、选股零替换失败路径和监控部分成功可观测性均已验证）|`fix(ME-18): `|
 |47|`ME-14`|中|TDX US|❌ 未修复|待处理|—|—|
 |48|`ME-30`|中|Trading Calendar|❌ 未修复|待处理|—|—|
 |49|`ME-22`|中|Utilities|❌ 未修复|待处理|—|—|
@@ -1123,16 +1123,26 @@
 ### 46. ME-18 · 选股/监控缺少失败标的隔离和输入数据协议校验
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Strategy Runners
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** SelectionRunner 在循环内直接解析 stock、调用 provider 和 strategy，任意标的异常都会终止整个批次；MonitoringRunner 只返回信号列表，任务层无法区分合法未命中和执行失败。K 线在策略入口前没有统一 schema、市场时区、时间排序、有限值和 OHLC 一致性校验，脏数据可能在策略内部随机失败或产生错误信号。
+- **b. 我是怎么修复的？** 新增 StrategyRunTarget、StrategyRunFailure 与 BatchRunResult，明确分离 hits、misses、failures，并以共享 run_strategy_target 对 target/provider/input/strategy/output 五个阶段独立捕获。K 线先深拷贝并按市场时区规范化，再验证 date/OHLCV、时间唯一升序、数值有限、volume 非负、OHLC 一致以及可选 code/frequency 与目标一致。SelectionRunner 与 MonitoringRunner 逐标的继续；XuanguTasks 仅在整批无失败时替换目标组和发布成功结果，并在 last_run_results 保留最近尝试；AlertTasks 继续保存正常命中，但只要有标的失败就返回 False、记录阶段日志并保留 last_batch_result。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前静态读取 selection.py、monitoring.py、xuangu_tasks.py 与 alert_tasks.py，确认 target/provider/input/strategy 任一异常都会穿透 runner，结果模型没有 miss/failure 三态，任务层只能依赖宽泛异常日志。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me18_strategy_runner_contracts.py`，13 项专项通过；混合命中、未命中、空表、缺列、provider timeout、策略异常、错误输出和畸形 target 后批次仍继续，failure stage/code/error_type 精确。
+  - 故障注入重复/倒序时间、Inf、负成交量、OHLC 矛盾、code/frequency 漂移、非 DataFrame 和未知市场；全部在策略调用前 fail-closed。合法 A 股 naive 时间规范化为 Asia/Shanghai aware，且原 provider DataFrame 完全不变。
+  - 动态加载真实 AlertTasks（仅为缺失的 Web 包依赖提供最小协议桩）：一个 input failure 后仍保存下一正常信号，但整批返回 False、日志包含 code/stage，last_batch_result 保留结构化失败。
+  - 更新 ME-19 故障注入：第二频率返回结构化 strategy failure 时，不调用目标组替换、不覆盖上一成功 running_tasks，并在 last_run_results 中保留本次命中与失败。
+  - 运行 ME-18、ME-19、ME-12、Web payload、策略加载及不依赖完整 Flask 包的选股/监控组合，共 52 passed；执行 compileall、git diff --check 和 6 个历史 CRLF 文件 bare-LF=0 门禁。
+- **e. 验证是否通过？** 通过（13 项 ME-18 专项、52 项相邻组合通过；逐标的隔离、输入协议、命中/未命中/失败三态、选股零替换失败路径和监控部分成功可观测性均已验证）
+- **提交：** `fix(ME-18): isolate strategy batch failures`
+- **修改文件：** `src/tradingview_zy/strategies/base.py`, `src/tradingview_zy/selection.py`, `src/tradingview_zy/monitoring.py`, `web/tradingview_zy_chart/cl_app/xuangu_tasks.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `tests/test_me18_strategy_runner_contracts.py`, `tests/test_me19_selection_task_atomicity.py`, `tests/test_selection_monitoring.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 同步 provider 的 deadline 和取消仍由具体适配器负责；本条保证异常隔离与可观察，不尝试强杀任意阻塞 SDK 线程。
+  - K 线校验不判断交易日历、业务合理缺口、复权正确性或供应商字段单位，真实市场数据质量仍需 provider 黄金样本。
+  - 任务批次结果是进程内可观测状态，不是跨进程持久审计表；持久化批次审计属于后续治理范围。
+  - 当前容器缺 pinyin，完整 cl_app package 的历史集成测试在 package import 前被阻断；本条对 AlertTasks 文件使用最小依赖桩动态执行真实任务代码，未伪造 runner 或任务控制流。
 - **原报告最新结论：** 设计文档被删除不等于功能修复；SelectionRunner/MonitoringRunner 的失败隔离与输入 schema 未修改。
 - **原报告建议：** BatchRunResult 明确 hits、misses、failures；每个 symbol 独立错误；策略调用前做一次轻量 KlineFrame 校验。
 
