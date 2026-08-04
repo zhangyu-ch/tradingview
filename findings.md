@@ -405,3 +405,10 @@
 
 ## ME-04 恢复重建
 - 时间规范化必须先于范围过滤；完整 OHLCV、身份、顺序和有限数在 Web 边界 fail-closed。
+
+
+## ME-01 TradingView 存储授权边界（恢复重建）
+- RV-06 的容量配额按 `client/user` 命名空间治理资源，但这些字段来自请求，不能同时承担授权身份。协议兼容字段与认证主体必须分离。
+- 新 owner 应由 `flask_login.current_user.get_id()` 派生；请求中的 `user` 只作 TradingView 协议格式校验，绝不能传给数据库 CRUD。
+- 旧 owner 迁移只能接受显式 allowlist，并在同一事务内处理 chart/template/drawing 与 quota owner；未知 owner 保留，避免把其他主体数据错误归并。
+- 迁移碰到同名/同键冲突时应确定性保留最新记录，随后幂等重跑不得继续改变数据。

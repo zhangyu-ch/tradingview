@@ -9,7 +9,14 @@ from io import BytesIO
 
 import pinyin
 from flask import Flask, redirect, render_template, request, send_file, session
-from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
 from tzlocal import get_localzone
 
 from tradingview_zy import config, fun
@@ -84,7 +91,9 @@ from tradingview_zy.tv_storage import (
     TVStorageError,
     normalize_chart_payload,
     normalize_drawing_payload,
-    normalize_owner,
+    normalize_legacy_owner_ids,
+    normalize_storage_principal,
+    resolve_storage_owner,
 )
 from tradingview_zy.tick_request import (
     BoundedProviderCaller,
@@ -400,6 +409,23 @@ def create_app(test_config=None):
     login_manager.init_app(app)
     login_manager.login_view = "login_opt"
 
+    storage_principal = normalize_storage_principal(
+        security_overrides.get(
+            "WEB_AUTH_PRINCIPAL",
+            getattr(config, "WEB_AUTH_PRINCIPAL", "tradingview_zy"),
+        )
+    )
+    storage_legacy_owner_ids = normalize_legacy_owner_ids(
+        security_overrides.get(
+            "TV_STORAGE_LEGACY_USER_IDS",
+            getattr(config, "TV_STORAGE_LEGACY_USER_IDS", ()),
+        ),
+        authenticated_principal=storage_principal,
+    )
+    db.migrate_tv_storage_legacy_owners(
+        storage_principal, storage_legacy_owner_ids
+    )
+
     @app.context_processor
     def inject_csrf_token():
         return {"csrf_token": lambda: get_csrf_token(session)}
@@ -421,7 +447,7 @@ def create_app(test_config=None):
         }, 403
 
     class LoginUser(UserMixin):
-        user_id = "tradingview_zy"
+        user_id = storage_principal
 
         def __init__(self) -> None:
             super().__init__()
@@ -844,8 +870,10 @@ def create_app(test_config=None):
     def tv_charts(version):
         """TradingView chart layout storage."""
         try:
-            client_id, user_id = normalize_owner(
-                request.args.get("client"), request.args.get("user")
+            client_id, user_id = resolve_storage_owner(
+                request.args.get("client"),
+                request.args.get("user"),
+                current_user.get_id(),
             )
         except TVStorageError as error:
             return {"status": "error", "error": error.code, "message": str(error)}, 422
@@ -925,8 +953,10 @@ def create_app(test_config=None):
     def tv_study_templates(version):
         """TradingView indicator template storage."""
         try:
-            client_id, user_id = normalize_owner(
-                request.args.get("client"), request.args.get("user")
+            client_id, user_id = resolve_storage_owner(
+                request.args.get("client"),
+                request.args.get("user"),
+                current_user.get_id(),
             )
         except TVStorageError as error:
             return {"status": "error", "error": error.code, "message": str(error)}, 422
@@ -981,15 +1011,30 @@ def create_app(test_config=None):
     @login_required
     def tv_drawings(version):
         """TradingView drawing persistence with explicit failure semantics."""
-        client_id = str(request.args.get("client") or "")
-        user_id = str(request.args.get("user") or "")
+        protocol_client_id = str(request.args.get("client") or "")
+        protocol_user_id = str(request.args.get("user") or "")
         chart_id = str(request.args.get("chart") or "")
         layout_id = str(request.args.get("layout") or "")
         symbol = str(request.args.get("symbol") or "")
 
         if request.method == "GET":
-            if client_id == "" or user_id == "" or chart_id == "" or layout_id == "":
+            if (
+                protocol_client_id == ""
+                or protocol_user_id == ""
+                or chart_id == ""
+                or layout_id == ""
+            ):
                 return {"status": "ok", "data": {"state": ""}}
+            try:
+                client_id, user_id = resolve_storage_owner(
+                    protocol_client_id, protocol_user_id, current_user.get_id()
+                )
+            except TVStorageError as error:
+                return {
+                    "status": "error",
+                    "error": error.code,
+                    "message": str(error),
+                }, 422
             state = db.tv_drawing_get(client_id, user_id, layout_id, chart_id, symbol)
             return {"status": "ok", "data": {"state": state or ""}}
 
@@ -1006,7 +1051,13 @@ def create_app(test_config=None):
             except (TypeError, ValueError, json.JSONDecodeError):
                 symbol = ""
 
-        if client_id == "" or user_id == "" or chart_id == "" or layout_id == "" or state is None:
+        if (
+            protocol_client_id == ""
+            or protocol_user_id == ""
+            or chart_id == ""
+            or layout_id == ""
+            or state is None
+        ):
             return {
                 "status": "error",
                 "error": "invalid_drawing_request",
@@ -1014,6 +1065,9 @@ def create_app(test_config=None):
             }, 422
 
         try:
+            client_id, user_id = resolve_storage_owner(
+                protocol_client_id, protocol_user_id, current_user.get_id()
+            )
             payload = normalize_drawing_payload(
                 db.tv_storage_policy,
                 client_id=client_id,

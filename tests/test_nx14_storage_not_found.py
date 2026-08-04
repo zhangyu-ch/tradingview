@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from tradingview_zy.web_api_validation import (
@@ -31,7 +33,7 @@ def test_parse_bounded_text_trims_valid_name():
 
 
 def test_chart_routes_validate_before_db_and_handle_not_found():
-    source = open("web/tradingview_zy_chart/cl_app/__init__.py", encoding="utf-8").read()
+    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
     charts = source[source.index("    def tv_charts(version):"):source.index("    @app.route(\"/tv/<version>/study_templates\"")]
     assert "parse_positive_int" in charts
     assert charts.index("parse_positive_int") < charts.index("db.tv_chart_get")
@@ -40,7 +42,7 @@ def test_chart_routes_validate_before_db_and_handle_not_found():
 
 
 def test_template_routes_validate_and_handle_not_found():
-    source = open("web/tradingview_zy_chart/cl_app/__init__.py", encoding="utf-8").read()
+    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
     templates = source[source.index("    def tv_study_templates(version):"):source.index("    @app.route(\"/tv/<version>/drawings\"")]
     assert "parse_bounded_text" in templates
     assert "template_not_found" in templates

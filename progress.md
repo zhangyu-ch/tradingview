@@ -628,3 +628,21 @@
 
 ### 问题 61：ME-04（恢复重建）
 - 状态：complete；严格 K 线 payload 边界与路由错误契约已复验。
+
+
+## 2026-08-04 第 61–70 条恢复重建
+- 运行环境重挂载后，未形成正式十条归档的第 61–70 条代码与 Git 对象不可恢复；第 51–60 条完整归档、原始问题清单及第 61–69 条 a–e 台账仍在。
+- 从已校验 `tradingview_remediation_issues_051-060.zip` 恢复到 `issue/060-ME-27`，逐条重新实现并生成真实提交，不沿用不存在的 SHA。
+- 第 61 条 ME-04 已完成严格 K 线 payload、市场时区前置规范化、身份/排序/OHLCV 校验与稳定错误契约；15 项专项及报告门禁通过。
+- 第 61 条提交：`184efe5 fix(ME-04): validate canonical history payloads`，标签 `issue/061-ME-04`。
+- 当前第 62 条 ME-01 已确认剩余根因：TradingView 协议中的 `client/user` 仍直接作为数据库所有权键；正在改为登录会话主体，并设计受控、幂等的旧 owner 迁移。
+- ME-01 首轮 43 项严格组合为 38 passed / 5 failed；失败全部来自 NX-15 旧测试未关闭源码文件的 ResourceWarning，已改为 Path.read_text 后准备复验，产品与迁移专项没有失败。
+
+### 问题 62：ME-01（恢复重建）
+- **状态：** complete
+- 验证结论：chart/template/drawing 虽要求登录，仍把请求 `user` 直接作为数据库 owner；已登录主体可横向伪造其他 owner，问题存在。
+- 修复：新增 `WEB_AUTH_PRINCIPAL` 和显式 `TV_STORAGE_LEGACY_USER_IDS`；请求 user 仅校验，不参与授权；所有数据库调用使用 `current_user.get_id()`。旧 999 owner 在单事务中迁移，冲突按 timestamp/id 保留最新，unknown owner 不触碰，quota lock 同步迁移。
+- 验证：4 项 ME-01 专项、60 项严格相邻测试通过，3 skipped；当前可运行仓库回归 515 passed、5 skipped、8 deselected。SQLite 冲突迁移、unknown 隔离、幂等重跑与三条真实路由动态执行均通过。
+- 过程修正：NX-15 旧 AST 测试未关闭源码文件导致 warnings-as-errors 失败，改为 `Path.read_text()` 后同一组合 43 passed。
+- 编译、JSON、diff 与三个历史 CRLF 文件 bare-LF=0 门禁通过。
+- 待提交主题：`fix(ME-01): bind TradingView storage to sessions`。

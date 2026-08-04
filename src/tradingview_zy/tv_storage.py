@@ -122,6 +122,68 @@ def normalize_owner(client_id: Any, user_id: Any) -> tuple[str, str]:
     )
 
 
+def normalize_storage_principal(value: Any) -> str:
+    """Return the authenticated principal used as the database ownership key."""
+
+    return normalize_identifier(
+        value,
+        field="authenticated storage principal",
+        max_bytes=50,
+    )
+
+
+def normalize_legacy_owner_ids(
+    values: Any,
+    *,
+    authenticated_principal: Any,
+) -> tuple[str, ...]:
+    """Normalize the explicit allowlist of legacy protocol user identifiers.
+
+    The request-provided TradingView ``user`` value is not an authorization
+    identity.  Only identifiers listed by trusted configuration may be claimed
+    during the one-way migration to the authenticated principal.
+    """
+
+    principal = normalize_storage_principal(authenticated_principal)
+    if values is None:
+        return ()
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, (list, tuple, set, frozenset)):
+        raise TVStorageFieldError("legacy storage owners must be a sequence")
+
+    result: list[str] = []
+    seen = {principal}
+    for index, value in enumerate(values):
+        owner = normalize_identifier(
+            value,
+            field=f"legacy storage owner[{index}]",
+            max_bytes=50,
+        )
+        if owner in seen:
+            continue
+        seen.add(owner)
+        result.append(owner)
+    return tuple(result)
+
+
+def resolve_storage_owner(
+    client_id: Any,
+    protocol_user_id: Any,
+    authenticated_principal: Any,
+) -> tuple[str, str]:
+    """Bind a TradingView namespace to the authenticated session principal.
+
+    ``client`` remains a bounded compatibility namespace. ``user`` is still
+    validated because it is part of the TradingView protocol, but it is never
+    returned as the database owner and therefore cannot be used for horizontal
+    authorization bypass.
+    """
+
+    client, _protocol_user = normalize_owner(client_id, protocol_user_id)
+    return client, normalize_storage_principal(authenticated_principal)
+
+
 def normalize_chart_payload(
     policy: TVStoragePolicy,
     *,

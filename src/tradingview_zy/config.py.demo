@@ -14,6 +14,11 @@ WEB_HOST = '127.0.0.1'
 LOGIN_PWD = ''
 LOGIN_PWD_HASH = ''
 
+# Web 认证主体同时作为 TradingView 存储的不可伪造 owner。多用户部署应由认证系统为每个用户分配稳定且唯一的 ID。
+WEB_AUTH_PRINCIPAL = 'tradingview_zy'
+# 仅认领经过管理员审计的旧 TradingView user_id；当前旧前端固定发送 999。未知 owner 永不自动迁移。
+TV_STORAGE_LEGACY_USER_IDS = ['999']
+
 # Flask 会话签名密钥。留空时首次启动会自动生成并保存到 DATA_PATH/web_secret_key。
 # 容器或多实例部署可通过环境变量 TRADINGVIEW_ZY_WEB_SECRET_KEY 设置固定值（至少 32 字节）。
 WEB_SECRET_KEY = ''

@@ -3,13 +3,19 @@ from __future__ import annotations
 import ast
 import json
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 
-from tradingview_zy.tv_storage import TVStorageError, TVStoragePolicy, normalize_drawing_payload
+from tradingview_zy.tv_storage import (
+    TVStorageError,
+    TVStoragePolicy,
+    normalize_drawing_payload,
+    resolve_storage_owner,
+)
 
 
 def _load_route(request, db, logger):
-    source = open("web/tradingview_zy_chart/cl_app/__init__.py", encoding="utf-8").read()
+    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     create_app = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "create_app")
     route = next(node for node in create_app.body if isinstance(node, ast.FunctionDef) and node.name == "tv_drawings")
@@ -23,6 +29,8 @@ def _load_route(request, db, logger):
         "__log": logger,
         "TVStorageError": TVStorageError,
         "normalize_drawing_payload": normalize_drawing_payload,
+        "resolve_storage_owner": resolve_storage_owner,
+        "current_user": SimpleNamespace(get_id=lambda: "session-user"),
     }
     exec(compile(module, "tv_drawings", "exec"), namespace)
     return namespace["tv_drawings"]
@@ -67,7 +75,7 @@ def test_drawing_save_returns_ok_only_for_strict_true():
         logger,
     )
     assert route("1.1") == {"status": "ok"}
-    assert calls == [{"client_id": "c", "user_id": "u", "layout_id": "2", "chart_id": "1", "symbol": "a:1", "state": "{}"}]
+    assert calls == [{"client_id": "c", "user_id": "session-user", "layout_id": "2", "chart_id": "1", "symbol": "a:1", "state": "{}"}]
     assert logger.errors == logger.exceptions == []
 
 

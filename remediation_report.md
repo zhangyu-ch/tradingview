@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 61
-- **待处理：** 20
+- **已完成：** 62
+- **待处理：** 19
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -72,7 +72,7 @@
 |59|`ME-25`|中|Supply Chain|🟡 部分修复|已完成（锁定安装、制品来源、SBOM/许可证/OSV 门禁）|通过（28 项专项/相邻测试通过；确定性制品、篡改/未登记/缺 provenance、过期策略、OSV advisory 与响应失配故障注入均按预期阻断）|`fix(ME-25)`|
 |60|`ME-27`|中|Secrets|🟡 部分修复|已完成|通过（105 项聚焦、82 项 provider 严格矩阵、495 项可运行仓库回归通过，5 项条件跳过；Secret 引用、权限、轮换、迁移、脱敏及 fail-closed 故障注入均符合预期）|`fix(ME-27)`|
 |61|`ME-04`|中|Web Payload|🟡 部分修复|已完成（统一 K 线 payload 边界）|通过（29 项严格 payload 测试、92 项直接相邻及 525 项可运行仓库回归通过；schema、时区、排序、重复、身份和稳定错误边界均已关闭）|`fix(ME-04)`|
-|62|`ME-01`|中|Web Storage|🟡 部分修复|待处理|—|—|
+|62|`ME-01`|中|Web Storage|🟡 部分修复|已完成（存储授权绑定登录会话）|通过（4 项授权专项、60 项严格相邻及 515 项当前可运行仓库回归通过；请求伪造 user 不再影响任何存储查询或写入）|`fix(ME-01)`|
 |63|`ME-03`|低|Web UDF|❌ 未修复|待处理|—|—|
 |64|`MX-11`|低|Configuration|❌ 未修复|待处理|—|—|
 |65|`MX-07`|低|Frontend|❌ 未修复|待处理|—|—|
@@ -1546,16 +1546,24 @@
 ### 62. ME-01 · TradingView 存储接口信任请求中的 client/user 作为授权边界
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Web Storage
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（存储授权绑定登录会话）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** Web 已要求登录，但 chart/template/drawing 路由仍把请求 query 中的 client/user 直接作为数据库授权主键；任一已登录调用者可伪造另一个 user 值读取、覆盖或删除其 TradingView 存储。旧单用户前端固定发送 user=999，使直接停止信任该字段还需要明确、可审计的迁移方案。
+- **b. 我是怎么修复的？** 新增 session-derived storage principal：所有三类路由只使用 current_user.get_id() 作为数据库 user_id，请求 client 仅保留为受限兼容命名空间，请求 user 只做长度/控制字符校验而永不成为 owner。配置新增稳定认证主体与显式 legacy user allowlist；数据库启动迁移只认领已知旧 user_id=999，冲突时按 timestamp/id 保留最新记录，删除旧 quota lock，并保持未知/任意 owner 完全隔离；迁移幂等且在单事务内完成。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 tests/test_me01_tv_storage_authorization.py，覆盖请求 user 不可成为 owner、三类真实路由在 DB 调用前绑定 current_user、真实 SQLite legacy 冲突迁移、未知 owner 隔离及幂等性，结果 4 passed。
+  - 运行 ME-01、RV-06、NX-14、NX-15、CR-02、HI-06 与 Web Security 严格警告组合，结果 60 passed、3 skipped。
+  - 运行排除当前容器既有 empyrical 与完整 Flask/pinyin 阻断后的可运行仓库回归，结果 515 passed、5 skipped、8 deselected；本次重建尚未包含后续第 63–69 条新增测试，因此计数低于先前临时工作区。
+  - 扩大回归发现本条测试最初在 sys.modules 留下 config stub，导致后续 ME-10 测试顺序污染；增加自动恢复 import/package 状态后整套通过。
+  - 执行 py_compile、compileall、git diff --check、audit JSON 解析，并确认 config.py.demo、db.py 与 cl_app/__init__.py 保持纯 CRLF。
+- **e. 验证是否通过？** 通过（4 项授权专项、60 项严格相邻及 515 项当前可运行仓库回归通过；请求伪造 user 不再影响任何存储查询或写入）
+- **提交：** fix(ME-01): bind TradingView storage to sessions
+- **修改文件：** `src/tradingview_zy/tv_storage.py`, `src/tradingview_zy/config.py.demo`, `src/tradingview_zy/db.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me01_tv_storage_authorization.py`, `tests/test_nx14_storage_not_found.py`, `tests/test_nx15_drawing_save_errors.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前产品认证模型仍是单用户主体；未来真正支持多用户时必须由认证系统分配不可伪造且彼此不同的 principal，不得重新使用请求 user 作为授权键。
+  - 只迁移配置 allowlist 中已知的旧 user_id=999；未知历史 owner 不会被自动认领，管理员如需迁移必须显式审计后加入 allowlist。
+  - 当前容器缺少完整 Flask/pinyin，未用真实浏览器执行 TradingView widget；真实路由所有权顺序由 AST 契约验证，SQLite 迁移与 owner resolver 动态执行。
 - **原报告最新结论：** 登录、会话和远程免密边界已加强，匿名攻击面下降；但 TradingView chart/template/drawing 存储仍信任请求中的 client/user 作为数据分区，没有绑定已认证主体。
 - **原报告建议：** 服务端从会话派生主体；忽略或校验客户端 user/client；为跨用户读写增加授权测试和迁移方案。
 

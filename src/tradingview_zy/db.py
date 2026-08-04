@@ -39,6 +39,8 @@ from tradingview_zy.tv_storage import (
     enforce_quota,
     normalize_chart_payload,
     normalize_drawing_payload,
+    normalize_legacy_owner_ids,
+    normalize_storage_principal,
     utf8_size,
 )
 
@@ -491,6 +493,147 @@ def migrate_tv_storage_schema(engine) -> None:
                         "ON cl_tv_drawings (client_id, user_id)"
                     )
                 )
+
+
+
+def _storage_row_order(row) -> tuple[int, int]:
+    return int(getattr(row, "timestamp", 0) or 0), int(getattr(row, "id", 0) or 0)
+
+
+def migrate_tv_storage_legacy_owners(
+    engine,
+    *,
+    authenticated_principal,
+    legacy_owner_ids,
+) -> dict[str, int]:
+    """Claim explicitly allowlisted legacy namespaces for one authenticated user.
+
+    The migration is deterministic and idempotent.  Unknown owners are never
+    touched.  When the authenticated and legacy namespaces contain the same
+    logical key, the latest ``timestamp``/``id`` record wins.
+    """
+
+    principal = normalize_storage_principal(authenticated_principal)
+    legacy_owners = normalize_legacy_owner_ids(
+        legacy_owner_ids,
+        authenticated_principal=principal,
+    )
+    result = {"charts_moved": 0, "drawings_moved": 0, "records_deleted": 0}
+    if not legacy_owners:
+        return result
+
+    allowed_owners = (principal, *legacy_owners)
+    legacy_set = set(legacy_owners)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    try:
+        if engine.dialect.name == "sqlite":
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+
+        chart_query = session.query(TableByTVCharts).filter(
+            TableByTVCharts.user_id.in_(allowed_owners)
+        )
+        drawing_query = session.query(TableByTVDrawings).filter(
+            TableByTVDrawings.user_id.in_(allowed_owners)
+        )
+        owner_query = session.query(TableByTVStorageOwner).filter(
+            TableByTVStorageOwner.user_id.in_(allowed_owners)
+        )
+        if engine.dialect.name != "sqlite":
+            chart_query = chart_query.with_for_update()
+            drawing_query = drawing_query.with_for_update()
+            owner_query = owner_query.with_for_update()
+
+        charts = chart_query.all()
+        drawings = drawing_query.all()
+        owner_rows = owner_query.all()
+        affected_clients: set[str] = set()
+
+        chart_groups: dict[tuple[str, str, str], list] = {}
+        for row in charts:
+            if str(row.user_id) not in legacy_set and str(row.user_id) != principal:
+                continue
+            key = (str(row.client_id), str(row.chart_type), str(row.name))
+            chart_groups.setdefault(key, []).append(row)
+        for (client_id, _chart_type, _name), rows in chart_groups.items():
+            if not any(str(row.user_id) in legacy_set for row in rows):
+                continue
+            affected_clients.add(client_id)
+            winner = max(rows, key=_storage_row_order)
+            for row in rows:
+                if row is winner:
+                    continue
+                session.delete(row)
+                result["records_deleted"] += 1
+            session.flush()
+            if str(winner.user_id) != principal:
+                winner.user_id = principal
+                result["charts_moved"] += 1
+            session.flush()
+
+        drawing_groups: dict[tuple[str, str, str, str], list] = {}
+        for row in drawings:
+            if str(row.user_id) not in legacy_set and str(row.user_id) != principal:
+                continue
+            key = (
+                str(row.client_id),
+                str(row.layout_id),
+                str(row.chart_id),
+                str(row.symbol or ""),
+            )
+            drawing_groups.setdefault(key, []).append(row)
+        for (client_id, _layout_id, _chart_id, _symbol), rows in drawing_groups.items():
+            if not any(str(row.user_id) in legacy_set for row in rows):
+                continue
+            affected_clients.add(client_id)
+            winner = max(rows, key=_storage_row_order)
+            for row in rows:
+                if row is winner:
+                    continue
+                session.delete(row)
+                result["records_deleted"] += 1
+            session.flush()
+            if str(winner.user_id) != principal:
+                winner.user_id = principal
+                result["drawings_moved"] += 1
+            session.flush()
+
+        owner_by_client: dict[str, list] = {}
+        for row in owner_rows:
+            owner_by_client.setdefault(str(row.client_id), []).append(row)
+            if str(row.user_id) in legacy_set:
+                affected_clients.add(str(row.client_id))
+
+        for client_id in sorted(affected_clients):
+            rows = owner_by_client.get(client_id, [])
+            max_timestamp = max(
+                [int(row.timestamp or 0) for row in rows] + [int(time.time())]
+            )
+            authenticated_row = next(
+                (row for row in rows if str(row.user_id) == principal), None
+            )
+            for row in rows:
+                if str(row.user_id) in legacy_set:
+                    session.delete(row)
+            session.flush()
+            if authenticated_row is None:
+                authenticated_row = TableByTVStorageOwner(
+                    client_id=client_id,
+                    user_id=principal,
+                    timestamp=max_timestamp,
+                )
+                session.add(authenticated_row)
+            else:
+                authenticated_row.timestamp = max_timestamp
+            session.flush()
+
+        session.commit()
+        return result
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 @fun.singleton
@@ -1594,6 +1737,15 @@ class DB(object):
                     .one()
                 )
         owner.timestamp = int(time.time())
+
+    def migrate_tv_storage_legacy_owners(
+        self, authenticated_principal, legacy_owner_ids
+    ) -> dict[str, int]:
+        return migrate_tv_storage_legacy_owners(
+            self.engine,
+            authenticated_principal=authenticated_principal,
+            legacy_owner_ids=legacy_owner_ids,
+        )
 
     @staticmethod
     def _tv_storage_usage(session, client_id: str, user_id: str):
