@@ -3016,16 +3016,41 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "TableByAlertTask 将通用 strategy_config/strategy_memo 继续映射到旧 check_idx_ma_info/check_idx_macd_info 两个 String(200) 列。SQLite 不执行 VARCHAR 长度，而 MySQL 可能报错或截断；现有 create_all 也不会为已部署表改变列结构。Web 对 JSON 与备注没有独立 UTF-8 字节边界，保存后没有往返完整性验证。",
+      "fix_summary": "新增独立 Text 物理列 strategy_config 与 strategy_memo，ORM 通过 strategy_config_text/strategy_memo_text 映射，属性优先读新列并保留旧列只读 fallback。DB 启动在 create_all 后执行幂等迁移：为旧表添加两列并回填 legacy 数据。strategy 专用保存/更新不再写旧 String(200)，而是在单事务内写新列、flush/refresh 后逐字节核对，任何静默截断都回滚。新增统一存储协议：config 必须是标准 JSON 对象，拒绝 NaN/Inf，按 UTF-8 字节限制为 32 KiB；memo 限制 8 KiB 且拒绝 NUL。Web 在 json.loads、策略导入和 DB 调用前执行边界校验。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_nx10_strategy_storage.py`，6 项专项测试通过。",
+        "用 legacy SQLite 表动态执行迁移，确认新增 strategy_config/strategy_memo TEXT、旧值/NULL 回填、第二次迁移零变更。",
+        "在独立子进程导入真实 DB 单例，保存并更新超过 200 字符的中英文 JSON 与长备注；查询新物理列、ORM 属性和 MySQL CreateTable DDL，全部完整。",
+        "验证 JSON 非对象、破损 JSON、NaN/Inf、UTF-8 多字节超限、memo NUL/超限均在写库前拒绝。",
+        "源码顺序门禁确认 raw strategy_kwargs 先检查字节再 json.loads，最终 payload 在 `_alert_tasks.alert_save` 前规范化；DB 保存后执行 refresh 与精确比较。",
+        "运行 NX-10、ME-18、ME-19、ME-26、NX-21、NX-22、NX-23、strategy loader 相邻组合，53 passed、2 deselected（两项仅因归档缺失本地 config.py）。",
+        "执行 py_compile、git diff --check 与 db.py/Web 历史 CRLF bare-LF=0 检查。"
+      ],
+      "verification_result": "通过（6 项专项、53 项可运行相邻组合通过；2 项既有环境阻断被明确排除；迁移、长 JSON 往返、MySQL TEXT DDL、保存后完整性和请求边界均已验证）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/alert_strategy_storage.py",
+        "src/tradingview_zy/db.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_nx10_strategy_storage.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "没有连接真实 MySQL；新表 DDL 用 SQLAlchemy MySQL dialect 编译，运行时迁移与往返在真实 SQLite 执行。",
+        "旧列中已经在历史 MySQL 部署被截断的数据无法恢复；迁移只能无损复制当前仍存在的值。",
+        "legacy check_idx_* 列暂时保留为兼容 fallback，不再由新的 strategy 专用写路径更新；后续 schema 大版本可在确认所有部署迁移后删除。",
+        "32 KiB/8 KiB 是应用硬上限，故意低于 MySQL TEXT 64 KiB；若未来需要更大配置，应版本化变更列类型和边界，而不是放宽其中一端。",
+        "两项旧 DB 子进程测试在产品逻辑前被归档未含 config.py 阻断；NX-10 自己的真实 DB 子进程注入了最小临时 SQLite 配置并通过。"
+      ],
+      "commit_subject": "fix(NX-10): migrate alert strategy storage"
     }
   },
   {

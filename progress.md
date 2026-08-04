@@ -515,3 +515,16 @@
 - 已生成包含完整源码与 `.git` 的 `tradingview_remediation_issues_041-050.zip` 及 SHA-256 sidecar。
 - 使用系统 `unzip` 重新解压；工作树 clean，HEAD 与 `issue/050-ME-02` 一致，`issue/041-*` 至 `issue/050-*` 全部存在，`git fsck --full` 无损坏。
 - Python 标准库 extractall 不恢复 Unix executable mode，曾造成 mode-only 假差；最终验证使用能恢复 external_attr 的系统 unzip。
+## 2026-08-04 会话恢复与第 51–59 条重建
+- 当前运行时仅保留问题 041–050 的完整仓库归档，以及截至第 59 条的规划、发现、进度与机器台账；第 51–59 条原 Git 对象和工作树未挂载，远程仓库也不包含这些本地提交。
+- 从 SHA-256 已验证的 `tradingview_remediation_issues_041-050.zip` 恢复 `issue/050-ME-02` 固定点；依据已保存 a–e 台账逐条重新实现和验证，不伪造先前临时 SHA。
+- 第 51 条专项 6 passed；直接相邻组合首次得到 53 passed / 2 failed，两个失败均在产品逻辑前被归档缺失 `config.py` 阻断；随后显式 deselect 后为 53 passed / 2 deselected。
+
+### 问题 51：NX-10
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：strategy JSON 与 memo 仍写旧 String(200)，create_all 不迁移旧表，Web 无字段字节边界或写后核对，问题存在。
+- 修复：新建两个 Text 列和幂等回填迁移；专用写路径事务内写新列并 refresh 精确往返；config/memo 采用 32 KiB/8 KiB UTF-8 硬上限，拒绝非对象、非标准数值和 NUL。
+- 验证：6 项专项、53 项可运行相邻组合通过；2 项旧测试被归档缺失 config.py 阻断。
+- 首轮专项有一个源码断言依赖单行格式，改为结构/片段顺序；另有测试未 dispose SQLite engine，在 `-W error` 下触发 ResourceWarning，修正测试资源清理后产品代码不变。
+- 提交：`fix(NX-10): migrate alert strategy storage`。

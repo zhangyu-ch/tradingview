@@ -66,6 +66,12 @@ from tradingview_zy.history_request_tracker import (
     HistoryRequestTracker,
     history_request_key,
 )
+from tradingview_zy.alert_strategy_storage import (
+    StrategyStorageValidationError,
+    build_strategy_config,
+    normalize_strategy_memo,
+    parse_strategy_kwargs,
+)
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
@@ -1276,11 +1282,9 @@ def create_app(test_config=None):
             return {"ok": False, "msg": "请选择已注册策略"}
 
         try:
-            strategy_kwargs = json.loads(request.form.get("strategy_kwargs") or "{}")
-        except json.JSONDecodeError as error:
-            return {"ok": False, "msg": f"strategy_kwargs 必须是合法 JSON：{error}"}
-        if not isinstance(strategy_kwargs, dict):
-            return {"ok": False, "msg": "strategy_kwargs 必须是 JSON 对象"}
+            strategy_kwargs = parse_strategy_kwargs(request.form.get("strategy_kwargs"))
+        except StrategyStorageValidationError as error:
+            return {"ok": False, "msg": str(error)}
 
         strategy_registry = getattr(config, "ALERT_STRATEGIES", {})
         try:
@@ -1299,13 +1303,13 @@ def create_app(test_config=None):
         except ValueError as error:
             return {"ok": False, "msg": f"数值字段格式错误：{error}"}
 
-        strategy_config = json.dumps(
-            {
-                "strategy_id": strategy_id,
-                "strategy_kwargs": strategy_kwargs,
-            },
-            ensure_ascii=False,
-        )
+        try:
+            strategy_config = build_strategy_config(strategy_id, strategy_kwargs)
+            strategy_memo = normalize_strategy_memo(
+                request.form.get("strategy_memo", "")
+            )
+        except StrategyStorageValidationError as error:
+            return {"ok": False, "msg": str(error)}
         alert_config = {
             "id": request.form.get("id", ""),
             "market": request.form.get("market", ""),
@@ -1314,7 +1318,7 @@ def create_app(test_config=None):
             "zx_group": request.form.get("zx_group", ""),
             "frequency": request.form.get("frequency", ""),
             "strategy_config": strategy_config,
-            "strategy_memo": request.form.get("strategy_memo", ""),
+            "strategy_memo": strategy_memo,
             "is_send_msg": is_send_msg,
             "is_run": is_run,
         }

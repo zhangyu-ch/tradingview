@@ -313,3 +313,10 @@
 - 状态主键至少包括认证身份、来源地址、市场、代码和周期。只用 symbol/resolution 会让不同浏览器共享并消耗同一节奏。
 - `firstDataRequest=true` 的完整历史是产品 zoom-out 契约；修复内存与并发问题时必须把 tracker 调用放在明确的 follow-up 分支，不能顺手改变返回范围。
 - 该 tracker 不是安全限流器。多 worker 各自有界即可关闭本条内存/竞态根因；跨进程频率治理应由 Redis/代理等独立基础设施承担。
+
+## NX-10 策略配置物理存储与迁移复核
+- SQLAlchemy `create_all()` 只创建缺失表，不会把已部署的 `VARCHAR(200)` 改为 TEXT；模型类型变化必须配套显式、幂等的运行前迁移。
+- 新列优先、旧列 fallback 能把兼容读取与新写入分离：升级后所有新数据进入独立 Text，旧数据回填后仍可读，避免继续扩大 legacy 技术债。
+- SQLite 不强制 VARCHAR 长度，不能作为 MySQL 截断的证明；必须同时编译 MySQL DDL，并在应用层把最大 UTF-8 字节数设在 TEXT 容量以内。
+- 对可能受 SQL mode 影响的文本写入，只有 `flush/refresh` 后精确比较才能发现“调用成功但内容已截断”的伪成功。
+- 字段限制要在 `json.loads` 和可信策略模块导入前执行，否则虽然数据库安全，超大字段仍能消耗解析/导入资源。

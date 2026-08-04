@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 7（问题 041–050 已归档，下一条为第 51 条 NX-10）
+阶段 7（第 51 条 NX-10 已重建并验证，下一条为第 52 条 RV-06）
 
 ## 各阶段
 
@@ -55,7 +55,7 @@
 - **状态：** complete
 
 ### 阶段 7：逐条验证、修复、测试与提交（51–60）
-- [ ] 51. NX-10
+- [x] 51. NX-10
 - [ ] 52. RV-06
 - [ ] 53. ME-15
 - [ ] 54. NX-01
@@ -151,6 +151,11 @@
 | ME-02 历史 firstDataRequest 路由测试在导入阶段缺少 `pinyin`/Flask | 1 | 不伪造完整 Web 运行时；保留原动态测试不改，新增真实路由 AST 旁路门禁并执行 48 项纯逻辑/相邻测试 |
 | ME-02 将 RV-07 历史源码测试与 `-W error` 合跑时，旧测试未关闭 `open()` 文件触发 ResourceWarning | 1 | 不在 ME-02 提交夹带无关 RV-07 测试重构；专项 tracker 单独以 warnings-as-errors 通过，48 项相邻组合按原告警策略通过 |
 | 041–050 归档首次用 Python `ZipFile.extractall` 验证时未恢复 Unix executable mode，Git 显示 6 个脚本 mode-only 修改 | 1 | 归档成员本身含正确 external_attr；改用系统 `unzip` 复验权限、clean status、HEAD、10 个标签和 `git fsck --full`，全部通过 |
+
+| 当前运行时未保留第 51–59 条原 Git 对象/工作树 | 1 | 从已校验 041–050 归档恢复，按持久化 a–e 台账逐条重建，不复用或伪造缺失 SHA |
+| 首次解析 remediation_state 误假定顶层为 dict，实际为 81 项 list | 1 | 读取首项结构后按 list/index 处理，未修改仓库 |
+| 仓库结构探测把第 57 条才新增的 market_registry.py 当成第 50 条既有文件 | 1 | 改为容错存在性检查；确认该文件应在 ME-10 重建时新增 |
+| NX-10 相邻组合两项子进程测试缺少归档外 config.py | 1 | 保留环境限制，显式 deselect 两项；专项真实 SQLite 与 MySQL DDL 证明均通过 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

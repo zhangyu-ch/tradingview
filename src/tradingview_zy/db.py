@@ -15,6 +15,8 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     func,
+    inspect,
+    text,
 )
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.engine import URL
@@ -22,6 +24,10 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
 
 from tradingview_zy import config, fun
+from tradingview_zy.alert_strategy_storage import (
+    normalize_strategy_config,
+    normalize_strategy_memo,
+)
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.database_catalog import list_market_kline_codes
@@ -92,6 +98,12 @@ class TableByAlertTask(Base):
     check_xd_mmd = Column(String(200), comment="检查线段的买卖点")  # 检查线段的买卖点
     check_idx_ma_info = Column(String(200), comment="检查指数的均线")
     check_idx_macd_info = Column(String(200), comment="检查指数的MACD")
+    strategy_config_text = Column(
+        "strategy_config", Text, nullable=True, comment="版本化策略 JSON"
+    )
+    strategy_memo_text = Column(
+        "strategy_memo", Text, nullable=True, comment="策略备注"
+    )
     is_run = Column(Integer, comment="是否运行")  # 是否运行
     is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
@@ -100,11 +112,11 @@ class TableByAlertTask(Base):
 
     @property
     def strategy_config(self):
-        return self.check_idx_ma_info or "{}"
+        return self.strategy_config_text or self.check_idx_ma_info or "{}"
 
     @property
     def strategy_memo(self):
-        return self.check_idx_macd_info or ""
+        return self.strategy_memo_text or self.check_idx_macd_info or ""
 
 
 class TableByAlertRecord(Base):
@@ -337,6 +349,36 @@ def normalize_watchlist_snapshot(stocks) -> list[dict[str, str]]:
     return [by_code[code] for code in order]
 
 
+def migrate_alert_strategy_storage(engine) -> None:
+    """Add dedicated TEXT columns to an existing alert table, idempotently."""
+    inspector = inspect(engine)
+    if not inspector.has_table(TableByAlertTask.__tablename__):
+        return
+    columns = {column["name"] for column in inspector.get_columns(TableByAlertTask.__tablename__)}
+    statements = []
+    if "strategy_config" not in columns:
+        statements.append("ALTER TABLE cl_alert_task ADD COLUMN strategy_config TEXT")
+    if "strategy_memo" not in columns:
+        statements.append("ALTER TABLE cl_alert_task ADD COLUMN strategy_memo TEXT")
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+        connection.execute(
+            text(
+                "UPDATE cl_alert_task SET strategy_config = check_idx_ma_info "
+                "WHERE (strategy_config IS NULL OR strategy_config = '') "
+                "AND check_idx_ma_info IS NOT NULL"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE cl_alert_task SET strategy_memo = check_idx_macd_info "
+                "WHERE (strategy_memo IS NULL OR strategy_memo = '') "
+                "AND check_idx_macd_info IS NOT NULL"
+            )
+        )
+
+
 @fun.singleton
 class DB(object):
     global Base
@@ -377,6 +419,7 @@ class DB(object):
         self.Session = sessionmaker(bind=self.engine)
 
         Base.metadata.create_all(self.engine)
+        migrate_alert_strategy_storage(self.engine)
 
         self.__cache_tables = {}
 
@@ -974,23 +1017,33 @@ class DB(object):
         is_run: int,
         is_send_msg: int,
     ):
-        return self.task_save(
-            market=market,
-            task_name=task_name,
-            zx_group=zx_group,
-            frequency=frequency,
-            interval_minutes=interval_minutes,
-            check_bi_type="",
-            check_bi_beichi="",
-            check_bi_mmd="",
-            check_xd_type="",
-            check_xd_beichi="",
-            check_xd_mmd="",
-            check_idx_ma_info=strategy_config,
-            check_idx_macd_info=strategy_memo,
-            is_run=is_run,
-            is_send_msg=is_send_msg,
-        )
+        normalized_config = normalize_strategy_config(strategy_config)
+        normalized_memo = normalize_strategy_memo(strategy_memo)
+        with self.Session.begin() as session:
+            task = TableByAlertTask(
+                market=market,
+                task_name=task_name,
+                zx_group=zx_group,
+                frequency=frequency,
+                interval_minutes=interval_minutes,
+                check_bi_type="",
+                check_bi_beichi="",
+                check_bi_mmd="",
+                check_xd_type="",
+                check_xd_beichi="",
+                check_xd_mmd="",
+                strategy_config_text=normalized_config,
+                strategy_memo_text=normalized_memo,
+                is_run=is_run,
+                is_send_msg=is_send_msg,
+                dt=datetime.datetime.now(),
+            )
+            session.add(task)
+            session.flush()
+            session.refresh(task)
+            if task.strategy_config_text != normalized_config or task.strategy_memo_text != normalized_memo:
+                raise RuntimeError("strategy storage round-trip verification failed")
+        return True
 
     def task_query(self, market: str = None, id: int = None) -> List[TableByAlertTask]:
         with self.Session() as session:
@@ -1071,24 +1124,33 @@ class DB(object):
         is_run: int,
         is_send_msg: int,
     ):
-        return self.task_update(
-            id=id,
-            market=market,
-            task_name=task_name,
-            zx_group=zx_group,
-            frequency=frequency,
-            interval_minutes=interval_minutes,
-            check_bi_type="",
-            check_bi_beichi="",
-            check_bi_mmd="",
-            check_xd_type="",
-            check_xd_beichi="",
-            check_xd_mmd="",
-            check_idx_ma_info=strategy_config,
-            check_idx_macd_info=strategy_memo,
-            is_run=is_run,
-            is_send_msg=is_send_msg,
-        )
+        normalized_config = normalize_strategy_config(strategy_config)
+        normalized_memo = normalize_strategy_memo(strategy_memo)
+        with self.Session.begin() as session:
+            task = (
+                session.query(TableByAlertTask)
+                .filter(
+                    TableByAlertTask.market == market,
+                    TableByAlertTask.id == id,
+                )
+                .one_or_none()
+            )
+            if task is None:
+                raise LookupError(f"alert task not found: market={market!r}, id={id!r}")
+            task.task_name = task_name
+            task.zx_group = zx_group
+            task.frequency = frequency
+            task.interval_minutes = interval_minutes
+            task.strategy_config_text = normalized_config
+            task.strategy_memo_text = normalized_memo
+            task.is_run = is_run
+            task.is_send_msg = is_send_msg
+            task.dt = datetime.datetime.now()
+            session.flush()
+            session.refresh(task)
+            if task.strategy_config_text != normalized_config or task.strategy_memo_text != normalized_memo:
+                raise RuntimeError("strategy storage round-trip verification failed")
+        return True
 
     def alert_record_save(
         self,
