@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 10（问题 071–080 已完成并归档；正在处理第 81 条 MX-12）
+全部完成（81/81 问题、最终验收、完整归档与提交日志均已完成）
 
 ## 各阶段
 
@@ -100,11 +100,11 @@
 - **状态：** complete
 
 ### 阶段 10：第 81 条与全量回归、最终交付
-- [ ] 81. MX-12
-- [ ] 完成第 81 条并独立提交
-- [ ] 执行全量测试、静态检查和提交完整性校验
-- [ ] 生成最终完整仓库 ZIP、修复报告、git log 与校验和
-- **状态：** in_progress
+- [x] 81. MX-12
+- [x] 完成第 81 条并独立提交
+- [x] 执行全量测试、静态检查和提交完整性校验
+- [x] 生成最终完整仓库 ZIP、修复报告、git log 与校验和
+- **状态：** complete
 
 ## 处理规则
 1. 顺序严格按问题索引 1–81。
@@ -125,6 +125,14 @@
 ## 遇到的错误
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| 最终归档首轮解压验收发现 task_plan/progress 的最终验收记录尚未 amend，归档工作树非 clean | 1 | 先把最终验收记录 amend 到第 81 条并移动标签，再重新生成/解压验收；首轮归档不交付 |
+| 最终组合验收在供应链门禁输出后达到工具总时限，后续检查未执行 | 1 | 不重跑已通过的 32/660 测试和主要门禁；单独执行 FIFO、依赖、报告、81 标签、status 与 fsck |
+| MX-12 执行期间规划/台账五文件被旧会话副本覆盖为第 73 条状态 | 1 | 以当前 Git HEAD 的已提交第 74–80 条版本恢复，仅重写本轮 MX-12 记录；产品代码未受影响 |
+| MX-12 首次批量路由补丁在最终残余断言阶段中止，app factory/service container 已写入而 tasks blueprint 尚未修改 | 1 | 检查实际 Git diff，保留已完成修改；改用带替换计数的路由迁移 |
+| MX-12 第二次 tasks 补丁把期望保留的 `services.*.resolve()` 误判为旧直接调用 | 1 | 文件未写回；门禁收窄为只禁止旧 `guard_task` 与直接业务方法 |
+| MX-12 首轮聚焦测试引用不存在的 `test_me05_web_startup_lazy.py` | 1 | 列举实际文件并改为 `test_me05_lazy_web_startup.py`，未运行测试 |
+| MX-12 专项隔离加载 dataclass 模块未先注册到 `sys.modules`，且 ME-26 仍断言旧 `task_cls(None)` | 1 | 按 import 协议注册测试模块；生命周期断言更新为通用代理和 factory_args |
+| MX-12 扩展 `-W error` 组合在 RV-06 历史 SQLite 测试结束时触发未关闭连接 ResourceWarning | 1 | 不夹带无关测试清理；保留 32 项核心严格门禁，扩展组合按项目原告警策略复验 |
 | LO-01 批量迁移历史测试时 ME-01 精确多行断言未命中 | 1 | 保留已成功写入的三个测试，改为逐文件按函数边界/AST helper 重写，不重复整批精确匹配 |
 | LO-01 首次动态启动使用系统 Python，环境未安装 Flask | 1 | 不重复原命令；确认 pytest 运行于 `/opt/pyvenv`，后续显式使用该解释器执行 Web 动态验证 |
 | LO-04 首轮专项中未知 market 透出 `InvalidRequestError`，未统一为 DataContractError | 1 | 在 OrderRequest 边界捕获领域 InvalidRequestError 并转换为稳定 DataContractError；不放宽市场校验 |
@@ -251,6 +259,9 @@
 | MX-18 首轮 select 信号在 bridge 映射前由既有 monitoring 协议抛 StrategyOutputError，未统一为 bridge 公共错误 | 1 | 在转换边界把既有 TypeError/ValueError 规范为 StrategyBridgeError；不放宽 action 校验，原样复验 |
 
 | MX-18 扩展回测组合收集 `test_backtesting_base_generic.py` 时缺少 empyrical | 1 | 保留环境限制；桥接专项、ME-20 信号协议和 ME-18 runner 共 82 项严格测试已执行，不伪造回测依赖 |
+
+| 最终封闭时误用 Python 执行 `check-complete.sh` | 1 | 首次仅产生 SyntaxError、未执行脚本且未修改产品；改用 `sh /mnt/data/work/planning-with-files-skill/scripts/check-complete.sh` 完成检查 |
+| 最终固定点脚本把报告计数误假定为无 Markdown 粗体的字面量 | 1 | 报告实际为 `- **已完成：** 81` / `- **待处理：** 0`；改用正则解析结构化计数后重验，81/81 台账本身未出错 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

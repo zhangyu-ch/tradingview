@@ -1,5 +1,3 @@
-import importlib
-
 from flask import Flask
 
 from tradingview_zy import config, fun
@@ -32,6 +30,7 @@ from tradingview_zy.zixuan import ZiXuan
 
 from .blueprints import register_blueprints
 from .stocks_bkgn import StocksBKGN
+from .task_services import LazyTaskService
 from .web_services import WebAppServices, install_web_services
 
 
@@ -199,111 +198,18 @@ def create_app(test_config=None):
     default_market_key = default_market_value()
     logger = fun.get_logger()
 
-    def unavailable_task_message():
-        return "监控/选股任务将在策略接入后可用：旧缠论依赖已移除"
-
-    removed_legacy_module_prefixes = (
-        "tradingview_zy.cl",
-        "tradingview_zy.kcharts",
-        "tradingview_zy.monitor",
-        "tradingview_zy.xuangu",
+    alert_tasks = LazyTaskService(
+        module_name=f"{__package__}.alert_tasks",
+        attribute_name="AlertTasks",
+        factory_args=(None,),
+        logger=logger,
     )
-    removed_legacy_import_names = (
-        "cl",
-        "cl_interface",
-        "cl_utils",
-        "kcharts",
-        "monitor",
-        "xuangu",
+    xuangu_tasks = LazyTaskService(
+        module_name=f"{__package__}.xuangu_tasks",
+        attribute_name="XuanguTasks",
+        factory_args=(None,),
+        logger=logger,
     )
-
-    def is_removed_legacy_import_error(error: ImportError):
-        missing_name = getattr(error, "name", None) or ""
-        if any(
-            missing_name == prefix or missing_name.startswith(f"{prefix}.")
-            for prefix in removed_legacy_module_prefixes
-        ):
-            return True
-        message = str(error)
-        if any(prefix in message for prefix in removed_legacy_module_prefixes):
-            return True
-        return missing_name == "tradingview_zy" and any(
-            f"'{import_name}'" in message
-            for import_name in removed_legacy_import_names
-        )
-
-    class UnavailableTasks:
-        def __init__(self, module_name: str, error: ImportError):
-            self.module_name = module_name
-            self.error = error
-
-        def __getattr__(self, name):
-            raise RuntimeError(unavailable_task_message()) from self.error
-
-    class LazyTasks:
-        def __init__(self, module_name: str, class_name: str, on_load=None):
-            self.module_name = module_name
-            self.class_name = class_name
-            self.on_load = on_load
-            self._task_obj = None
-            self._task_error = None
-
-        @property
-        def error(self):
-            return self._task_error
-
-        def _load(self):
-            if self._task_obj is not None or self._task_error is not None:
-                return self._task_obj
-            task_cls, task_error = load_task_class(
-                self.module_name, self.class_name
-            )
-            if task_error is not None:
-                self._task_error = task_error
-                return None
-            self._task_obj = task_cls(None)
-            if self.on_load is not None:
-                self.on_load(self._task_obj)
-            return self._task_obj
-
-        def __getattr__(self, name):
-            task_obj = self._load()
-            if task_obj is None:
-                raise RuntimeError(unavailable_task_message()) from self._task_error
-            return getattr(task_obj, name)
-
-    def load_task_class(module_name: str, class_name: str):
-        try:
-            module = importlib.import_module(f"{__package__}.{module_name}")
-            return getattr(module, class_name), None
-        except (ImportError, ModuleNotFoundError) as error:
-            if is_removed_legacy_import_error(error):
-                logger.warning(
-                    "%s 依赖的旧缠论模块已移除，任务将在策略接入后可用：%s",
-                    module_name,
-                    error,
-                )
-                return None, error
-            logger.exception("%s 导入异常", module_name)
-            raise
-
-    def task_error_response(error: Exception | None = None):
-        message = unavailable_task_message()
-        if error is not None:
-            message = f"{message}：{error}"
-        return {"ok": False, "msg": message}
-
-    alert_tasks = LazyTasks("alert_tasks", "AlertTasks")
-    xuangu_tasks = LazyTasks("xuangu_tasks", "XuanguTasks")
-
-    def guard_task(task_obj):
-        if isinstance(task_obj, UnavailableTasks):
-            return task_error_response(task_obj.error)
-        if isinstance(task_obj, LazyTasks):
-            task_obj._load()
-            if task_obj.error is not None:
-                return task_error_response(task_obj.error)
-        return None
 
     app = Flask(__name__, instance_relative_config=True)
     app.extensions["scheduler_mode"] = "external-process"
@@ -372,7 +278,6 @@ def create_app(test_config=None):
         logger=logger,
         alert_tasks=alert_tasks,
         xuangu_tasks=xuangu_tasks,
-        guard_task=guard_task,
         security_overrides=security_overrides,
         database=db,
         get_exchange=get_exchange,

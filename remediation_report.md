@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 78
-- **待处理：** 3
+- **已完成：** 81
+- **待处理：** 0
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -91,7 +91,7 @@
 |78|`LO-03`|低|Domain Model|🟡 部分修复|已完成（市场、周期与订单代码统一领域化）|通过（11 项专项、193 项严格相邻、637 项可运行仓库回归及全部静态门禁通过）|`refactor(LO-03)`|
 |79|`LO-04`|低|Domain Model|🟡 部分修复|已完成（不可变 provider、策略与订单数据契约）|通过（9 项专项、142 项严格相邻与 646 项可运行仓库回归通过；环境阻断已单独记录）|`refactor(LO-04)`|
 |80|`LO-01`|低|Maintainability|🟡 部分修复|已完成（Flask 工厂拆分为功能蓝图与 app-scoped 服务容器）|通过（5 项结构专项、214 项严格相邻、651 项可运行仓库回归及全部静态门禁通过）|`refactor(LO-01)`|
-|81|`MX-12`|低|Architecture / Spec|🟡 部分修复|待处理|—|—|
+|81|`MX-12`|低|Architecture / Spec|🟡 部分修复|已完成（通用可观测任务服务代理）|通过（9 项专项、32 项严格核心、200 项相邻及 660 项可运行仓库回归通过；所有旧模块专用分支已删除）|`refactor(MX-12)`|
 
 ## 逐条记录
 
@@ -1958,28 +1958,23 @@
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 低 / Domain Model
 - **本轮状态：** 已完成（不可变 provider、策略与订单数据契约）
-- **问题是否存在：** 是。当前运行树实际没有原报告曾引用的 `OrderRequest`、`Fill`、`OrderState` 或 `KlineFrame`；Alpaca/Polygon 重复构造 OHLCV dict，策略配置在 Web、任务、存储和 loader 之间重复解析任意 dict，策略桥接也缺少显式订单/成交/状态数据组。
-- **a. 这个问题是什么？** 相同字段组由多个调用方分别拼装和校验，容易出现字段遗漏、拼写漂移、嵌套对象被修改、NaN/Inf/负数量进入下游，以及策略配置或订单语义被调用方猜测。SQLite/DataFrame 的宽松行为会进一步掩盖错误。
-- **b. 我是怎么修复的？**
-  - 新增 `data_contracts.py`，建立版本化、`frozen=True, slots=True` 的 `ProviderBarPayload`、`KlineBar`、`StrategyParameters`、`OrderRequest`、`Fill` 和 `OrderState`。
-  - 所有对象统一校验文本、控制字符、有限数、OHLC 一致性、非负成交量、正数量/价格、timezone-aware 时间、JSON schema/大小及 Market/OrderSide/OrderOffset/OrderStatus 枚举。
-  - Alpaca 与 Polygon 只构造 `ProviderBarPayload`；`us_history` 规范化时间、排序和去重后物化 `KlineBar`，内部仍输出兼容 DataFrame。
-  - 策略存储、Web 编辑和 `AlertTasks` 共同使用 `StrategyParameters`，新配置带 `schema_version=1`，旧的已登记 `strategy_path` 继续只读兼容。
-  - `strategy_bridge` 新增显式 `TradeDecision → OrderRequest`，数量/价格必须由调用者提供；不会启用实盘提交。`Fill/OrderState` 提供不可变部分成交、加权均价、归属和超量检查。
-- **c. 修复后是否验证？** 是。
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 当前运行树并没有原报告曾引用的 OrderRequest、Fill、OrderState 或 KlineFrame 领域对象。Alpaca 与 Polygon 仍各自组装相同的 timestamp/open/close/high/low/volume dict；策略配置在 Web 编辑、AlertTasks、存储校验和策略加载之间反复 json.loads 并传递任意 dict；策略交易桥接只能生成旧 Operation，缺少明确的订单意图、成交和状态数据组。字段遗漏、拼写漂移、可变嵌套对象和非法数值只能由每个调用方重复防御，问题仍真实存在。
+- **b. 我是怎么修复的？** 新增 data_contracts.py，定义版本化、frozen/slots 的 ProviderBarPayload、KlineBar、StrategyParameters、OrderRequest、Fill 和 OrderState，并统一文本、有限数、时区、OHLC、数量、价格、JSON 大小及领域枚举校验。Alpaca/Polygon 只构造 ProviderBarPayload，共享 us_history 在规范化后物化 KlineBar 再输出 DataFrame；策略存储、Web 编辑和 AlertTasks 共同解析一次 StrategyParameters，新保存配置带 schema_version 且兼容已登记的旧 strategy_path；strategy_bridge 增加显式 TradeDecision→OrderRequest 转换，必须由调用者提供数量/价格，绝不启用实盘提交。Fill/OrderState 提供不可变的部分成交、加权均价和归属/超量检查。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 9 项专项测试覆盖不可变性、OHLC/负成交量、时区、重复时间、canonical JSON/深拷贝、未知字段、订单参数、部分/完整成交和错误 fill 归属。
-  - 静态检查两个 US provider 已无重复六字段 dict；动态确认策略配置只解析一次且旧 `strategy_path` 只能映射服务端注册表。
-  - LO-04/NX-10/ME-18/ME-20/MX-18/LO-02/ME-14/LO-06/ME-17 严格组合：142 passed（`-W error`）。
-  - 可运行仓库回归：646 passed、5 skipped、8 deselected；8 项是当前容器缺少 `pinyin` 的既有 Web 导入节点，完整回测收集仍受缺少 `empyrical` 阻断。
-  - compileall、质量/可读性、供应链、Secret、FIFO、Node、JSON、diff 与 CRLF 门禁全部通过。
-- **e. 验证是否通过？** 通过。三类高风险数据团块均由不可变、版本化、可验证的公共边界接管，且没有打开实盘能力。
+  - 9 项 LO-04 专项测试验证 frozen 语义、OHLC/负成交量拒绝、纽约时区 KlineBar、重复时间 keep-last、canonical JSON、深拷贝、未知字段/双策略身份拒绝、订单参数校验、Fill→OrderState 部分/完整成交及篡改归属拒绝。
+  - 静态契约确认 Alpaca/Polygon 不再复制六字段 dict，AlertTasks 与 Web 编辑不再各自 json.loads strategy_config；动态验证旧 strategy_path 仍只能解析到服务端注册策略。
+  - 运行 LO-04、NX-10、ME-18、ME-20、MX-18、LO-02、ME-14、LO-06、ME-17 严格相邻组合：142 passed（-W error）。
+  - 使用受控临时 config 执行全部可运行仓库回归：646 passed、5 skipped、8 deselected；deselect 为当前容器缺少 pinyin 的既有 Web 导入节点，完整回测收集仍受缺少 empyrical 阻断。
+  - 执行 compileall、repository hygiene、readability、quality gates、Secret、供应链、FIFO、Node JavaScript、JSON、git diff --check 和历史 CRLF 门禁，全部通过。
+- **e. 验证是否通过？** 通过（9 项专项、142 项严格相邻与 646 项可运行仓库回归通过；环境阻断已单独记录）
 - **提交：** refactor(LO-04): introduce immutable data contracts
 - **修改文件：** `src/tradingview_zy/data_contracts.py`, `src/tradingview_zy/alert_strategy_storage.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/us_history.py`, `src/tradingview_zy/strategy_bridge.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `tests/test_lo04_data_clump_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - 内部 DataFrame 与 SDK 对象仍是实现细节；本条不做全仓对象化。
-  - `OrderRequest` 仅表达订单意图，`LIVE_ORDERS` 仍由 CR-03 无条件 fail-closed；没有真实券商联调或交易。
-  - 当前容器缺少 `pinyin` 与 `empyrical`，环境阻断已如实记录，托管 Python 3.11 锁定环境仍需运行完整套件。
+  - 内部 pandas DataFrame 与第三方 SDK 对象仍作为实现细节保留；本条只在 provider、JSON、策略和订单公共边界消除高风险数据团块，不做全仓对象化。
+  - OrderRequest 是不可变订单意图，不是下单权限；所有 LIVE_ORDERS 仍由 CR-03 fail-closed，未连接真实券商或执行任何交易。
+  - 当前容器缺少 pinyin 与 empyrical；相关测试在进入本条产品断言前阻断，托管 Python 3.11 锁定环境仍要求完整 pytest。
 - **原报告最新结论：** 新增不可变 OrderRequest、Fill、OrderState 和严格 KlineFrame 边界，部分核心 dict 已被领域对象替代；旧适配器和策略参数仍广泛传 dict。
 - **原报告建议：** 按模块边界渐进迁移，不要求内部 DataFrame 全部对象化；优先交易/成交和外部 provider payload。
 
@@ -1987,37 +1982,49 @@
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 低 / Maintainability
 - **本轮状态：** 已完成（Flask 工厂拆分为功能蓝图与 app-scoped 服务容器）
-- **问题是否存在：** 是。修复前 `cl_app/__init__.py` 有 1,516 行，`create_app()` 内嵌认证、页面、UDF、TradingView 存储、自选、监控/选股、设置、CSRF、限流和调度状态等 35 个路由/钩子，并通过闭包直接捕获 DB、provider、任务与缓存对象。
-- **a. 这个问题是什么？** 认证、行情、存储、任务和设置任一功能变化都必须修改同一个工厂；路由依赖既不是构造参数也不是 app extension，测试只能解析工厂内部函数。结果是职责边界模糊、启动副作用难隔离、同进程多 app 共享状态风险和大量 Shotgun/Divergent Change。
-- **b. 我是怎么修复的？** 新增 `WebAppServices`，以 `frozen=True, slots=True` 容器通过 `app.extensions` 显式发布数据库、provider factory、任务代理、限流器、市场元数据和安全策略，并深度冻结共享市场映射/catalog。把 37 个公开路由拆到 `core/auth/pages/udf/storage/watchlist/tasks/settings` 八个真实 Flask Blueprint；`create_app()` 只负责配置、安全边界、协作者装配、服务发布和 Blueprint 注册，降到 351 行且不再内嵌 route/hook。`pinyin` 只在 search 路由调用时惰性导入。新增 `test_support.web_routes`，让历史契约测试直接定位和隔离执行真实 Blueprint 路由；Secret checker 改为 AST 审计 settings Blueprint。
-- **c. 修复后是否验证？** 是。
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 修复前 cl_app/__init__.py 有 1,516 行，create_app() 内嵌认证、页面、UDF、TradingView 存储、自选、监控/选股、设置、CSRF、限流和调度状态等 35 个路由/钩子。业务路由通过闭包直接捕获全局 DB、provider 工厂、任务代理和缓存对象，任何功能变化都迫使修改同一工厂，测试也只能解析工厂内部函数，Divergent Change/Shotgun 风险真实存在。
+- **b. 我是怎么修复的？** 新增 app-scoped、frozen/slots 的 WebAppServices，通过 app.extensions 显式安装数据库、provider factory、任务、限流、市场元数据和安全策略；共享市场映射与 catalog 做深度不可变投影。把 37 个公开路由按 core/auth/pages/udf/storage/watchlist/tasks/settings 八个真实 Flask Blueprint 拆分，create_app 只负责配置、安全边界、协作者装配、服务发布和 Blueprint 注册。pinyin 改为 search 路由内惰性导入，启动不再因搜索可选依赖产生副作用。新增 route AST helper，使历史契约测试直接验证 Blueprint 路由而不依赖工厂闭包；Secret checker 同步以 AST 审计 settings Blueprint。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 5 项 LO-01 专项验证工厂行数、零内嵌路由/钩子、37 个路由八蓝图归属、Blueprint 不直接构造 DB/provider/ZiXuan/StocksBKGN，以及 service container 安装与深度不可变元数据。
-  - 把 UDF、存储、授权、CSRF、Secret、自选、监控/选股、交易日历、限流和 payload 的既有测试迁移到 Blueprint 路由；严格相邻组合 214 passed（`-W error`）。
-  - 受控临时 config 下运行全部可运行仓库回归：651 passed、5 skipped、8 deselected；8 个节点仍因当前容器缺少 `pinyin` 在旧 package-import 测试入口阻断，完整回测收集仍受缺少 `empyrical` 限制。
-  - 执行 compileall、repository/readability/quality、Secret exposure/reference、dependency/supply-chain、FIFO、Node、JSON、diff 与历史 CRLF 门禁，全部通过。
-- **e. 验证是否通过？** 通过。工厂从业务路由宿主收敛为 composition root；功能边界、依赖所有权和测试入口均已显式化。
+  - 5 项 LO-01 专项门禁验证 create_app 从 1,516 行/内嵌路由降到 351 行、工厂无 route/hook 注册、37 个路由全部归属八个 Blueprint，业务 Blueprint 不直接构造 DB/provider/ZiXuan/StocksBKGN。
+  - 动态隔离加载 WebAppServices，验证每个 app 使用独立实例，MappingProxyType/tuple 深度冻结 market/frequency/catalog 元数据，输入对象后续修改不会污染已发布服务，重复安装明确拒绝。
+  - 把既有 UDF、存储、授权、CSRF、Secret、自选、任务、日历、限流和 payload 测试迁移到真实 Blueprint 路由；严格相邻组合 214 passed（-W error）。
+  - 使用受控临时 config 执行仓库级可运行回归：651 passed、5 skipped、8 deselected；8 个 deselect 是当前容器缺少 pinyin 的历史 package-import 节点，完整回测收集仍由缺少 empyrical 阻断。
+  - 执行 compileall、repository hygiene、readability、quality gates、Secret exposure/reference、dependency/supply-chain、FIFO、Node JavaScript、JSON、git diff 和历史 CRLF 门禁，全部通过。
+- **e. 验证是否通过？** 通过（5 项结构专项、214 项严格相邻、651 项可运行仓库回归及全部静态门禁通过）
 - **提交：** refactor(LO-01): split Flask app into feature blueprints
-- **修改文件：** `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/web_services.py`, `web/tradingview_zy_chart/cl_app/blueprints/`, `test_support/web_routes.py`, `script/remediation/check_secret_exposure.py`, `tests/test_lo01_app_factory_blueprints.py` 及迁移到 Blueprint 路由的历史 Web 契约测试，另含规划/台账文件。
+- **修改文件：** `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/web_services.py`, `web/tradingview_zy_chart/cl_app/blueprints/__init__.py`, `web/tradingview_zy_chart/cl_app/blueprints/core.py`, `web/tradingview_zy_chart/cl_app/blueprints/auth.py`, `web/tradingview_zy_chart/cl_app/blueprints/pages.py`, `web/tradingview_zy_chart/cl_app/blueprints/udf.py`, `web/tradingview_zy_chart/cl_app/blueprints/storage.py`, `web/tradingview_zy_chart/cl_app/blueprints/watchlist.py`, `web/tradingview_zy_chart/cl_app/blueprints/tasks.py`, `web/tradingview_zy_chart/cl_app/blueprints/settings.py`, `test_support/__init__.py`, `test_support/web_routes.py`, `script/remediation/check_secret_exposure.py`, `tests/test_lo01_app_factory_blueprints.py`, `tests/test_cr02_settings_secret.py`, `tests/test_hi06_csrf.py`, `tests/test_lo04_data_clump_contracts.py`, `tests/test_lo05_market_registry_single_source.py`, `tests/test_me01_tv_storage_authorization.py`, `tests/test_me02_history_request_tracker.py`, `tests/test_me03_udf_resolution_union.py`, `tests/test_me04_web_payload_contracts.py`, `tests/test_me05_lazy_web_startup.py`, `tests/test_me06_watchlist_transfer.py`, `tests/test_me12_tdx_contracts.py`, `tests/test_me19_selection_task_atomicity.py`, `tests/test_me26_scheduler_lifecycle.py`, `tests/test_me30_trading_calendar.py`, `tests/test_mx04_exchange_db_trading_state.py`, `tests/test_nx10_strategy_storage.py`, `tests/test_nx14_storage_not_found.py`, `tests/test_nx15_drawing_save_errors.py`, `tests/test_nx16_tick_request_limits.py`, `tests/test_nx17_udf_market_metadata.py`, `tests/test_rv06_tv_storage_limits.py`, `tests/test_rv07_web_parameter_validation.py`, `tests/test_selection_monitoring.py`, `tests/test_web_security.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - 当前容器没有 Flask/Flask-Login/APScheduler/pinyin，未运行真实 WSGI/浏览器启动；路由隔离执行和托管 CI 完整环境负责补充，未把环境阻断伪报为通过。
-  - 工厂仍暂时保留 legacy task fallback helper/class，严格留给下一条 MX-12 独立提交处理。
-  - 可变数据库、任务和限流协作者按设计由 app 独占引用；只有共享元数据被深度冻结。
+  - 当前容器未安装 Flask/Flask-Login/APScheduler/pinyin，无法在本地启动真实 WSGI app；路由 AST 隔离执行、651 项可运行回归和托管 CI 的锁定 Python 3.11 完整测试共同覆盖，未伪称完成真实浏览器启动联调。
+  - create_app 仍暂时保留五个 legacy task helper 和 Unavailable/LazyTasks 类；它们是紧接着第 81 条 MX-12 的专门修复范围，本条不提前混入旧模块降级策略删除。
+  - 服务容器只冻结共享元数据映射；数据库、限流器和任务代理是有生命周期的协作者，按设计保持对象身份并由 app 独占引用。
 - **原报告最新结论：** cl_app/__init__.py 继续集中认证、调度、UDF、存储、自选、监控和选股；文件职责没有拆分。
 - **原报告建议：** 按 auth/udf/storage/watchlist/tasks/health 蓝图拆分；依赖通过 app extensions 注入。
 
 ### 81. MX-12 · Web app factory 保留旧模块专用降级分支，当前成为无覆盖的迁移残留
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 低 / Architecture / Spec
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通用可观测任务服务代理）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** LO-01 已把业务路由移出 app factory，但 create_app() 仍内嵌旧缠论模块名集合、ImportError 文本匹配、UnavailableTasks、LazyTasks、load_task_class、task_error_response 和 guard_task。只有命中特定历史模块名的失败会被降级，其他导入/构造失败重新抛出；失败对象没有统一健康状态，公共响应也不携带真实 module/attribute/error_type。迁移残留真实存在。
+- **b. 我是怎么修复的？** 新增与具体历史模块无关的 task_services.py：LazyTaskService 只声明真实 module_name、attribute_name 和 factory 参数，以 Condition/RLock 状态机管理 not_loaded/loading/ready/failed；并发调用只执行一次 import/构造，失败缓存为稳定 TaskServiceUnavailableError，同时通过 __cause__ 保留原始异常。TaskServiceHealth 和公共 payload 只公开 module、attribute、state、attempts、error_type，不复制异常文本或 Secret。create_app 删除全部旧模块名/异常文本分支，直接创建两个通用代理；WebAppServices 删除 guard_task 闭包。任务 Blueprint 的六个入口统一 resolve 代理，加载失败返回 HTTP 503，列表接口同时保留 Layui code/count/data 形状。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 9 项 MX-12 专项覆盖初始/ready/failed 健康状态、同实例缓存、12 线程并发仅一次 import/构造、失败缓存、真实异常链和非法 module/attribute 拒绝。
+  - 故障注入 ModuleNotFoundError，异常消息包含 token=super-secret；验证两次 resolve 都以原异常为 __cause__，import 只调用一次，而公共 payload、错误字符串和日志均不含 Secret 或原始异常文本。
+  - 隔离执行真实 alert_list Blueprint 路由，验证通用失败响应为 HTTP 503，并携带 module/attribute/state/attempts/error_type；列表响应继续包含 code=1、count=0、data=[]。
+  - 静态扫描 create_app、WebAppServices 和 tasks Blueprint，确认 UnavailableTasks、LazyTasks、旧模块名集合、ImportError 文本匹配、load_task_class、task_error_response 与 guard_task 全部删除；只保留两个真实 LazyTaskService 描述符和六个 resolve 调用。
+  - 运行 MX-12/LO-01/NX-10/ME-26/ME-05 核心组合：32 passed（-W error）；运行 Web、UDF、存储、授权、CSRF、自选、监控/选股、调度相邻组合：200 passed、3 skipped。严格扩展唯一额外告警来自 RV-06 历史 SQLite 测试未关闭连接，不是产品断言失败。
+  - 临时准备受控 config 后运行仓库级可运行回归：660 passed、5 skipped、8 deselected；8 个 deselect 仍是当前容器缺少 pinyin 的历史 Web package-import 节点，完整回测收集仍由缺少 empyrical 阻断。
+  - 执行 compileall、repository hygiene、readability、quality gates、Secret exposure/reference、supply-chain、FIFO、JSON、git diff 和历史 CRLF 门禁，全部通过。
+- **e. 验证是否通过？** 通过（9 项专项、32 项严格核心、200 项相邻及 660 项可运行仓库回归通过；所有旧模块专用分支已删除）
+- **提交：** refactor(MX-12): replace legacy task fallbacks
+- **修改文件：** `web/tradingview_zy_chart/cl_app/task_services.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/web_services.py`, `web/tradingview_zy_chart/cl_app/blueprints/tasks.py`, `test_support/web_routes.py`, `tests/test_mx12_task_service_loading.py`, `tests/test_lo01_app_factory_blueprints.py`, `tests/test_me26_scheduler_lifecycle.py`, `tests/test_nx10_strategy_storage.py`, `tests/test_selection_monitoring.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器缺少 Flask/Flask-Login/APScheduler/pinyin，未执行真实 WSGI 启动；通用代理本身无 Flask 依赖，Blueprint 失败路由已由 AST 隔离执行，锁定依赖完整启动由 CI 负责。
+  - 失败状态有意在进程生命周期内缓存，避免每个请求重复 import/构造和日志风暴；部署修复依赖后通过进程重启重新加载，不在公共 HTTP 路由暴露 reset。
+  - 完整回测测试文件仍因当前环境缺少 empyrical 无法收集；本条不修改回测代码。
+  - 公共健康 payload 暴露模块和类名用于运维定位，但不暴露文件路径、原始异常消息、栈或 Secret；详细异常仅保留在 Python exception chain。
 - **原报告最新结论：** 最新 create_app() 仍完整保留 _REMOVED_LEGACY_*、_UnavailableTasks 和 _LazyTasks。
 - **原报告建议：** 清理旧模块专用判断；保留通用 lazy loading 时，错误应携带真实模块、异常链和健康状态。

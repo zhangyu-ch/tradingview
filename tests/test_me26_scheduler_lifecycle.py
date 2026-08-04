@@ -134,7 +134,8 @@ def test_flask_factory_has_no_scheduler_lifecycle_side_effects() -> None:
     assert "apscheduler" not in source.lower()
     assert "TornadoScheduler" not in source
     assert "scheduler.start()" not in source
-    assert "task_cls(None)" in source
+    assert source.count("LazyTaskService(") == 2
+    assert "factory_args=(None,)" in source
     assert "SchedulerStatusStore()" in source
     tasks_source = (WEB / "cl_app" / "blueprints" / "tasks.py").read_text(encoding="utf-8")
     assert "services.scheduler_status_store.read()" in tasks_source

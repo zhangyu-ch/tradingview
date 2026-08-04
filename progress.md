@@ -898,3 +898,25 @@
 - 归档固定点为第 80 条 LO-01 提交；问题 071–080 十个标签全部可解引用，解压后工作树干净，`git fsck --full` 返回成功。
 - 初验仅发现一个由第 74 条 amend/重打标签留下的不可达旧 tag 对象；在最终重打第 80 条计划状态后将执行 `reflog expire + gc --prune=now` 并重新生成归档，不影响任何可达提交或标签。
 - 下一条：81. MX-12。
+
+
+### 问题 81：MX-12
+- 已验证旧模块专用降级分支仍存在。新增通用 `LazyTaskService`，移除旧模块名/异常文本判断、UnavailableTasks、LazyTasks、load_task_class、task_error_response 和 guard_task。
+- 任务服务以线程安全状态机只加载一次；失败缓存、真实 module/attribute/error_type/health payload 和原始异常链均有专项测试，Secret 文本不会进入公共响应或日志。
+- 任务 Blueprint 对六个入口统一将加载失败映射为 HTTP 503；列表接口保留 Layui `code/count/data` 形状。
+- MX-12/LO-01/NX-10/ME-26/ME-05 核心严格组合 32 passed（-W error）。扩展 Web/任务相邻组合 200 passed、3 skipped；严格扩展唯一失败来自 RV-06 历史 SQLite ResourceWarning。
+- 仓库级可运行回归 660 passed、5 skipped、8 deselected；deselect 仍是当前容器缺少 pinyin 的既有 Web 节点，完整回测收集仍受缺少 empyrical 限制。
+- repository/readability/quality/Secret/supply-chain/FIFO/compileall/JSON/diff/CRLF 门禁全部通过。
+- 问题 071–080 最终归档：SHA-256 `7aad3b671291f2cf2288b816a7967ccd797a3b1863c01133c9061b647771894d`，HEAD `4adbcd0c6aa1ad6ea374b35932120fb42426b72d`，十个标签、clean status、clean fsck 均通过。
+- MX-12 a–e 台账已完成；验证结论为通过，提交主题 `refactor(MX-12): replace legacy task fallbacks`。下一步创建独立提交/标签，然后执行最终固定点验收与完整仓库归档。
+- 最终组合验收在已完成 32 项严格核心、660 项仓库回归和主要静态/供应链门禁后达到工具总时限；工作树仍干净。未返回的 FIFO、依赖、报告、标签和 Git 检查改为独立执行。
+- 最终剩余门禁已单独完成：FIFO、依赖唯一来源、报告统计、81/81 标签可达且对应 81 个唯一提交、clean fsck 全部通过。
+- 最终归档首轮已生成，但解压验收发现上述最终记录尚未 amend，导致归档工作树显示 task_plan/progress 修改；该包不作为交付，先 amend 第 81 条后重新生成。
+
+
+### 最终交付状态
+- 第 81 条提交后的干净预最终归档已重新解压并验证：81/81 台账、81 个问题标签、81 个唯一问题提交、clean status、clean fsck 全部通过。
+- 最终产品验证固定为：32 项 MX-12 核心严格测试、660 项仓库级可运行回归、全部静态/安全/供应链/FIFO/依赖/报告门禁通过。
+- 规划阶段全部 complete；最后一次 amend 仅封闭本段交付状态，不改变产品代码。
+- 最终规划检查首次误用 Python 执行 shell 脚本，只产生 SyntaxError，未修改仓库；已改用 `sh` 执行正确检查。
+- 最终固定点脚本首次按无粗体字面量查找报告计数而失败；报告实际结构正确，改用正则解析 `已完成=81`、`待处理=0` 后重验。

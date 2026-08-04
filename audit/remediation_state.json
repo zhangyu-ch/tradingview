@@ -5065,16 +5065,46 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（通用可观测任务服务代理）",
+      "problem_verified": true,
+      "problem_summary": "LO-01 已把业务路由移出 app factory，但 create_app() 仍内嵌旧缠论模块名集合、ImportError 文本匹配、UnavailableTasks、LazyTasks、load_task_class、task_error_response 和 guard_task。只有命中特定历史模块名的失败会被降级，其他导入/构造失败重新抛出；失败对象没有统一健康状态，公共响应也不携带真实 module/attribute/error_type。迁移残留真实存在。",
+      "fix_summary": "新增与具体历史模块无关的 task_services.py：LazyTaskService 只声明真实 module_name、attribute_name 和 factory 参数，以 Condition/RLock 状态机管理 not_loaded/loading/ready/failed；并发调用只执行一次 import/构造，失败缓存为稳定 TaskServiceUnavailableError，同时通过 __cause__ 保留原始异常。TaskServiceHealth 和公共 payload 只公开 module、attribute、state、attempts、error_type，不复制异常文本或 Secret。create_app 删除全部旧模块名/异常文本分支，直接创建两个通用代理；WebAppServices 删除 guard_task 闭包。任务 Blueprint 的六个入口统一 resolve 代理，加载失败返回 HTTP 503，列表接口同时保留 Layui code/count/data 形状。",
+      "verification_performed": true,
+      "verification_method": [
+        "9 项 MX-12 专项覆盖初始/ready/failed 健康状态、同实例缓存、12 线程并发仅一次 import/构造、失败缓存、真实异常链和非法 module/attribute 拒绝。",
+        "故障注入 ModuleNotFoundError，异常消息包含 token=super-secret；验证两次 resolve 都以原异常为 __cause__，import 只调用一次，而公共 payload、错误字符串和日志均不含 Secret 或原始异常文本。",
+        "隔离执行真实 alert_list Blueprint 路由，验证通用失败响应为 HTTP 503，并携带 module/attribute/state/attempts/error_type；列表响应继续包含 code=1、count=0、data=[]。",
+        "静态扫描 create_app、WebAppServices 和 tasks Blueprint，确认 UnavailableTasks、LazyTasks、旧模块名集合、ImportError 文本匹配、load_task_class、task_error_response 与 guard_task 全部删除；只保留两个真实 LazyTaskService 描述符和六个 resolve 调用。",
+        "运行 MX-12/LO-01/NX-10/ME-26/ME-05 核心组合：32 passed（-W error）；运行 Web、UDF、存储、授权、CSRF、自选、监控/选股、调度相邻组合：200 passed、3 skipped。严格扩展唯一额外告警来自 RV-06 历史 SQLite 测试未关闭连接，不是产品断言失败。",
+        "临时准备受控 config 后运行仓库级可运行回归：660 passed、5 skipped、8 deselected；8 个 deselect 仍是当前容器缺少 pinyin 的历史 Web package-import 节点，完整回测收集仍由缺少 empyrical 阻断。",
+        "执行 compileall、repository hygiene、readability、quality gates、Secret exposure/reference、supply-chain、FIFO、JSON、git diff 和历史 CRLF 门禁，全部通过。"
+      ],
+      "verification_result": "通过（9 项专项、32 项严格核心、200 项相邻及 660 项可运行仓库回归通过；所有旧模块专用分支已删除）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "web/tradingview_zy_chart/cl_app/task_services.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "web/tradingview_zy_chart/cl_app/web_services.py",
+        "web/tradingview_zy_chart/cl_app/blueprints/tasks.py",
+        "test_support/web_routes.py",
+        "tests/test_mx12_task_service_loading.py",
+        "tests/test_lo01_app_factory_blueprints.py",
+        "tests/test_me26_scheduler_lifecycle.py",
+        "tests/test_nx10_strategy_storage.py",
+        "tests/test_selection_monitoring.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "当前容器缺少 Flask/Flask-Login/APScheduler/pinyin，未执行真实 WSGI 启动；通用代理本身无 Flask 依赖，Blueprint 失败路由已由 AST 隔离执行，锁定依赖完整启动由 CI 负责。",
+        "失败状态有意在进程生命周期内缓存，避免每个请求重复 import/构造和日志风暴；部署修复依赖后通过进程重启重新加载，不在公共 HTTP 路由暴露 reset。",
+        "完整回测测试文件仍因当前环境缺少 empyrical 无法收集；本条不修改回测代码。",
+        "公共健康 payload 暴露模块和类名用于运维定位，但不暴露文件路径、原始异常消息、栈或 Secret；详细异常仅保留在 Python exception chain。"
+      ],
+      "commit_subject": "refactor(MX-12): replace legacy task fallbacks"
     }
   }
 ]

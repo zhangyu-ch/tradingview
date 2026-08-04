@@ -91,13 +91,7 @@ def test_factory_only_composes_services_and_blueprints() -> None:
     nested_functions = {
         node.name for node in create_app.body if isinstance(node, ast.FunctionDef)
     }
-    assert nested_functions <= {
-        "unavailable_task_message",
-        "is_removed_legacy_import_error",
-        "load_task_class",
-        "task_error_response",
-        "guard_task",
-    }
+    assert nested_functions == set()
     assert not any(
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
@@ -207,7 +201,6 @@ def _service_values(service_type) -> dict:
         market_default_codes=mappings["market_default_codes"],
         market_catalog=[{"value": "a", "label": "A股"}],
         default_market="a",
-        guard_task=lambda value: None,
         security_overrides=mappings["security_overrides"],
         get_exchange=lambda market: market,
         zixuan_factory=lambda market: market,

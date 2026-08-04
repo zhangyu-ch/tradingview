@@ -409,10 +409,11 @@ def test_xuangu_task_add_without_target_group_passes_empty_target(monkeypatch):
     monkeypatch.setattr(cl_app, "get_exchange", lambda market: fake_exchange)
 
     app = cl_app.create_app()
-    route_view = app.view_functions["xuangu_task_add"]
+    route_view = app.view_functions["tasks.xuangu_task_add"]
     wrapped_view = route_view.__wrapped__
-    closure_cells = dict(zip(wrapped_view.__code__.co_freevars, wrapped_view.__closure__))
-    monkeypatch.setattr(closure_cells["_xuangu_tasks"].cell_contents, "_task_obj", FakeXuanguTasks())
+    services = app.extensions["tradingview_zy.web_services"]
+    fake_tasks = FakeXuanguTasks()
+    monkeypatch.setattr(services.xuangu_tasks, "resolve", lambda: (fake_tasks, None))
 
     base_form = {
         "market": "a",
@@ -466,7 +467,7 @@ def test_tv_history_backfill_returns_ohlcv_when_market_is_closed(monkeypatch):
     monkeypatch.setattr(cl_app, "get_exchange", lambda market: ClosedMarketExchange())
 
     app = cl_app.create_app()
-    view = app.view_functions["tv_history"].__wrapped__
+    view = app.view_functions["udf.tv_history"].__wrapped__
     start_ts = int(pd.Timestamp("2026-05-03 09:00:00").timestamp())
     end_ts = int(pd.Timestamp("2026-05-03 10:00:00").timestamp())
     with app.test_request_context(
@@ -538,7 +539,7 @@ def test_tv_history_first_request_returns_available_history_for_zoom_out(monkeyp
     monkeypatch.setattr(cl_app, "get_exchange", lambda market: HistoricalExchange())
 
     app = cl_app.create_app()
-    view = app.view_functions["tv_history"].__wrapped__
+    view = app.view_functions["udf.tv_history"].__wrapped__
     start_ts = int(pd.Timestamp("2026-05-03 09:00:00").timestamp())
     end_ts = int(pd.Timestamp("2026-05-03 10:00:00").timestamp())
     with app.test_request_context(

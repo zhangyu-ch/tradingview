@@ -33,7 +33,6 @@ SERVICE_ATTRIBUTE_NAMES = {
     "max_watchlist_line_bytes": "max_watchlist_line_bytes",
     "alert_tasks": "_alert_tasks",
     "xuangu_tasks": "_xuangu_tasks",
-    "guard_task": "_guard_task",
     "scheduler_status_store": "scheduler_status_store",
     "storage_principal": "storage_principal",
     "database": "db",

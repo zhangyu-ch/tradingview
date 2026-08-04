@@ -567,3 +567,12 @@
 - 工厂可以保留配置/安全/生命周期装配，但不应持有业务 route/hook。测试必须验证真实 Blueprint 函数，而不是为了兼容旧测试把路由再复制回工厂。
 - 可选搜索依赖 `pinyin` 应在实际搜索调用点惰性导入；应用启动不应因未使用功能的依赖缺失而失败。
 - Secret/质量门禁也必须跟随职责迁移：以 AST 定位 settings Blueprint 的 `setting()`，而不是依赖旧 route 文本边界。
+
+
+## MX-12 通用任务服务加载边界
+- LO-01 已把业务路由移出 app factory，但 `create_app()` 仍内嵌旧缠论模块名集合、ImportError 文本匹配、Unavailable/Lazy 类和 guard 闭包；问题仍存在。
+- 正确的通用边界只声明真实 `module + attribute + factory args`，由线程安全状态机记录 `not_loaded/loading/ready/failed`；失败抛稳定领域异常并以 `__cause__` 保留原始异常。
+- 公共 503 payload 只暴露 module、attribute、state、attempts、error_type，不复制第三方异常文本；日志同样只记录稳定字段。
+- 任务 Blueprint 直接解析 app-scoped 代理，`WebAppServices` 不再携带 app-factory 闭包 `guard_task`。
+- 最终实现选择在进程生命周期内缓存失败：避免每次请求重复导入、构造和日志风暴；修复部署依赖后以进程重启恢复，不向公共 HTTP 暴露 reset。
+- 公开健康信息以 module/attribute/state/attempts/error_type 为上限；原始异常只存在于 `__cause__`，从而同时满足可诊断性与 Secret 不泄漏。

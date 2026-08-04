@@ -197,6 +197,6 @@ def test_schema_and_web_route_use_new_storage_boundary_before_persistence(tmp_pa
     parse_pos = source.index("parse_strategy_kwargs(request.form.get")
     validate_pos = source.index("validate_registered_strategy(", parse_pos)
     build_pos = source.index("build_strategy_config(strategy_id, strategy_kwargs)", validate_pos)
-    save_pos = source.index("services.alert_tasks.alert_save(alert_config)", build_pos)
+    save_pos = source.index("alert_tasks.alert_save(alert_config)", build_pos)
     assert parse_pos < validate_pos < build_pos < save_pos
     module.db.engine.dispose()

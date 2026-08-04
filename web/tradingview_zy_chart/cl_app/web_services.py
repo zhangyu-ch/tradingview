@@ -38,7 +38,6 @@ class WebAppServices:
     logger: Any
     alert_tasks: Any
     xuangu_tasks: Any
-    guard_task: Callable[[Any], dict[str, Any] | None]
     security_overrides: Mapping[str, Any]
     database: Any
     get_exchange: Callable[..., Any]
