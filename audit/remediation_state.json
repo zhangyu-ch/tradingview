@@ -2402,16 +2402,40 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
-      "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "`FileCacheDB.save_tdx_klines()` 直接覆盖最终 CSV，进程中断或并发读取可观察半文件；`get_tdx_klines()` 对任意读取异常立即删除文件，把权限抖动和暂时性 I/O 故障放大为永久丢失。未完成 bar 通过读取端无条件删除最后一行表达，既没有元数据也没有调用方选择，单行缓存会静默变空。通用 `cache_pkl_to_file/from_file()` 和 TDX 除权缓存使用 pickle/pandas pickle；只要缓存目录可被不可信主体写入，读取就可能执行任意反序列化 payload。",
+      "fix_summary": "重写文件缓存持久化边界：所有文本/CSV/JSON 先写同目录临时文件，flush+fsync 后 `os.replace`，再尽力 fsync 父目录；固定 64 条进程内 RLock 保护同一路径，缓存目录和文件使用 0700/0600。K 线保存增加 sidecar 元数据，显式记录 `last_row_complete`；读取方通过 `include_incomplete` 选择是否保留未完成 bar。CSV 解析或 schema 损坏时把文件重命名为 `.corrupt.*` 供审计，PermissionError 等暂时性 I/O 错误只返回不可用而不删除。状态缓存迁移为带 schema/version/SHA-256 envelope 的严格 JSON 白名单编码，仅支持 primitive、日期时间、容器、pandas Series/DataFrame 和项目 POSITION；文件内容不能指定或导入任意类。旧 `.pkl` 只检测并抛出 `UnsafeLegacyCacheError`，绝不调用 pickle。`BackTestTrader` 改用安全状态缓存；TDX 除权缓存改为原子 CSV，不再使用 `to_pickle/read_pickle`。",
+      "verification_performed": true,
+      "verification_method": [
+        "修复前逐行读取 `file_db.py`、`backtest_trader.py` 和 `exchange_tdx.py`：确认 K 线直接写最终 CSV、任意 `read_csv` 异常后 unlink、无条件丢最后一行、通用 pickle 状态接口和 xdxr pandas pickle 均可达。",
+        "运行 `PYTHONPATH=src pytest -q tests/test_hi16_file_cache_safety.py`，9 项专项测试通过；覆盖原子写中途失败保留旧文件且无临时文件残留、显式未完成 bar 元数据、损坏 CSV 隔离、暂时 PermissionError 保留原文件。",
+        "使用真实 `POSITION`、aware/naive datetime、pandas Series、tuple/set 动态执行安全状态往返，并通过真实 `BackTestTrader.save_to_pkl/load_from_pkl` 兼容入口确认恢复成功；POSIX 环境确认状态文件权限为 0600。",
+        "构造带 `__reduce__` 写文件 payload 的真实 legacy pickle；调用缓存读取后明确得到 `UnsafeLegacyCacheError`，payload 标记文件不存在且旧文件仍保留，证明没有执行 `pickle.load`。",
+        "故意破坏安全 JSON envelope，确认文件被移动为 `.corrupt.*` 且返回 `SafeCacheCorruptionError`；验证 `../`、子目录和反斜杠路径均被 basename 契约拒绝。",
+        "运行 HI-16、ME-23、ME-12、MX-17、NX-20、RV-04、NX-08 和报告统计组合测试，共 44 passed；执行 changed-file compileall 和 `git diff --check`。",
+        "静态扫描确认 `file_db.py` 不再含 `pickle.load/dump`，TDX 除权路径不再含 `read_pickle/to_pickle`；三个原 CRLF 源文件 bare-LF 均为 0。"
+      ],
+      "verification_result": "通过（9 项 HI-16 专项、44 项相邻组合通过；原子失败、损坏隔离、暂时 I/O、旧 pickle 不执行、真实交易器安全状态和除权 CSV 路径均已验证）",
+      "commit": "fix(HI-16): make file caches atomic and non-executable",
+      "files_changed": [
+        "src/tradingview_zy/file_db.py",
+        "src/tradingview_zy/backtesting/backtest_trader.py",
+        "src/tradingview_zy/exchange/exchange_tdx.py",
+        "tests/test_hi16_file_cache_safety.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "K 线 CSV 和 sidecar 元数据分别原子替换，不是跨两个文件的事务；两次替换之间被读取时会按保守 legacy 规则把最后一行视为未完成，不会把未知状态伪装为完成，但可能暂时少返回一根 bar。",
+        "条带锁只协调单进程线程；跨进程依靠原子 replace 保证读不到半文件，并发写采用最后成功替换者生效，没有合并语义。需要跨进程 compare-and-swap 或 writer ownership 时应引入独立锁服务。",
+        "安全 JSON 编码刻意拒绝未列入白名单的自定义对象；旧 pickle 不自动迁移，因为安全迁移本身需要在隔离环境执行不可信反序列化。维护者应重新生成缓存，而不是在生产进程加载旧文件。",
+        "`BackTest.save/load` 的完整回测产物仍是项目原有可信本地 pickle；该文件不是 FileCacheDB 缓存路径。本条关闭缓存与交易器状态的可执行反序列化，回测产物信任边界已在 ME-23 限制中保留。"
+      ],
+      "commit_subject": "fix(HI-16): make file caches atomic and non-executable"
     }
   },
   {

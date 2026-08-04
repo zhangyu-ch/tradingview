@@ -234,3 +234,10 @@
 - 以重新解压并通过 `git fsck` 的 `9bad598` 为唯一代码固定点，后续问题按照保存的 a–e 台账重新实现、重新测试并重新提交。
 - ME-23 的旧 20 品种参数已经原样迁移到不可变版本 `2024-12-13`；版本只覆盖 2024-12-13 起且未做交易所二次核验，缺日期/缺品种明确失败。
 - 期货交易器只持有注入快照，具体合约和 TQ 连续合约先规范化到 `EXCHANGE.PRODUCT`；BackTest 保存/加载同时验证 dataset 与 snapshot SHA-256，篡改不再静默通过。
+
+
+## HI-16 文件缓存原子性、损坏隔离与安全格式复核（恢复重建）
+- `save_tdx_klines()` 原先直接覆盖最终 CSV，读取端又对任意异常删文件；权限抖动、并发读取或进程中断会被放大为永久缓存丢失。
+- “最后一行可能未完成”原先只靠无条件 `iloc[:-1]` 表达。现在 sidecar 显式记录 `last_row_complete`，调用方可通过 `include_incomplete` 选择，legacy CSV 采用保守规则。
+- 所有写入使用同目录临时文件、flush+fsync、`os.replace` 和固定条带锁；坏 CSV/JSON 重命名为 `.corrupt.*`，暂时性 PermissionError 只返回不可用。
+- 任意对象 pickle 状态缓存已替换为 schema/version/SHA-256 JSON 白名单；真实恶意 `__reduce__` payload 未执行。TDX 除权缓存同步迁移为原子 CSV。

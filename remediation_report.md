@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 41
-- **待处理：** 40
+- **已完成：** 42
+- **待处理：** 39
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -52,7 +52,7 @@
 |39|`HI-17`|中|Scripts|❌ 未修复|已完成|通过（10 项 HI-17 专项、18 项组合测试通过；导入副作用、无界循环、不可恢复状态和无限外部等待均已移除或有界化）|`fix(HI-17)`|
 |40|`ME-12`|中|TDX Adapters|❌ 未修复|已完成|通过（11 项 ME-12 专项、74 项相邻组合、235 项可收集广泛回归通过；3 skipped；递归重连、错误分母、不可用价格伪装和四个证据适配器的硬编码时段根因均已关闭）|`fix(ME-12)`|
 |41|`ME-23`|中|Backtesting Config|❌ 未修复|已完成|通过（7 项 ME-23 专项、30 项相邻组合通过；版本/生效区间/品种覆盖、交易器注入、保存快照、加载完整性和篡改失败路径均已验证）|`fix(ME-23): `|
-|42|`HI-16`|中|File Cache|❌ 未修复|待处理|—|—|
+|42|`HI-16`|中|File Cache|❌ 未修复|已完成|通过（9 项 HI-16 专项、44 项相邻组合通过；原子失败、损坏隔离、暂时 I/O、旧 pickle 不执行、真实交易器安全状态和除权 CSV 路径均已验证）|`fix(HI-16): `|
 |43|`ME-17`|中|QMT Market Data|❌ 未修复|待处理|—|—|
 |44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|待处理|—|—|
 |45|`ME-19`|中|Selection Tasks|❌ 未修复|待处理|—|—|
@@ -1015,16 +1015,27 @@
 ### 42. HI-16 · 文件缓存非原子写入、读错即删，且使用可执行反序列化格式
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / File Cache
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** `FileCacheDB.save_tdx_klines()` 直接覆盖最终 CSV，进程中断或并发读取可观察半文件；`get_tdx_klines()` 对任意读取异常立即删除文件，把权限抖动和暂时性 I/O 故障放大为永久丢失。未完成 bar 通过读取端无条件删除最后一行表达，既没有元数据也没有调用方选择，单行缓存会静默变空。通用 `cache_pkl_to_file/from_file()` 和 TDX 除权缓存使用 pickle/pandas pickle；只要缓存目录可被不可信主体写入，读取就可能执行任意反序列化 payload。
+- **b. 我是怎么修复的？** 重写文件缓存持久化边界：所有文本/CSV/JSON 先写同目录临时文件，flush+fsync 后 `os.replace`，再尽力 fsync 父目录；固定 64 条进程内 RLock 保护同一路径，缓存目录和文件使用 0700/0600。K 线保存增加 sidecar 元数据，显式记录 `last_row_complete`；读取方通过 `include_incomplete` 选择是否保留未完成 bar。CSV 解析或 schema 损坏时把文件重命名为 `.corrupt.*` 供审计，PermissionError 等暂时性 I/O 错误只返回不可用而不删除。状态缓存迁移为带 schema/version/SHA-256 envelope 的严格 JSON 白名单编码，仅支持 primitive、日期时间、容器、pandas Series/DataFrame 和项目 POSITION；文件内容不能指定或导入任意类。旧 `.pkl` 只检测并抛出 `UnsafeLegacyCacheError`，绝不调用 pickle。`BackTestTrader` 改用安全状态缓存；TDX 除权缓存改为原子 CSV，不再使用 `to_pickle/read_pickle`。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前逐行读取 `file_db.py`、`backtest_trader.py` 和 `exchange_tdx.py`：确认 K 线直接写最终 CSV、任意 `read_csv` 异常后 unlink、无条件丢最后一行、通用 pickle 状态接口和 xdxr pandas pickle 均可达。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_hi16_file_cache_safety.py`，9 项专项测试通过；覆盖原子写中途失败保留旧文件且无临时文件残留、显式未完成 bar 元数据、损坏 CSV 隔离、暂时 PermissionError 保留原文件。
+  - 使用真实 `POSITION`、aware/naive datetime、pandas Series、tuple/set 动态执行安全状态往返，并通过真实 `BackTestTrader.save_to_pkl/load_from_pkl` 兼容入口确认恢复成功；POSIX 环境确认状态文件权限为 0600。
+  - 构造带 `__reduce__` 写文件 payload 的真实 legacy pickle；调用缓存读取后明确得到 `UnsafeLegacyCacheError`，payload 标记文件不存在且旧文件仍保留，证明没有执行 `pickle.load`。
+  - 故意破坏安全 JSON envelope，确认文件被移动为 `.corrupt.*` 且返回 `SafeCacheCorruptionError`；验证 `../`、子目录和反斜杠路径均被 basename 契约拒绝。
+  - 运行 HI-16、ME-23、ME-12、MX-17、NX-20、RV-04、NX-08 和报告统计组合测试，共 44 passed；执行 changed-file compileall 和 `git diff --check`。
+  - 静态扫描确认 `file_db.py` 不再含 `pickle.load/dump`，TDX 除权路径不再含 `read_pickle/to_pickle`；三个原 CRLF 源文件 bare-LF 均为 0。
+- **e. 验证是否通过？** 通过（9 项 HI-16 专项、44 项相邻组合通过；原子失败、损坏隔离、暂时 I/O、旧 pickle 不执行、真实交易器安全状态和除权 CSV 路径均已验证）
+- **提交：** `fix(HI-16): make file caches atomic and non-executable`
+- **修改文件：** `src/tradingview_zy/file_db.py`, `src/tradingview_zy/backtesting/backtest_trader.py`, `src/tradingview_zy/exchange/exchange_tdx.py`, `tests/test_hi16_file_cache_safety.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - K 线 CSV 和 sidecar 元数据分别原子替换，不是跨两个文件的事务；两次替换之间被读取时会按保守 legacy 规则把最后一行视为未完成，不会把未知状态伪装为完成，但可能暂时少返回一根 bar。
+  - 条带锁只协调单进程线程；跨进程依靠原子 replace 保证读不到半文件，并发写采用最后成功替换者生效，没有合并语义。需要跨进程 compare-and-swap 或 writer ownership 时应引入独立锁服务。
+  - 安全 JSON 编码刻意拒绝未列入白名单的自定义对象；旧 pickle 不自动迁移，因为安全迁移本身需要在隔离环境执行不可信反序列化。维护者应重新生成缓存，而不是在生产进程加载旧文件。
+  - `BackTest.save/load` 的完整回测产物仍是项目原有可信本地 pickle；该文件不是 FileCacheDB 缓存路径。本条关闭缓存与交易器状态的可执行反序列化，回测产物信任边界已在 ME-23 限制中保留。
 - **原报告最新结论：** file_db 仍使用非原子写入和可执行反序列化格式，读取异常时删除缓存；相关路径未被后续修复触及。
 - **原报告建议：** 临时文件+fsync+原子 replace；优先安全序列化；校验失败隔离坏文件而不是无条件删除。
 

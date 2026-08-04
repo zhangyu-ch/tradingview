@@ -598,7 +598,7 @@ class ExchangeTDX(Exchange):
         xdxr_path = get_data_path() / "xdxr"
         if xdxr_path.is_dir() is False:
             xdxr_path.mkdir()
-        xdxr_file = xdxr_path / f"new_xdxr_{market}_{project_code}.pkl"
+        xdxr_file = xdxr_path / f"new_xdxr_{market}_{project_code}.csv"
         now_day = fun.datetime_to_str(datetime.datetime.now(), "%Y-%m-%d")
         need_update = False  # 判断是否需要更新
         if (
@@ -619,10 +619,12 @@ class ExchangeTDX(Exchange):
                     + data["day"].map(str)
                 )
                 data["date"] = pd.to_datetime(data["date"])
-            data.to_pickle(str(xdxr_file))
+            self.fdb.atomic_write_dataframe_csv(xdxr_file, data)
         else:
             # print('直接读取缓存')
-            data = pd.read_pickle(str(xdxr_file))
+            data = self.fdb.read_dataframe_csv(xdxr_file, parse_dates=["date"])
+            if data is None:
+                return pd.DataFrame()
 
         return data
 

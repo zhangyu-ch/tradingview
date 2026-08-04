@@ -270,7 +270,7 @@ class BackTestTrader(Trader):
 
     def save_to_pkl(self, key: str):
         """
-        将对象数据保存到 pkl 文件中
+        将对象数据保存到安全、不可执行的状态缓存中
         """
         save_infos = {
             "name": self.name,
@@ -303,7 +303,7 @@ class BackTestTrader(Trader):
 
     def load_from_pkl(self, key: str, save_infos: dict = None):
         """
-        从 pkl 文件 中恢复之前的数据
+        从安全、不可执行的状态缓存中恢复之前的数据
         """
         if save_infos is None:
             from tradingview_zy.file_db import fdb

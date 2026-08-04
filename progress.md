@@ -396,3 +396,13 @@
 - 验证：`tests/test_me23_futures_parameter_versions.py` 7 passed；与 NEW-05、RV-04、RV-05、NX-08 和报告统计组合共 30 passed；compileall、TOML 解析、CRLF 与 `git diff --check` 通过。
 - 限制：参数为原仓库 2024-12-13 快照迁移，未连接期货公司/交易所二次核验；更早日期和未列品种按设计 fail-closed。
 - 提交：`fix(ME-23): version futures backtest parameters`。
+
+
+### 问题 42：HI-16（恢复重建）
+- **状态：** complete
+- 验证结论：K 线 CSV 直接覆盖、任意读错即删、隐式丢最后一行，以及通用/除权 pickle 缓存均可达，问题存在。
+- 修复：统一同目录临时文件+fsync+原子 replace；损坏隔离、暂时 I/O 保留；K 线完成状态显式元数据；交易器状态改为 schema/hash JSON 白名单，legacy pickle 明确拒绝；xdxr 改原子 CSV。
+- 专项及相邻测试：9 项 HI-16 专项、44 项组合通过；恶意 `__reduce__` payload 未执行，原子中断、权限抖动、损坏 JSON/CSV、路径穿越和真实 `BackTestTrader` 往返均通过。
+- 首轮专项唯一失败来自测试在默认 `signal` 模式下错误期待初始现金；改为显式 `trade` 模式后通过，产品行为未修改。
+- 限制：CSV 与 sidecar 非跨文件事务；进程间为 last-writer-wins；旧 pickle 不做自动迁移；完整 BackTest 产物 pickle 不属于本缓存路径。
+- 提交：`fix(HI-16): make file caches atomic and non-executable`。
