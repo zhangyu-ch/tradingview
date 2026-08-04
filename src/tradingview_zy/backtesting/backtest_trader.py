@@ -29,6 +29,7 @@ class BackTestTrader(Trader):
         fee_rate=0.0005,
         max_pos=10,
         log=None,
+        futures_parameter_manifest=None,
     ):
         """
         交易者初始化
@@ -86,11 +87,25 @@ class BackTestTrader(Trader):
             "position_record": 0,
         }
 
-        # TODO 期货合约信息
-        # https://www.jiaoyixingqiu.com/shouxufei
-        # http://www.hongyuanqh.com/download/20241213/%E4%BF%9D%E8%AF%81%E9%87%91%E6%A0%87%E5%87%8620241213.pdf
-        # 手续费分为 百分比 和 每手固定金额，小于1的就是百分比设置，大于1的就是固定金额的
-        self.futures_contracts = futures_contracts.futures_contracts
+        # 期货参数必须由回测配置选择的不可变版本注入，禁止读取模块全局。
+        self.futures_parameter_manifest = None
+        self.futures_parameter_version = None
+        self.futures_contracts = {}
+        if self.market == "futures":
+            if futures_parameter_manifest is None:
+                raise futures_contracts.FuturesParameterError(
+                    "futures_parameter_manifest is required for futures traders"
+                )
+            checked_manifest = futures_contracts.validate_futures_parameter_manifest(
+                futures_parameter_manifest
+            )
+            self.futures_parameter_manifest = checked_manifest
+            self.futures_parameter_version = checked_manifest["version"]
+            self.futures_contracts = copy.deepcopy(checked_manifest["contracts"])
+        elif futures_parameter_manifest is not None:
+            raise futures_contracts.FuturesParameterError(
+                "futures parameters may only be supplied for futures traders"
+            )
 
         # 策略对象
         self.strategy: Strategy = None
@@ -275,6 +290,10 @@ class BackTestTrader(Trader):
             "balance_history": self.balance_history,
             "orders": self.orders,
             "results": self.results,
+            "futures_parameter_version": self.futures_parameter_version,
+            "futures_parameter_manifest": copy.deepcopy(
+                self.futures_parameter_manifest
+            ),
         }
         if key is not None:
             from tradingview_zy.file_db import fdb
@@ -316,6 +335,28 @@ class BackTestTrader(Trader):
         self.hold_profit_history = save_infos["hold_profit_history"]
         self.balance_history = save_infos["balance_history"]
         self.orders = save_infos["orders"]
+
+        manifest = save_infos.get("futures_parameter_manifest")
+        if self.market == "futures":
+            if manifest is None:
+                raise futures_contracts.FuturesParameterError(
+                    "saved futures trader state has no parameter manifest"
+                )
+            checked_manifest = futures_contracts.validate_futures_parameter_manifest(
+                manifest
+            )
+            saved_version = save_infos.get("futures_parameter_version")
+            if saved_version != checked_manifest["version"]:
+                raise futures_contracts.FuturesParameterError(
+                    "saved futures trader parameter version mismatch"
+                )
+            self.futures_parameter_manifest = checked_manifest
+            self.futures_parameter_version = checked_manifest["version"]
+            self.futures_contracts = copy.deepcopy(checked_manifest["contracts"])
+        else:
+            self.futures_parameter_manifest = None
+            self.futures_parameter_version = None
+            self.futures_contracts = {}
 
         return True
 
@@ -523,7 +564,7 @@ class BackTestTrader(Trader):
             now_profit = (price_info["close"] - pos.price) * pos.amount
 
             if self.market == "futures":
-                contract_info = self.futures_contracts[pos.code]
+                contract_info = self.futures_contracts[futures_contracts.normalize_futures_code(pos.code)]
                 high_profit_rate = round(
                     (price_info["high"] - pos.price)
                     / pos.price
@@ -557,7 +598,7 @@ class BackTestTrader(Trader):
             now_profit = (pos.price - price_info["close"]) * pos.amount
 
             if self.market == "futures":
-                contract_info = self.futures_contracts[pos.code]
+                contract_info = self.futures_contracts[futures_contracts.normalize_futures_code(pos.code)]
                 high_profit_rate = round(
                     (pos.price - price_info["low"])
                     / pos.price
@@ -611,7 +652,7 @@ class BackTestTrader(Trader):
                 amount = int(amount / 100) * 100
             if self.market == "futures":
                 # 如果是期货，按照期货的规则，计算可买的最大手数
-                contract_config = self.futures_contracts[code]
+                contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                 amount = int(
                     use_balance
                     / contract_config["margin_rate_long"]
@@ -635,7 +676,7 @@ class BackTestTrader(Trader):
             if self.market == "a":
                 amount = int(amount / 100) * 100
             if self.market == "futures":
-                contract_config = self.futures_contracts[code]
+                contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                 amount = int(
                     use_balance
                     / contract_config["margin_rate_long"]
@@ -658,7 +699,7 @@ class BackTestTrader(Trader):
                 amount = int(amount / 100) * 100
             if self.market == "futures":
                 # 如果是期货，按照期货的规则，计算可买的最大手数
-                contract_config = self.futures_contracts[code]
+                contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                 amount = int(
                     use_balance
                     / contract_config["margin_rate_short"]
@@ -682,7 +723,7 @@ class BackTestTrader(Trader):
             if self.market == "a":
                 amount = int(amount / 100) * 100
             if self.market == "futures":
-                contract_config = self.futures_contracts[code]
+                contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                 amount = int(
                     use_balance
                     / contract_config["margin_rate_short"]
@@ -753,7 +794,7 @@ class BackTestTrader(Trader):
 
         # 如果是期货，按照期货的规则，计算手续费
         if self.market == "futures":
-            contract_config = self.futures_contracts[code]
+            contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
             fee_rate = contract_config["fee_rate_open"]
             if "close" in other_info.keys() and other_info["close"]:
                 fee_rate = contract_config["fee_rate_close"]
@@ -861,7 +902,7 @@ class BackTestTrader(Trader):
                 fee = 0  # 此次成交的手续费
                 if self.market == "futures":
                     # 期货计算占用保证金，手续费
-                    contract_config = self.futures_contracts[code]
+                    contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                     hold_balance = (
                         res["price"]
                         * res["amount"]
@@ -942,7 +983,7 @@ class BackTestTrader(Trader):
                 hold_balance = 0
                 fee = 0
                 if self.market == "futures":  # 期货计算占用保证金
-                    contract_config = self.futures_contracts[code]
+                    contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                     hold_balance = (
                         res["price"]
                         * res["amount"]
@@ -1034,7 +1075,7 @@ class BackTestTrader(Trader):
                 fee = 0
                 if self.market == "futures":
                     # 计算期货释放保证金与手续费
-                    contract_config = self.futures_contracts[code]
+                    contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                     # 占用保证金
                     release_balance = (
                         res["price"]
@@ -1106,7 +1147,7 @@ class BackTestTrader(Trader):
                         profit = 0
                         if self.market == "futures":
                             # 期货盈利的计算方式
-                            contract_config = self.futures_contracts[code]
+                            contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                             profit = (
                                 pos.balance - pos.release_balance
                             ) / contract_config["margin_rate_short"] - pos.fee
@@ -1159,7 +1200,7 @@ class BackTestTrader(Trader):
                 fee = 0
                 if self.market == "futures":
                     # 计算期货释放保证金与手续费
-                    contract_config = self.futures_contracts[code]
+                    contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                     # 占用保证金
                     release_balance = (
                         res["price"]
@@ -1235,7 +1276,7 @@ class BackTestTrader(Trader):
                         profit = 0
                         if self.market == "futures":
                             # 期货盈利的计算方式
-                            contract_config = self.futures_contracts[code]
+                            contract_config = self.futures_contracts[futures_contracts.normalize_futures_code(code)]
                             profit = (
                                 pos.release_balance - pos.balance
                             ) / contract_config["margin_rate_long"] - pos.fee

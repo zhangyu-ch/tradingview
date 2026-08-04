@@ -47,6 +47,9 @@ dependencies = [
     "tqsdk>=3.8.2",
 ]
 
+[tool.setuptools.package-data]
+"tradingview_zy.backtesting" = ["futures_parameters.json"]
+
 [tool.uv.sources]
 ta-lib = [
     { marker = "sys_platform == 'win32' and platform_machine == 'amd64'", path = "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl" },

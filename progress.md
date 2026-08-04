@@ -384,3 +384,15 @@
 - 同进程扩展回归曾暴露专项测试对 singleton 包装函数的隔离不足；测试改为通过 `__wrapped__` 获取真实 provider 类型后恢复稳定，产品代码无需回退。
 - 联调限制：无真实 pytdx/TDX 网络；现金日历当前覆盖 2026，FX venue 细节和期货品种时段留给 ME-30。未排除全量测试仍被基线缺少本地 config.py、环境缺 empyrical/pinyin 和既有 footprint 私有符号漂移阻断。
 - 提交：`fix(ME-12): unify TDX quote and calendar contracts`。
+
+## 2026-08-04 · 续作恢复：从第 41 条重新构建
+- 检查发现 041–050 归档文件未挂载；GitHub 对 `80e346e` 和 `faa2227` 均返回 commit 不存在。
+- 重新解压 `tradingview_remediation_issues_031-040.zip`，确认 `HEAD=9bad598`、工作树干净、问题 001–040 标签存在。
+
+### 问题 41：ME-23（恢复重建）
+- **状态：** complete
+- 验证结论：20 个期货品种参数为无版本模块全局，交易器和利润计算直接读取，保存产物无日期/source/hash/snapshot，问题存在。
+- 修复：迁移为带 schema、版本、生效区间、来源和 provenance 的 JSON package data；期货回测显式选择版本并在行情构造前校验日期/代码覆盖；交易器只使用注入快照，保存/加载校验 manifest 与 SHA-256。
+- 验证：`tests/test_me23_futures_parameter_versions.py` 7 passed；与 NEW-05、RV-04、RV-05、NX-08 和报告统计组合共 30 passed；compileall、TOML 解析、CRLF 与 `git diff --check` 通过。
+- 限制：参数为原仓库 2024-12-13 快照迁移，未连接期货公司/交易所二次核验；更早日期和未列品种按设计 fail-closed。
+- 提交：`fix(ME-23): version futures backtest parameters`。

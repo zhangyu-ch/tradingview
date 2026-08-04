@@ -112,6 +112,25 @@ class BackTest:
 
         self.data_config: dict = config.get("data_config", {})
 
+        self.futures_parameter_version = config.get("futures_parameter_version")
+        self.futures_parameter_manifest = None
+        if self.market == "futures":
+            self.futures_parameter_manifest = (
+                futures_contracts.build_futures_parameter_manifest(
+                    version=self.futures_parameter_version,
+                    start_datetime=self.start_datetime,
+                    end_datetime=self.end_datetime,
+                    codes=self.codes,
+                )
+            )
+            self.futures_parameter_version = self.futures_parameter_manifest[
+                "version"
+            ]
+        elif self.futures_parameter_version is not None:
+            raise futures_contracts.FuturesParameterError(
+                "futures_parameter_version may only be used for futures backtests"
+            )
+
         # 执行策略
         self.strategy: Strategy = config["strategy"]
 
@@ -126,6 +145,7 @@ class BackTest:
             fee_rate=self.fee_rate,
             max_pos=self.max_pos,
             log=self.log.info,
+            futures_parameter_manifest=self.futures_parameter_manifest,
         )
         self.trader.set_strategy(self.strategy)
         self.datas = BackTestKlines(
@@ -170,6 +190,10 @@ class BackTest:
             "fee_rate": self.fee_rate,
             "max_pos": self.max_pos,
             "data_config": self.data_config,
+            "futures_parameter_version": self.futures_parameter_version,
+            "futures_parameter_manifest": copy.deepcopy(
+                self.futures_parameter_manifest
+            ),
             "strategy": self.strategy,
             "trader": self.trader,
             "next_frequency": self.next_frequency,
@@ -197,8 +221,46 @@ class BackTest:
         self.fee_rate = config_dict["fee_rate"]
         self.max_pos = config_dict["max_pos"]
         self.data_config = config_dict.get("data_config", {})
+        self.futures_parameter_version = config_dict.get(
+            "futures_parameter_version"
+        )
+        self.futures_parameter_manifest = config_dict.get(
+            "futures_parameter_manifest"
+        )
+        if self.market == "futures":
+            if self.futures_parameter_manifest is None:
+                raise futures_contracts.FuturesParameterError(
+                    "saved futures backtest has no parameter manifest"
+                )
+            self.futures_parameter_manifest = (
+                futures_contracts.validate_futures_parameter_manifest(
+                    self.futures_parameter_manifest
+                )
+            )
+            if (
+                self.futures_parameter_version
+                != self.futures_parameter_manifest["version"]
+            ):
+                raise futures_contracts.FuturesParameterError(
+                    "saved futures parameter version mismatch"
+                )
+        elif self.futures_parameter_manifest is not None:
+            raise futures_contracts.FuturesParameterError(
+                "non-futures backtest unexpectedly contains futures parameters"
+            )
         self.strategy = config_dict["strategy"]
         self.trader = config_dict["trader"]
+        if self.market == "futures":
+            trader_manifest = futures_contracts.validate_futures_parameter_manifest(
+                getattr(self.trader, "futures_parameter_manifest", None)
+            )
+            if (
+                trader_manifest["snapshot_sha256"]
+                != self.futures_parameter_manifest["snapshot_sha256"]
+            ):
+                raise futures_contracts.FuturesParameterError(
+                    "saved trader and backtest futures parameter snapshots differ"
+                )
         self.next_frequency = config_dict["next_frequency"]
         self.datas = BackTestKlines(
             self.market,
@@ -227,6 +289,11 @@ class BackTest:
             f"起始时间 : {self.start_datetime} 结束时间 : {self.end_datetime}"
         )
         self.log.info(f"数据配置 : {self.data_config}")
+        if self.market == "futures":
+            self.log.info(
+                f"期货参数版本 : {self.futures_parameter_version} "
+                f"({self.futures_parameter_manifest['snapshot_sha256']})"
+            )
         self.log.info(f"交易总手续费 : {self.trader.fee_total}")
         return True
 
@@ -436,6 +503,7 @@ class BackTest:
                 # mode 为 trade 生效，最大持仓数量（分仓）
                 "max_pos": self.max_pos,
                 "data_config": copy_data_config,
+                "futures_parameter_version": self.futures_parameter_version,
             }
         )
 
@@ -1166,7 +1234,7 @@ class BackTest:
             profit = release_balance - hold_balance - fee
             profit_rate = profit / hold_balance * 100
             if self.market == "futures":
-                contract_config = futures_contracts.futures_contracts[pos.code]
+                contract_config = self.trader.futures_contracts[futures_contracts.normalize_futures_code(pos.code)]
                 profit = (release_balance - hold_balance) / contract_config[
                     "margin_rate_long"
                 ] - pos.fee
@@ -1175,7 +1243,7 @@ class BackTest:
             profit = hold_balance - release_balance - fee
             profit_rate = profit / hold_balance * 100
             if self.market == "futures":
-                contract_config = futures_contracts.futures_contracts[pos.code]
+                contract_config = self.trader.futures_contracts[futures_contracts.normalize_futures_code(pos.code)]
                 profit = (hold_balance - release_balance) / contract_config[
                     "margin_rate_short"
                 ] - pos.fee

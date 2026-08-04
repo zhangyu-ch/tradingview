@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 40
-- **待处理：** 41
+- **已完成：** 41
+- **待处理：** 40
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -51,7 +51,7 @@
 |38|`ME-11`|中|Baostock|❌ 未修复|已完成|通过（11 项专项与相邻测试通过；目录日期、源分钟时间和有限重登录三项根因均关闭）|`fix(ME-11)`|
 |39|`HI-17`|中|Scripts|❌ 未修复|已完成|通过（10 项 HI-17 专项、18 项组合测试通过；导入副作用、无界循环、不可恢复状态和无限外部等待均已移除或有界化）|`fix(HI-17)`|
 |40|`ME-12`|中|TDX Adapters|❌ 未修复|已完成|通过（11 项 ME-12 专项、74 项相邻组合、235 项可收集广泛回归通过；3 skipped；递归重连、错误分母、不可用价格伪装和四个证据适配器的硬编码时段根因均已关闭）|`fix(ME-12)`|
-|41|`ME-23`|中|Backtesting Config|❌ 未修复|待处理|—|—|
+|41|`ME-23`|中|Backtesting Config|❌ 未修复|已完成|通过（7 项 ME-23 专项、30 项相邻组合通过；版本/生效区间/品种覆盖、交易器注入、保存快照、加载完整性和篡改失败路径均已验证）|`fix(ME-23): `|
 |42|`HI-16`|中|File Cache|❌ 未修复|待处理|—|—|
 |43|`ME-17`|中|QMT Market Data|❌ 未修复|待处理|—|—|
 |44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|待处理|—|—|
@@ -989,16 +989,26 @@
 ### 41. ME-23 · 期货手续费/保证金参数硬编码且没有生效日期与数据版本
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Backtesting Config
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 期货回测的 20 个品种乘数、保证金率和三类手续费全部硬编码在 `futures_contracts.py` 模块级字典中，只以注释保存来源线索；BackTestTrader 与回测平仓利润计算直接读取该全局字典，配置没有选择参数版本，保存产物也不记录有效日期、来源、摘要或参数快照。同一历史回测会随未来代码修改静默改变，旧日期或缺失品种也不会在行情加载前得到可解释的配置错误。
+- **b. 我是怎么修复的？** 把旧值原样迁移到 package data `futures_parameters.json`，数据集声明 schema/version、effective_from/effective_to、source_date、两项来源和迁移 provenance。重写 `futures_contracts.py` 为严格加载器：校验 schema、数值范围、版本唯一性、完整回测日期覆盖和所有目标品种；支持产品代码、具体合约以及 TQ 连续合约规范化。期货 BackTest 现在必须显式提供 `futures_parameter_version`，在构造行情对象之前解析参数并把完整 manifest 注入 BackTestTrader；所有交易、手续费和平仓利润统一读取该快照，不再访问模块全局。保存文件嵌入版本、完整参数/source/provenance、dataset SHA-256 和 snapshot SHA-256；加载时重新校验摘要、版本和 trader 参数一致性。参数优化会继承同一版本，JSON 通过 pyproject package-data 随安装包发布。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前读取 `futures_contracts.py`、`backtest.py` 和 `backtest_trader.py`：确认 20 个品种位于模块全局字典，BackTestTrader 构造和平仓利润路径均直接读取全局，save/load 没有参数版本、日期或摘要。
+  - 运行 `PYTHONPATH=src pytest -q tests/test_me23_futures_parameter_versions.py`，7 项专项测试通过；覆盖 package data 元数据、20 个旧值迁移、产品/具体合约/TQ 连续合约规范化、manifest hash 往返、缺版本、日期越界和缺品种 fail-closed。
+  - 动态导入并执行真实 BackTest/BackTestTrader：验证缺少版本在 BackTestKlines 构造前失败；有效版本注入 trader；DCE 固定每手手续费仍按旧参数算出 3.02。测试只替换行情容器，未替换参数加载、交易器或 pickle 保存/加载逻辑。
+  - 真实执行 BackTest.save() 后反序列化产物，确认版本、完整参数快照、来源和 SHA-256 与 trader 参数一致；再调用真实 load() 成功恢复，篡改 snapshot 合约后明确触发 `FuturesParameterError: hash mismatch`。
+  - 运行 ME-23、NEW-05、RV-04、RV-05、NX-08 和报告统计组合测试，共 30 passed；执行 backtesting compileall、TOML package-data 解析、`git diff --check`。
+  - 检查 `backtest.py`、`backtest_trader.py`、`futures_contracts.py` 和 `pyproject.toml`，原 CRLF 文件 bare-LF 均为 0；静态门禁确认旧模块级字典和 `futures_contracts.futures_contracts` 读取已全部移除。
+- **e. 验证是否通过？** 通过（7 项 ME-23 专项、30 项相邻组合通过；版本/生效区间/品种覆盖、交易器注入、保存快照、加载完整性和篡改失败路径均已验证）
+- **提交：** `fix(ME-23): version futures backtest parameters`
+- **修改文件：** `src/tradingview_zy/backtesting/futures_parameters.json`, `src/tradingview_zy/backtesting/futures_contracts.py`, `src/tradingview_zy/backtesting/backtest.py`, `src/tradingview_zy/backtesting/backtest_trader.py`, `pyproject.toml`, `tests/test_me23_futures_parameter_versions.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 数据集数值是从仓库原硬编码快照迁移，来源日期按原注释确定为 2024-12-13；本轮没有连接期货公司或交易所重新核验每个费率。provenance 已明确记录这一点，未来更新必须新增版本而不是覆盖旧快照。
+  - 当前数据集只覆盖 2024-12-13 起的 20 个品种；更早回测、CFFEX/INE/GFEX 或其他未列品种会明确失败。这是防止猜测参数的预期行为，需要补充有来源和有效期的新数据版本后才能运行。
+  - 当前容器缺少 empyrical/pyfolio 和真实期货历史数据，没有执行完整策略回放；实际 BackTest 构造、BackTestTrader 费率、保存/加载和篡改检测已动态执行，行情容器以无副作用桩隔离。
+  - 回测产物仍使用项目原有 pickle，manifest 提供可复现性和一致性检测，不把不可信 pickle 变成安全输入；只应加载可信本地回测文件。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/backtesting/futures_contracts.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 参数外部化为带 effective_from/to、source、version 的数据集；回测产物嵌入 hash/快照；缺少目标日期配置时失败。
 

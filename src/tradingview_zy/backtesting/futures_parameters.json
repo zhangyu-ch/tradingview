@@ -1,0 +1,189 @@
+{
+  "dataset_id": "tradingview_zy.futures_parameters",
+  "schema_version": 1,
+  "versions": [
+    {
+      "contracts": {
+        "CZCE.FG": {
+          "fee_rate_close": 10.01,
+          "fee_rate_close_today": 10.01,
+          "fee_rate_open": 10.01,
+          "margin_rate_long": 0.18,
+          "margin_rate_short": 0.18,
+          "symbol_size": 20
+        },
+        "CZCE.MA": {
+          "fee_rate_close": 0.00010107,
+          "fee_rate_close_today": 0.00010107,
+          "fee_rate_open": 0.00010107,
+          "margin_rate_long": 0.13,
+          "margin_rate_short": 0.13,
+          "symbol_size": 10
+        },
+        "CZCE.OI": {
+          "fee_rate_close": 5.01,
+          "fee_rate_close_today": 5.01,
+          "fee_rate_open": 5.01,
+          "margin_rate_long": 0.11,
+          "margin_rate_short": 0.11,
+          "symbol_size": 10
+        },
+        "CZCE.RM": {
+          "fee_rate_close": 5.01,
+          "fee_rate_close_today": 5.01,
+          "fee_rate_open": 5.01,
+          "margin_rate_long": 0.12,
+          "margin_rate_short": 0.12,
+          "symbol_size": 10
+        },
+        "CZCE.SA": {
+          "fee_rate_close": 0.00040107,
+          "fee_rate_close_today": 0.00040107,
+          "fee_rate_open": 0.00040107,
+          "margin_rate_long": 0.18,
+          "margin_rate_short": 0.18,
+          "symbol_size": 20
+        },
+        "CZCE.TA": {
+          "fee_rate_close": 3.01,
+          "fee_rate_close_today": 0,
+          "fee_rate_open": 3.01,
+          "margin_rate_long": 0.12,
+          "margin_rate_short": 0.12,
+          "symbol_size": 10
+        },
+        "DCE.C": {
+          "fee_rate_close": 1.21,
+          "fee_rate_close_today": 1.21,
+          "fee_rate_open": 1.21,
+          "margin_rate_long": 0.11,
+          "margin_rate_short": 0.11,
+          "symbol_size": 10
+        },
+        "DCE.I": {
+          "fee_rate_close": 0.00010107,
+          "fee_rate_close_today": 0.00010107,
+          "fee_rate_open": 0.00010107,
+          "margin_rate_long": 0.16,
+          "margin_rate_short": 0.16,
+          "symbol_size": 50
+        },
+        "DCE.L": {
+          "fee_rate_close": 1.01,
+          "fee_rate_close_today": 1.01,
+          "fee_rate_open": 1.01,
+          "margin_rate_long": 0.12,
+          "margin_rate_short": 0.12,
+          "symbol_size": 5
+        },
+        "DCE.M": {
+          "fee_rate_close": 1.51,
+          "fee_rate_close_today": 1.51,
+          "fee_rate_open": 1.51,
+          "margin_rate_long": 0.12,
+          "margin_rate_short": 0.12,
+          "symbol_size": 10
+        },
+        "DCE.P": {
+          "fee_rate_close": 2.51,
+          "fee_rate_close_today": 2.51,
+          "fee_rate_open": 2.51,
+          "margin_rate_long": 0.14,
+          "margin_rate_short": 0.14,
+          "symbol_size": 10
+        },
+        "DCE.V": {
+          "fee_rate_close": 1.01,
+          "fee_rate_close_today": 1.01,
+          "fee_rate_open": 1.01,
+          "margin_rate_long": 0.12,
+          "margin_rate_short": 0.12,
+          "symbol_size": 5
+        },
+        "DCE.Y": {
+          "fee_rate_close": 2.51,
+          "fee_rate_close_today": 2.51,
+          "fee_rate_open": 2.51,
+          "margin_rate_long": 0.11,
+          "margin_rate_short": 0.11,
+          "symbol_size": 20
+        },
+        "SHFE.AG": {
+          "fee_rate_close": 5.107e-05,
+          "fee_rate_close_today": 5.107e-05,
+          "fee_rate_open": 5.107e-05,
+          "margin_rate_long": 0.18,
+          "margin_rate_short": 0.18,
+          "symbol_size": 15
+        },
+        "SHFE.AU": {
+          "fee_rate_close": 10.01,
+          "fee_rate_close_today": 0,
+          "fee_rate_open": 10.01,
+          "margin_rate_long": 0.17,
+          "margin_rate_short": 0.17,
+          "symbol_size": 20
+        },
+        "SHFE.BU": {
+          "fee_rate_close": 5.107e-05,
+          "fee_rate_close_today": 0,
+          "fee_rate_open": 5.107e-05,
+          "margin_rate_long": 0.16,
+          "margin_rate_short": 0.16,
+          "symbol_size": 10
+        },
+        "SHFE.FU": {
+          "fee_rate_close": 5.107e-05,
+          "fee_rate_close_today": 7e-08,
+          "fee_rate_open": 5.107e-05,
+          "margin_rate_long": 0.16,
+          "margin_rate_short": 0.16,
+          "symbol_size": 10
+        },
+        "SHFE.HC": {
+          "fee_rate_close": 0.00010107,
+          "fee_rate_close_today": 0.00010107,
+          "fee_rate_open": 0.00010107,
+          "margin_rate_long": 0.11,
+          "margin_rate_short": 0.11,
+          "symbol_size": 10
+        },
+        "SHFE.RB": {
+          "fee_rate_close": 0.00010107,
+          "fee_rate_close_today": 0.00010107,
+          "fee_rate_open": 0.00010107,
+          "margin_rate_long": 0.11,
+          "margin_rate_short": 0.11,
+          "symbol_size": 10
+        },
+        "SHFE.RU": {
+          "fee_rate_close": 3.01,
+          "fee_rate_close_today": 18.01,
+          "fee_rate_open": 3.01,
+          "margin_rate_long": 0.13,
+          "margin_rate_short": 0.13,
+          "symbol_size": 10
+        }
+      },
+      "effective_from": "2024-12-13",
+      "effective_to": null,
+      "provenance": {
+        "independent_verification": false,
+        "maintenance_rule": "Publish a new immutable version for any fee or margin change; do not overwrite this snapshot.",
+        "migration": "Values copied verbatim from the repository futures_contracts.py snapshot."
+      },
+      "source_date": "2024-12-13",
+      "sources": [
+        {
+          "description": "期货手续费参考（原仓库注释来源）",
+          "url": "https://www.jiaoyixingqiu.com/shouxufei"
+        },
+        {
+          "description": "保证金标准 2024-12-13（原仓库注释来源）",
+          "url": "http://www.hongyuanqh.com/download/20241213/%E4%BF%9D%E8%AF%81%E9%87%91%E6%A0%87%E5%87%8620241213.pdf"
+        }
+      ],
+      "version": "2024-12-13"
+    }
+  ]
+}
