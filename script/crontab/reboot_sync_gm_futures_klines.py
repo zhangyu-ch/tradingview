@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 from tradingview_zy import config, fun
 from tradingview_zy.exchange.exchange import convert_futures_kline_frequency
 from tradingview_zy.exchange.exchange_db import ExchangeDB
+from tradingview_zy.secret_store import resolve_config_secret
 
 """
 同步期货行情到数据库中
@@ -20,7 +21,7 @@ from tradingview_zy.exchange.exchange_db import ExchangeDB
 # 如在远程执行，需要制定掘金终端地址  https://www.myquant.cn/docs/gm3_faq/154#b244aeed0032526e
 set_serv_addr(config.GM_SERVER_ADDR)
 # 设置token， 查看已有token ID,在用户-秘钥管理里获取
-set_token(config.GM_TOKEN)
+set_token(resolve_config_secret(config, "GM_TOKEN", required=True))
 
 # 这里指定要同步的标的代码
 # TODO 原来的合约列表，改为了指数，后面+99，保存的需要将 99 去掉

@@ -64,10 +64,10 @@
 - [x] 57. ME-10
 - [x] 58. ME-20
 - [x] 59. ME-25
-- [ ] 60. ME-27
-- [ ] 完成 51–60
-- [ ] 生成完整仓库归档 06
-- **状态：** in_progress
+- [x] 60. ME-27
+- [x] 完成 51–60
+- [x] 生成完整仓库归档 06
+- **状态：** complete
 
 ### 阶段 8：逐条验证、修复、测试与提交（61–70）
 - [ ] 完成 61–70
@@ -175,6 +175,10 @@
 | ME-25 首次本地 wheel 证据复验因 METADATA 中 Project-URL 原始顺序与清单排序不同而报 stale | 1 | 对多值 Project-URL 做确定性排序后重新生成；清单与实际 7 个 wheel 全部一致 |
 | ME-25 故障注入测试首次未创建目标临时根目录，4 项 copy2 报 FileNotFoundError | 1 | 在 fixture helper 开头显式 mkdir；20 项供应链/质量聚焦测试随后通过 |
 | 本地 uv 0.10.0 在 UV_PYTHON_DOWNLOADS=never 下找不到 Python 3.11 | 1 | 不允许静默下载；保留本地限制，并由 setup-python 3.11 的 supply-chain-contracts 执行 uv lock --check 与 uv sync --locked |
+
+| ME-27 首轮 `check_env` 在 `pymysql` 导入前未绑定 redactor，驱动缺失时可能二次触发 UnboundLocalError | 1 | 把 Secret resolver/redactor 导入移到数据库 try 之前，增加驱动导入失败且 token 脱敏的动态回归测试 |
+| ME-27 扩大仓库回归以全局 `-W error` 执行时，19 项旧源码契约测试因未关闭 `open()` 触发 ResourceWarning | 1 | 不把测试代码告警误归因于 ME-27 产品逻辑；105 项聚焦与 82 项 provider 继续严格 warnings-as-errors，完整可运行回归按 CI 单元策略得到 495 passed/5 skipped |
+| ME-27 CRLF 检查表误把原生 LF 的 `messaging_reliability.py` 当作历史 CRLF 文件 | 1 | 对照 HEAD blob 的原始换行后从 CRLF 清单移除；其余 13 个历史 CRLF 文件继续要求 bare-LF=0 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

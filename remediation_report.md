@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 59
-- **待处理：** 22
+- **已完成：** 60
+- **待处理：** 21
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -70,7 +70,7 @@
 |57|`ME-10`|中|Adapter Architecture|🟡 部分修复|已完成（能力绑定运行边界；旧宽接口保留为迁移兼容）|通过（7 项专项、31 项聚焦、125 项直接相邻测试通过）|`fix(ME-10)`|
 |58|`ME-20`|中|Strategy Protocol|🟡 部分修复|已完成（版本化信号协议与 runner 输出边界）|通过（60 项 ME-20 专项、91 项核心聚焦和 108 项任务相邻测试通过；无版本输出、用途错配、时间/metadata/数量边界和裸 list 绕过根因已关闭）|`fix(ME-20)`|
 |59|`ME-25`|中|Supply Chain|🟡 部分修复|已完成（锁定安装、制品来源、SBOM/许可证/OSV 门禁）|通过（28 项专项/相邻测试通过；确定性制品、篡改/未登记/缺 provenance、过期策略、OSV advisory 与响应失配故障注入均按预期阻断）|`fix(ME-25)`|
-|60|`ME-27`|中|Secrets|🟡 部分修复|待处理|—|—|
+|60|`ME-27`|中|Secrets|🟡 部分修复|已完成|通过（105 项聚焦、82 项 provider 严格矩阵、495 项可运行仓库回归通过，5 项条件跳过；Secret 引用、权限、轮换、迁移、脱敏及 fail-closed 故障注入均符合预期）|`fix(ME-27)`|
 |61|`ME-04`|中|Web Payload|🟡 部分修复|待处理|—|—|
 |62|`ME-01`|中|Web Storage|🟡 部分修复|待处理|—|—|
 |63|`ME-03`|低|Web UDF|❌ 未修复|待处理|—|—|
@@ -1497,16 +1497,25 @@
 ### 60. ME-27 · 交易/API 密钥设计为明文 Python 配置，缺少分级与轮换机制
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Secrets
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 本地配置模板仍把数据库、行情源、券商、AI 与飞书凭据表示为明文或示例字符串；多个消费者直接读取全局 config 属性，飞书设置仍把 App Secret 保存在通用 JSON 缓存中。旧日志脱敏依赖调用方手工传值，也没有统一的凭据分类、引用解析、私有文件权限或版本轮换边界，因此问题存在。
+- **b. 我是怎么修复的？** 新增统一 Secret inventory，把配置凭据分为 database、market-data、broker-trading、messaging 与 AI，并声明外部或 managed-versioned 轮换责任；配置只允许 env://、managed://、file://、keyring:// 引用，明文默认 fail-closed。新增 64 KiB 有界解析、占位符/NUL 拒绝、私有文件 0600/目录 0700 校验、原子版本化 ManagedSecretStore 和中央日志脱敏。数据库、Binance、Polygon、Alpaca、TQ、GM、IB、环境检查及飞书消息入口全部在使用边界解析引用。飞书旧 fs_app_secret 缓存首次读取时迁移为 managed:// 引用，留空保持、非空新建版本，数据库不再保存明文，页面不获得 Secret 或引用路径。新增文档、仓库门禁与专项测试；扩大回归时发现并修复 ContractedExchange.order 对早期 CR-03 fail-closed 门禁的回归。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 `PYTHONPATH=src pytest -q -W error` 覆盖 ME-27、CR-02、NX-03、RV-08、ME-22、Binance/TQ/Futu、环境检查、策略/图表存储和供应链/仓库门禁，共 105 项通过。
+  - 对 env/raw/placeholder/missing、managed 原子轮换与退役、file 权限、keyring getter、显式 legacy switch、Secret 分类/轮换 inventory、飞书旧缓存迁移/留空保持/新版本轮换和中央日志脱敏执行故障注入；缺少 pymysql 时环境检查仍稳定失败且不泄露 token。
+  - 运行 provider 严格警告矩阵，结果 82 passed；运行排除当前容器缺失 empyrical 与完整 Flask/pinyin 集成阻断的可运行仓库回归，结果 495 passed、5 skipped。
+  - 运行 `check_secret_references.py`、`check_secret_exposure.py`、`check_repository_hygiene.py`、`check_quality_gates.py`，并执行 py_compile/compileall、JSON 解析、git diff --check 和历史 CRLF bare-LF 门禁。
+  - 运行 CR-03 与 ME-10 组合测试，确认 ContractedExchange 即使能力声明误报 LIVE_ORDERS 也不会调用底层下单方法。
+- **e. 验证是否通过？** 通过（105 项聚焦、82 项 provider 严格矩阵、495 项可运行仓库回归通过，5 项条件跳过；Secret 引用、权限、轮换、迁移、脱敏及 fail-closed 故障注入均符合预期）
+- **提交：** fix(ME-27): require rotatable secret references
+- **修改文件：** `.github/workflows/repository-hygiene.yml`, `README.md`, `check_env.py`, `docs/secrets.md`, `script/crontab/reboot_sync_gm_a_klines.py`, `script/crontab/reboot_sync_gm_futures_klines.py`, `script/crontab/script_ib_tasks.py`, `script/remediation/check_secret_references.py`, `src/tradingview_zy/config.py.demo`, `src/tradingview_zy/db.py`, `src/tradingview_zy/exchange/contracted.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_binance.py`, `src/tradingview_zy/exchange/exchange_binance_spot.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/exchange_tq.py`, `src/tradingview_zy/messaging_reliability.py`, `src/tradingview_zy/secret_store.py`, `src/tradingview_zy/settings_security.py`, `src/tradingview_zy/utils.py`, `tests/test_cr02_settings_secret.py`, `tests/test_me10_exchange_contracts.py`, `tests/test_me22_utility_contracts.py`, `tests/test_me27_secret_management.py`, `tests/test_nx03_feishu_config_copy.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 未连接真实系统 keyring、Vault/云 Secret Manager 或第三方交易/消息服务；env/file/keyring 凭据的外部版本变更和旧凭据撤销仍由部署运营方完成。
+  - POSIX 0700/0600 与原子替换已动态验证；Windows 依赖宿主 ACL，当前 Linux 容器没有验证 Windows ACL 继承策略。
+  - 当前容器缺少完整 Flask/pinyin 与浏览器运行依赖，未本地启动真实设置页；纯迁移/轮换逻辑、路由源码契约和现有浏览器 CI 门禁已覆盖不回显边界。
+  - 中央 redactor 只能处理已解析值和常见结构；调用方仍不得记录原始 SDK 请求对象、响应体或完整配置字典。
 - **原报告最新结论：** Web 登录密码和 Flask 会话密钥现在支持环境变量/随机持久化，且默认远程免密访问被阻止，降低了配置泄露后的直接利用面。但是数据库、交易所、券商、AI 和飞书等业务密钥仍集中在明文 Python 配置/通用缓存中，设置页仍回显飞书 Secret。
 - **原报告建议：** 将业务密钥迁移到环境变量、系统 keyring 或 Vault；设置 API 只接受新值而不返回旧值，统一日志脱敏与轮换。
 

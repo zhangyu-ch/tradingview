@@ -159,6 +159,8 @@ def _check_redis(config) -> CheckResult:
 def _check_database(config) -> CheckResult:
     if str(getattr(config, "DB_TYPE", "sqlite")).lower() != "mysql":
         return CheckResult("database", CheckStatus.OK, "SQLite/local database mode")
+    from tradingview_zy.secret_store import redact_secrets, resolve_config_secret
+
     connection = None
     try:
         pymysql = importlib.import_module("pymysql")
@@ -166,7 +168,7 @@ def _check_database(config) -> CheckResult:
             host=config.DB_HOST,
             port=int(config.DB_PORT),
             user=config.DB_USER,
-            password=config.DB_PWD,
+            password=resolve_config_secret(config, "DB_PWD", required=True),
             database=config.DB_DATABASE,
             connect_timeout=3,
             read_timeout=3,
@@ -176,7 +178,7 @@ def _check_database(config) -> CheckResult:
         return CheckResult(
             "database",
             CheckStatus.FAILED,
-            f"configured MySQL is unavailable: {type(exc).__name__}: {exc}",
+            f"configured MySQL is unavailable: {type(exc).__name__}: {redact_secrets(exc)}",
         )
     finally:
         if connection is not None:

@@ -391,3 +391,13 @@
 - 在线 OSV 查询必须对 HTTP/JSON/结果基数异常 fail closed；豁免需要 advisory+package 精确绑定、负责人、原因和短期到期日。
 - SBOM、许可证和漏洞输出应由锁图确定性生成并由 hygiene 检查 stale，CI 再生成安装环境增强证据作为 artifact，不能回写带时间戳的实时结果。
 - 固定 uv 版本和 `UV_PYTHON_DOWNLOADS=never` 把 Python 解释器也纳入环境契约；本地没有 3.11 时应明确失败，而不是静默下载另一个运行时。
+
+
+## ME-27 引用式 Secret、分级与轮换边界
+- Python 配置文件不能同时充当 Secret store；配置只保留引用，实际值应在数据库、SDK 或消息客户端构造的最后使用边界解析。
+- Secret inventory 必须同时声明安全领域和轮换责任。database/market-data/broker/AI 通常由外部平台轮换；飞书 Web Secret 使用本地 managed-versioned 流程，数据库只持久化不可读的引用。
+- `managed://` 轮换顺序是先原子创建新 0600 版本，再提交引用，最后退役旧版本；失败时宁可保留孤立旧版本，也不能先删除仍被数据库引用的 Secret。
+- `env://` 和 `file://` 是否“已配置”与是否可读取应分开；真正需要调用外部服务时使用 required=True fail-closed。
+- 日志脱敏必须在 Secret 解析时注册实际值，并额外覆盖 Authorization、URL userinfo 和常见 password/token/api_key 键值形态；它不能替代禁止记录原始 SDK 对象。
+- 配置门禁应从运行时 Secret policy inventory 派生字段清单，避免新凭据只加入模板却绕过分类与扫描。
+- 能力 facade 的“未声明 LIVE_ORDERS”不是足够的长期防线；公开 `order()` 本身也必须保持 CR-03 无条件 fail-closed，防止未来 registry 误报重新接通未对账下单。

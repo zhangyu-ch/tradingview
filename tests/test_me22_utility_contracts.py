@@ -4,6 +4,7 @@ import datetime as dt
 import importlib.util
 import logging
 import sys
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -267,12 +268,20 @@ def _load_utils(monkeypatch, responses):
     config_module.FEISHU_MAX_ATTEMPTS = 3
     config_module.FEISHU_RETRY_BACKOFF_SECONDS = 0
     config_module.FEISHU_MAX_RETRY_BACKOFF_SECONDS = 0
+    config_module.SECRET_ALLOW_LEGACY_PLAINTEXT = False
+    config_module.get_data_path = lambda: Path(tempfile.mkdtemp(prefix="me22-secrets-"))
     config_module.FEISHU_KEYS = {
-        "default": {"app_id": "app", "app_secret": "secret"},
-        "user_id": "user",
+        "default": {
+            "app_id": "env://ME22_FEISHU_APP_ID",
+            "app_secret": "env://ME22_FEISHU_APP_SECRET",
+        },
+        "user_id": "env://ME22_FEISHU_USER_ID",
     }
+    monkeypatch.setenv("ME22_FEISHU_APP_ID", "app")
+    monkeypatch.setenv("ME22_FEISHU_APP_SECRET", "secret")
+    monkeypatch.setenv("ME22_FEISHU_USER_ID", "user")
     db_module = ModuleType("tradingview_zy.db")
-    db_module.db = SimpleNamespace(cache_get=lambda _key: None)
+    db_module.db = SimpleNamespace(cache_get=lambda _key: None, cache_set=lambda _key, _value: True)
     monkeypatch.setitem(sys.modules, "tradingview_zy.config", config_module)
     monkeypatch.setitem(sys.modules, "tradingview_zy.db", db_module)
     import tradingview_zy

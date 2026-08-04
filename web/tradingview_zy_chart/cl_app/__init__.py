@@ -72,9 +72,12 @@ from tradingview_zy.alert_strategy_storage import (
     normalize_strategy_memo,
     parse_strategy_kwargs,
 )
+from tradingview_zy.secret_store import ManagedSecretStore
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
+    migrate_feishu_settings,
+    retire_superseded_feishu_secret,
 )
 from tradingview_zy.tv_storage import (
     TVStorageError,
@@ -1496,11 +1499,19 @@ def create_app(test_config=None):
         # Never send a stored secret back to the browser.  The page only receives a
         # boolean so it can explain that leaving the password field blank keeps it.
         proxy = db.cache_get("req_proxy")
-        fs_setting = db.cache_get("fs_keys")
+        secret_store = ManagedSecretStore(get_data_path())
+        fs_setting, migrated = migrate_feishu_settings(
+            db.cache_get("fs_keys"),
+            store=secret_store,
+        )
+        if migrated:
+            db.cache_set("fs_keys", fs_setting)
         set_config = {
-            "fs_app_id": fs_setting.get("fs_app_id", "") if fs_setting else "",
-            "fs_app_secret_configured": feishu_secret_is_configured(fs_setting),
-            "fs_user_id": fs_setting.get("fs_user_id", "") if fs_setting else "",
+            "fs_app_id": fs_setting.get("fs_app_id", ""),
+            "fs_app_secret_configured": feishu_secret_is_configured(
+                fs_setting, store=secret_store
+            ),
+            "fs_user_id": fs_setting.get("fs_user_id", ""),
             "proxy_host": proxy.get("host", "") if proxy else "",
             "proxy_port": proxy.get("port", "") if proxy else "",
         }
@@ -1517,14 +1528,22 @@ def create_app(test_config=None):
             "host": request.form.get("proxy_host", "").strip(),
             "port": request.form.get("proxy_port", "").strip(),
         }
-        fs_keys = merge_feishu_settings(
-            db.cache_get("fs_keys"),
+        secret_store = ManagedSecretStore(get_data_path())
+        existing, migrated = migrate_feishu_settings(
+            db.cache_get("fs_keys"), store=secret_store
+        )
+        if migrated:
+            db.cache_set("fs_keys", existing)
+        fs_keys, superseded_reference = merge_feishu_settings(
+            existing,
             app_id=request.form.get("fs_app_id"),
             app_secret=request.form.get("fs_app_secret"),
             user_id=request.form.get("fs_user_id"),
+            store=secret_store,
         )
         db.cache_set("req_proxy", proxy)
         db.cache_set("fs_keys", fs_keys)
+        retire_superseded_feishu_secret(secret_store, superseded_reference)
 
         return {"ok": True}, 200, {"Cache-Control": "no-store"}
 

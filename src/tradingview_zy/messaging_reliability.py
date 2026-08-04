@@ -4,6 +4,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from tradingview_zy.secret_store import redact_secrets
+
 
 @dataclass(frozen=True)
 class RetryPolicy:
@@ -83,10 +85,6 @@ def execute_with_retry(
 
 
 def redact_sensitive(value: object, secrets: list[str] | tuple[str, ...]) -> str:
-    """Return a compact diagnostic string with configured secrets removed."""
+    """Return a compact diagnostic string through the central secret redactor."""
 
-    text = str(value).replace("\r", " ").replace("\n", " ")
-    for secret in secrets:
-        if secret:
-            text = text.replace(str(secret), "[REDACTED]")
-    return text[:300]
+    return redact_secrets(value, tuple(str(secret) for secret in secrets if secret))[:300]

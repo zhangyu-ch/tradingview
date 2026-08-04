@@ -17,6 +17,7 @@ from tradingview_zy import config
 from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.exchange.worker_lifecycle import ManagedWorker
 from tradingview_zy.trading_calendar import is_market_open
+from tradingview_zy.secret_store import resolve_config_secret
 
 
 class ExchangeTq(Exchange):
@@ -239,13 +240,19 @@ class ExchangeTq(Exchange):
                 try:
                     self.g_api = tqsdk.TqApi(
                         account=account,
-                        auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD),
+                        auth=tqsdk.TqAuth(
+                            resolve_config_secret(config, "TQ_USER", required=True),
+                            resolve_config_secret(config, "TQ_PWD", required=True),
+                        ),
                     )
                     self.g_account_enable = True
                 except Exception as exc:
                     print("初始化默认的天勤 API 报错，重新尝试初始化无账户的 API：", str(exc))
                     self.g_api = tqsdk.TqApi(
-                        auth=tqsdk.TqAuth(config.TQ_USER, config.TQ_PWD)
+                        auth=tqsdk.TqAuth(
+                            resolve_config_secret(config, "TQ_USER", required=True),
+                            resolve_config_secret(config, "TQ_PWD", required=True),
+                        )
                     )
                     self.g_account_enable = False
             return self.g_api
@@ -266,12 +273,12 @@ class ExchangeTq(Exchange):
             return self.g_account
 
         # 天勤的实盘账号，如果有设置则使用
-        if config.TQ_SP_ACCOUNT == "":
+        account = resolve_config_secret(config, "TQ_SP_ACCOUNT")
+        if account == "":
             return None
+        password = resolve_config_secret(config, "TQ_SP_PWD", required=True)
         if self.g_account is None:
-            self.g_account = tqsdk.TqAccount(
-                config.TQ_SP_NAME, config.TQ_SP_ACCOUNT, config.TQ_SP_PWD
-            )
+            self.g_account = tqsdk.TqAccount(config.TQ_SP_NAME, account, password)
         return self.g_account
 
     def all_stocks(self):

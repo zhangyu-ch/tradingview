@@ -606,3 +606,21 @@
 - 过程修正：TA-Lib Project-URL 顺序改为确定性排序；测试复制 helper 补目标目录。
 - 限制：当前容器无 Python 3.11 且本轮未联网访问 OSV；真实 locked sync 与 live scan 由新增 CI job 执行，离线报告不声称无漏洞。
 - 提交：`fix(ME-25): add verifiable supply-chain manifests`。
+
+
+### 问题 60：ME-27
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：业务凭据仍以明文/示例字符串集中在 Python 配置与通用飞书缓存，消费者直接读取 config，缺少统一分类、引用解析、版本轮换和日志脱敏，问题存在。
+- 修复：新增 database/market-data/broker-trading/messaging/AI Secret inventory；配置只允许 env/managed/file/keyring 引用，明文默认拒绝；ManagedSecretStore 采用版本化原子 0600 文件与 0700 目录；全部数据库/行情/券商/AI/消息消费者在使用边界解析；飞书旧缓存迁移为 reference-only，留空保持、非空轮换；新增中央 redactor、文档和仓库门禁。
+- 回归修正：扩大测试发现 issue57 ContractedExchange.order 绕过 issue13 CR-03 源码门禁；已恢复无条件 fail-closed，并用误报 LIVE_ORDERS 能力的 fake provider 确认底层 order 从未调用。
+- 验证：105 项聚焦、82 项 provider `-W error` 矩阵、495 项可运行仓库回归通过，5 skipped；四项静态门禁、compileall、JSON、diff 与 CRLF 检查通过。
+- 环境限制：未连接真实 keyring/Vault/券商或消息服务；Windows ACL 和完整 Flask/Chromium 本地运行未验证，真实 browser gate 已保留在 CI。
+- 提交：`fix(ME-27): require rotatable secret references`。
+
+
+### 问题 051–060 完整仓库归档
+- **状态：** complete
+- 已生成包含完整源码与 `.git` 的 `tradingview_remediation_issues_051-060.zip` 及 SHA-256 sidecar。
+- 使用系统 `unzip` 重新解压验证：工作树 clean，HEAD 与 `issue/060-ME-27` 一致，`issue/051-*` 至 `issue/060-*` 全部可解引用，`git fsck --full` 成功。
+- 归档前清除 ignored 测试配置、运行缓存和 `__pycache__`；保留全部可达本地提交、标签及源码。

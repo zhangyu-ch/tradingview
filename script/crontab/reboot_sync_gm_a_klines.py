@@ -12,6 +12,7 @@ from tradingview_zy import config, fun
 from tradingview_zy.exchange.exchange import convert_stock_kline_frequency
 from tradingview_zy.exchange.exchange_db import ExchangeDB
 from tradingview_zy.exchange.exchange_tdx import ExchangeTDX
+from tradingview_zy.secret_store import resolve_config_secret
 
 """
 同步A股行情到数据库中
@@ -31,7 +32,7 @@ def to_tdx_codes(_codes):
 # 如在远程执行，需要制定掘金终端地址  https://www.myquant.cn/docs/gm3_faq/154#b244aeed0032526e
 set_serv_addr(config.GM_SERVER_ADDR)
 # 设置token， 查看已有token ID,在用户-秘钥管理里获取
-set_token(config.GM_TOKEN)
+set_token(resolve_config_secret(config, "GM_TOKEN", required=True))
 
 symbols = get_symbols(sec_type1=1010, sec_type2=101001)
 run_codes = [_s["exchange"] + "." + _s["sec_id"] for _s in symbols]

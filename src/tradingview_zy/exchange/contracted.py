@@ -8,6 +8,7 @@ from typing import Any, Callable, TypeVar
 import pandas as pd
 
 from tradingview_zy.base import Market
+from tradingview_zy.exchange.exchange import LiveTradingDisabledError
 from tradingview_zy.domain import (
     CAPABILITY_METHODS,
     Capability,
@@ -160,10 +161,16 @@ class ContractedExchange:
     def positions(self, code: str = ""):
         return self._call(Capability.POSITIONS, "positions", code)
 
+    def _raise_live_trading_disabled(self, action: str = "order") -> None:
+        raise LiveTradingDisabledError(
+            f"live trading is disabled: ContractedExchange.{action}; "
+            "a persisted Order/Fill state machine and broker reconciliation are required"
+        )
+
     def order(self, code: str, o_type: str, amount: float, args=None):
         if not isinstance(amount, (int, float)) or isinstance(amount, bool) or not math.isfinite(float(amount)):
             raise ProviderResponseError("订单数量无效", provider=self.provider_name)
-        return self._call(Capability.LIVE_ORDERS, "order", code, o_type, amount, args=args)
+        return self._raise_live_trading_disabled("order")
 
     def close(self) -> None:
         close = getattr(self.raw_provider, "close", None)

@@ -11,6 +11,7 @@ import pytest
 
 from tradingview_zy.base import Market
 from tradingview_zy.exchange.contracted import ContractedExchange
+from tradingview_zy.exchange.exchange import LiveTradingDisabledError
 from tradingview_zy.domain import (
     CAPABILITY_METHODS,
     Capability,
@@ -184,3 +185,30 @@ def test_factory_publishes_cache_only_after_success(monkeypatch) -> None:
     finally:
         exchange.reset_exchange_cache()
         sys.modules.pop(module_name, None)
+
+
+def test_facade_live_orders_remain_fail_closed_even_if_a_spec_overreports_capability() -> None:
+    class Provider(_GoodProvider):
+        called = False
+
+        def order(self, *args, **kwargs):
+            self.called = True
+            return {"status": "filled"}
+
+    provider = Provider()
+    facade = _facade(
+        provider,
+        frozenset(
+            {
+                Capability.METADATA,
+                Capability.MARKET_DATA,
+                Capability.TICKS,
+                Capability.CATALOG,
+                Capability.SESSION_STATUS,
+                Capability.LIVE_ORDERS,
+            }
+        ),
+    )
+    with pytest.raises(LiveTradingDisabledError, match="Order/Fill state machine"):
+        facade.order("X", "buy", 1)
+    assert provider.called is False

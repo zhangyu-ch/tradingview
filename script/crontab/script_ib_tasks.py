@@ -13,6 +13,7 @@ from tradingview_zy import config, fun, rd
 from tradingview_zy.base import Market
 from tradingview_zy.exchange.exchange_ib import CmdEnum, ib_res_hkey
 from tradingview_zy.file_db import FileCacheDB
+from tradingview_zy.secret_store import resolve_config_secret
 
 
 def run_tasks(client_id: int):
@@ -27,6 +28,7 @@ def run_tasks(client_id: int):
     fdb = FileCacheDB()  # 保存存储的k线数据
 
     tz = pytz.timezone("US/Eastern")
+    configured_account = resolve_config_secret(config, "IB_ACCOUNT", required=True)
 
     def get_ib() -> ib_insync.IB:
         if ib.isConnected():
@@ -36,7 +38,7 @@ def run_tasks(client_id: int):
                 config.IB_HOST,
                 config.IB_PORT,
                 clientId=client_id,
-                account=config.IB_ACCOUNT,
+                account=configured_account,
             )
         except Exception as e:
             log.error(f"get ib connect error : {e}")
@@ -196,7 +198,7 @@ def run_tasks(client_id: int):
         return {"code": code, "name": details[0].longName}
 
     def balance():
-        account = get_ib().accountSummary(account=config.IB_ACCOUNT)
+        account = get_ib().accountSummary(account=configured_account)
         # Demo
         # {'AccruedCash': '561.00', 'AvailableFunds': '1000561.00', 'BuyingPower': '4002244.00',
         # 'EquityWithLoanValue': '1000561.00', 'ExcessLiquidity': '1000561.00', 'FullAvailableFunds': '1000561.00',
@@ -208,7 +210,7 @@ def run_tasks(client_id: int):
         return info
 
     def positions(code: str = ""):
-        hold_positions = get_ib().positions(account=config.IB_ACCOUNT)
+        hold_positions = get_ib().positions(account=configured_account)
         hold_positions = [
             {
                 "code": get_code_by_contract(_p.contract),

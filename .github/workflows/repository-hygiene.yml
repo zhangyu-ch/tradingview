@@ -26,5 +26,7 @@ jobs:
         run: python script/remediation/check_supply_chain.py
       - name: Reject stale deterministic supply-chain evidence
         run: python script/remediation/generate_supply_chain_artifacts.py --check
+      - name: Reject plaintext business secrets and direct consumers
+        run: python script/remediation/check_secret_references.py
       - name: Reject persisted secret exposure in settings UI
         run: python script/remediation/check_secret_exposure.py

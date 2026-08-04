@@ -11,6 +11,7 @@ from tenacity import retry_if_result, wait_random, stop_after_attempt, retry
 
 from tradingview_zy import config
 from tradingview_zy import fun
+from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.exchange.exchange import *
 from tradingview_zy.trading_calendar import is_market_open
 
@@ -26,7 +27,7 @@ class ExchangePolygon(Exchange):
     def __init__(self):
         super().__init__()
 
-        self.client = RESTClient(config.POLYGON_APIKEY)
+        self.client = RESTClient(resolve_config_secret(config, "POLYGON_APIKEY", required=True))
 
         self.trade_days = None
 

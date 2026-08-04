@@ -13,9 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
+from tradingview_zy.secret_store import ManagedSecretStore  # noqa: E402
 from tradingview_zy.settings_security import (  # noqa: E402
     feishu_secret_is_configured,
     merge_feishu_settings,
+    migrate_feishu_settings,
 )
 
 
@@ -62,33 +64,44 @@ def test_remote_passwordless_bind_is_rejected_and_secret_is_persistent(tmp_path)
         assert stat.S_IMODE((tmp_path / "web_secret_key").stat().st_mode) == 0o600
 
 
-def test_blank_feishu_secret_preserves_existing_and_non_blank_rotates():
+def test_blank_feishu_secret_preserves_reference_and_non_blank_rotates(tmp_path):
+    store = ManagedSecretStore(tmp_path)
     existing = {
         "fs_app_id": "old-id",
         "fs_app_secret": "sentinel-secret",
         "fs_user_id": "old-user",
     }
-    assert feishu_secret_is_configured(existing)
+    migrated, changed = migrate_feishu_settings(existing, store=store)
+    assert changed is True
+    assert "fs_app_secret" not in migrated
+    assert migrated["fs_app_secret_ref"].startswith("managed://")
+    assert feishu_secret_is_configured(migrated, store=store)
 
-    preserved = merge_feishu_settings(
-        existing,
+    preserved, superseded = merge_feishu_settings(
+        migrated,
         app_id=" new-id ",
         app_secret="   ",
         user_id=" new-user ",
+        store=store,
     )
     assert preserved == {
         "fs_app_id": "new-id",
-        "fs_app_secret": "sentinel-secret",
+        "fs_app_secret_ref": migrated["fs_app_secret_ref"],
         "fs_user_id": "new-user",
     }
+    assert superseded is None
 
-    rotated = merge_feishu_settings(
-        existing,
+    rotated, superseded = merge_feishu_settings(
+        migrated,
         app_id="new-id",
         app_secret=" replacement-secret ",
         user_id="new-user",
+        store=store,
     )
-    assert rotated["fs_app_secret"] == "replacement-secret"
+    assert rotated["fs_app_secret_ref"].startswith("managed://")
+    assert rotated["fs_app_secret_ref"] != migrated["fs_app_secret_ref"]
+    assert superseded == migrated["fs_app_secret_ref"]
+    assert "replacement-secret" not in repr(rotated)
 
 
 def test_setting_page_source_never_embeds_or_logs_the_saved_secret():

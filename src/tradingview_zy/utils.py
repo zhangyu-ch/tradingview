@@ -20,6 +20,8 @@ from tradingview_zy.messaging_reliability import (
     execute_with_retry,
     redact_sensitive,
 )
+from tradingview_zy.secret_store import ManagedSecretStore, resolve_secret
+from tradingview_zy.settings_security import migrate_feishu_settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,24 +34,48 @@ def config_get_proxy():
 
 
 def config_get_feishu_keys(market: str) -> dict[str, str]:
+    data_path = config.get_data_path()
+    store = ManagedSecretStore(data_path)
     db_fs_key = db.cache_get("fs_keys")
-    if (
-        db_fs_key is not None
-        and db_fs_key["fs_app_id"] != ""
-        and db_fs_key["fs_app_secret"] != ""
-        and db_fs_key["fs_user_id"] != ""
-    ):
-        return {
-            "app_id": db_fs_key["fs_app_id"],
-            "app_secret": db_fs_key["fs_app_secret"],
-            "user_id": db_fs_key["fs_user_id"],
-        }
+    if db_fs_key is not None:
+        db_fs_key, migrated = migrate_feishu_settings(db_fs_key, store=store)
+        if migrated:
+            db.cache_set("fs_keys", db_fs_key)
+        if (
+            db_fs_key.get("fs_app_id", "")
+            and db_fs_key.get("fs_app_secret_ref", "")
+            and db_fs_key.get("fs_user_id", "")
+        ):
+            return {
+                "app_id": db_fs_key["fs_app_id"],
+                "app_secret": resolve_secret(
+                    db_fs_key["fs_app_secret_ref"],
+                    data_path=data_path,
+                    required=True,
+                ),
+                "user_id": db_fs_key["fs_user_id"],
+            }
 
-    source = config.FEISHU_KEYS.get(market, config.FEISHU_KEYS["default"])
-    keys = dict(source)
-    keys["user_id"] = config.FEISHU_KEYS["user_id"]
-    return keys
-
+    configured = getattr(config, "FEISHU_KEYS", {})
+    source = configured.get(market, configured.get("default", {}))
+    allow_legacy = bool(getattr(config, "SECRET_ALLOW_LEGACY_PLAINTEXT", False))
+    return {
+        "app_id": resolve_secret(
+            source.get("app_id", ""),
+            data_path=data_path,
+            allow_legacy_plaintext=allow_legacy,
+        ),
+        "app_secret": resolve_secret(
+            source.get("app_secret", ""),
+            data_path=data_path,
+            allow_legacy_plaintext=allow_legacy,
+        ),
+        "user_id": resolve_secret(
+            configured.get("user_id", ""),
+            data_path=data_path,
+            allow_legacy_plaintext=allow_legacy,
+        ),
+    }
 
 def _message_content(title: str, contents: Union[str, list[str]]) -> str:
     if not isinstance(title, str) or not title.strip():

@@ -8,6 +8,7 @@ from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 import datetime as dt
 from tradingview_zy import config
 from tradingview_zy import fun
+from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.exchange.exchange import *
 from tradingview_zy.trading_calendar import is_market_open
 
@@ -24,7 +25,8 @@ class ExchangeAlpaca(Exchange):
         super().__init__()
 
         self.client = StockHistoricalDataClient(
-            api_key=config.ALPACA_APIKEY, secret_key=config.ALPACA_SECRET
+            api_key=resolve_config_secret(config, "ALPACA_APIKEY", required=True),
+            secret_key=resolve_config_secret(config, "ALPACA_SECRET", required=True),
         )
 
         # 设置时区

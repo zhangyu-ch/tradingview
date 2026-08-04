@@ -18,6 +18,10 @@ LOGIN_PWD_HASH = ''
 # 容器或多实例部署可通过环境变量 TRADINGVIEW_ZY_WEB_SECRET_KEY 设置固定值（至少 32 字节）。
 WEB_SECRET_KEY = ''
 
+# 业务凭据只允许使用 env://、managed://、file:// 或 keyring:// 引用。
+# 临时迁移旧私有配置时才可显式改为 True；默认拒绝所有明文业务 Secret。
+SECRET_ALLOW_LEGACY_PLAINTEXT = False
+
 # 本地 HTTP 部署保持 False；经 HTTPS 反向代理访问时改为 True。
 WEB_COOKIE_SECURE = False
 WEB_REMEMBER_DAYS = 30
@@ -61,7 +65,7 @@ DB_TYPE = "sqlite"  # 支持  mysql 与 sqlite，如果是 sqlite 则只需填�
 DB_HOST = '127.0.0.1'
 DB_PORT = 3306
 DB_USER = 'root'
-DB_PWD = '123456'
+DB_PWD = 'env://TRADINGVIEW_ZY_DB_PASSWORD'
 DB_DATABASE = 'chanlun_klines'
 
 # Redis 配置，不使用可将 REDIS_HOST 设置为空字符串（基本不用）
@@ -94,48 +98,48 @@ TDX_PATH = ''
 
 # 掘金设置 https://www.myquant.cn/docs2/faq/#%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8-linux-%E7%89%88%E6%9C%AC%E7%9A%84-python-sdk
 GM_SERVER_ADDR = '127.0.0.1:7001'
-GM_TOKEN = '******'
+GM_TOKEN = 'env://TRADINGVIEW_ZY_GM_TOKEN'
 
 # 富途API配置（不使用请将 FUTU_HOST 留空）
 FUTU_HOST = ''
 FUTU_PORT = 11111
-FUTU_UNLOCK_PWD = ''
+FUTU_UNLOCK_PWD = 'env://TRADINGVIEW_ZY_FUTU_UNLOCK_PASSWORD'
 
 # 天勤账号配置
-TQ_USER = ''
-TQ_PWD = ''
+TQ_USER = 'env://TRADINGVIEW_ZY_TQ_USER'
+TQ_PWD = 'env://TRADINGVIEW_ZY_TQ_PASSWORD'
 TQ_SP_NAME = 'simnow'
-TQ_SP_ACCOUNT = ''
-TQ_SP_PWD = ''
+TQ_SP_ACCOUNT = 'env://TRADINGVIEW_ZY_TQ_BROKER_ACCOUNT'
+TQ_SP_PWD = 'env://TRADINGVIEW_ZY_TQ_BROKER_PASSWORD'
 
 # 币安交易所配置
-BINANCE_APIKEY = ''
-BINANCE_SECRET = ''
+BINANCE_APIKEY = 'env://TRADINGVIEW_ZY_BINANCE_API_KEY'
+BINANCE_SECRET = 'env://TRADINGVIEW_ZY_BINANCE_SECRET'
 
 # 美股 Ploygon API 配置（申请网址 https://polygon.io/）
-POLYGON_APIKEY = ''
+POLYGON_APIKEY = 'env://TRADINGVIEW_ZY_POLYGON_API_KEY'
 
 # 美股 Alpaca API 配置（申请网址 https://alpaca.markets/）
-ALPACA_APIKEY = ''
-ALPACA_SECRET = ''
+ALPACA_APIKEY = 'env://TRADINGVIEW_ZY_ALPACA_API_KEY'
+ALPACA_SECRET = 'env://TRADINGVIEW_ZY_ALPACA_SECRET'
 
 # 盈透证券 TWS 设置
 IB_HOST = '127.0.0.1'
 IB_PORT = 7497
 IB_CLIENT_ID = 1
-IB_ACCOUNT = 'DU6941075'
+IB_ACCOUNT = 'env://TRADINGVIEW_ZY_IB_ACCOUNT'
 
 # AI 分析配置  （硅基流动和 Openrouteai 二选一，都配置优先使用 Openrouteai）
 # 使用硅基流动的API调用模型，并返回数据
 # 邀请链接：https://cloud.siliconflow.cn/i/HwLeeOjK   （注册送 14 元）
-AI_TOKEN = ""
+AI_TOKEN = 'env://TRADINGVIEW_ZY_AI_TOKEN'
 AI_MODEL = "Pro/deepseek-ai/DeepSeek-R1"
 # AI_MODEL = "Pro/deepseek-ai/DeepSeek-V3"
 
 # OpenRouterAI 的api key
 # API KEY 获取地址： https://openrouter.ai/settings/keys
 # 模型获取地址：https://openrouter.ai/models
-OPENROUTER_AI_KEYS = ""
+OPENROUTER_AI_KEYS = 'env://TRADINGVIEW_ZY_OPENROUTER_API_KEY'
 OPENROUTER_AI_MODEL = "google/gemini-2.5-pro-preview"
 
 # 飞书消息配置 (项目中新的消息推送使用飞书，user_id 是唯一的，不同的市场可以配置不同的机器人，没有设置则使用 default 的机器人)
@@ -148,42 +152,42 @@ FEISHU_RETRY_BACKOFF_SECONDS = 0.2
 FEISHU_MAX_RETRY_BACKOFF_SECONDS = 1.0
 FEISHU_KEYS = {
     "default": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_DEFAULT_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_DEFAULT_APP_SECRET",
     },
     "a": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_A_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_A_APP_SECRET",
     },
     "us": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_US_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_US_APP_SECRET",
     },
     "hk": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_HK_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_HK_APP_SECRET",
     },
     "fx": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_FX_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_FX_APP_SECRET",
     },
     "futures": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_FUTURES_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_FUTURES_APP_SECRET",
     },
     "ny_futures": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_NY_FUTURES_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_NY_FUTURES_APP_SECRET",
     },
     "currency_spot": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_SPOT_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_SPOT_APP_SECRET",
     },
     "currency": {
-        "app_id": "cli_********",
-        "app_secret": "TlQXy9Y7********",
+        "app_id": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_APP_ID",
+        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_APP_SECRET",
     },
-    "user_id": "86********",
+    "user_id": "env://TRADINGVIEW_ZY_FEISHU_USER_ID",
     "enable_img": False,
 }
 

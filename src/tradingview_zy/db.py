@@ -33,6 +33,7 @@ from tradingview_zy.alert_strategy_storage import (
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.database_catalog import list_market_kline_codes
+from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.tv_storage import (
     TVStoragePolicy,
     enforce_quota,
@@ -513,7 +514,9 @@ class DB(object):
             self.engine = create_engine(
                 build_mysql_url(
                     username=config.DB_USER,
-                    password=config.DB_PWD,
+                    password=resolve_config_secret(
+                        config, "DB_PWD", required=True, data_path=get_data_path()
+                    ),
                     host=config.DB_HOST,
                     port=config.DB_PORT,
                     database=config.DB_DATABASE,

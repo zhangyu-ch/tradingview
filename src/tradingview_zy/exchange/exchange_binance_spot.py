@@ -16,6 +16,7 @@ from tradingview_zy.exchange.binance_pagination import (
 )
 from tradingview_zy.exchange.exchange_db import ExchangeDB
 from tradingview_zy.utils import config_get_proxy
+from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.trading_calendar import is_market_open
 
 
@@ -41,9 +42,13 @@ class ExchangeBinanceSpot(Exchange):
             }
 
         # 设置是否设置交易 api
-        if config.BINANCE_APIKEY != "":
-            params["apiKey"] = config.BINANCE_APIKEY
-            params["secret"] = config.BINANCE_SECRET
+        api_key = resolve_config_secret(config, "BINANCE_APIKEY")
+        api_secret = resolve_config_secret(config, "BINANCE_SECRET")
+        if bool(api_key) != bool(api_secret):
+            raise RuntimeError("Binance API key and secret must be configured together")
+        if api_key:
+            params["apiKey"] = api_key
+            params["secret"] = api_secret
 
         self.exchange = ccxt.binance(params)
         # self.exchange = ccxt.htx(params)

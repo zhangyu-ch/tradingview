@@ -68,6 +68,20 @@ python script/remediation/check_supply_chain.py
 python script/remediation/generate_supply_chain_artifacts.py --check
 ```
 
+## 业务凭据与轮换
+
+数据库、交易所、券商、AI 和消息平台的业务凭据不得直接写入 Python 配置。
+配置项只保存 `env://`、`managed://`、`file://` 或 `keyring://` 引用；
+引用格式、私有文件权限、飞书轮换和旧配置迁移见
+[`docs/secrets.md`](docs/secrets.md)。
+
+本地复核：
+
+```bash
+python script/remediation/check_secret_references.py
+python script/remediation/check_secret_exposure.py
+```
+
 ## Web 安全配置
 
 ### 本机单机使用
