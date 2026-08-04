@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 67
-- **待处理：** 14
+- **已完成：** 68
+- **待处理：** 13
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -78,7 +78,7 @@
 |65|`MX-07`|低|Frontend|❌ 未修复|已完成（Layui 列字段绑定修正）|通过（七处错误键全部消失，排序字段绑定、JS 语法及 12 项相邻测试通过）|`fix(MX-07)`|
 |66|`MX-10`|低|Frontend|❌ 未修复|已完成（图表展示契约统一）|通过（六个调用点、运行时函数元数、布局尺寸、JavaScript 语法及 7 项相邻测试全部通过）|`fix(MX-10)`|
 |67|`NX-09`|低|Backtesting Fees|❌ 未修复|已完成（未实现公开费用桩删除）|通过（未实现函数和全部运行代码引用均已删除，既有 A 股费用计算及 6 项相邻测试通过）|`fix(NX-09)`|
-|68|`NX-18`|低|Frontend|❌ 未修复|待处理|—|—|
+|68|`NX-18`|低|Frontend|❌ 未修复|已完成（自选模板变量作用域修正）|通过（真实脚本输出保持正确，临时变量不再进入全局对象，6 项相邻测试及语法门禁通过）|`fix(NX-18)`|
 |69|`NX-17`|低|Web UDF|❌ 未修复|待处理|—|—|
 |70|`LO-02`|低|Maintainability|❌ 未修复|待处理|—|—|
 |71|`LO-06`|低|Readability|❌ 未修复|待处理|—|—|
@@ -1676,16 +1676,21 @@
 ### 68. NX-18 · zixuan.js 的 templet 未声明，泄漏为全局变量
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Frontend
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（自选模板变量作用域修正）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** zixuan.js 在 layui.each 回调的 checked/unchecked 两个分支中直接给 templet 赋值，却没有 let/const/var 声明；非严格模式会把它写到全局对象，多个组件或后续脚本可意外覆盖和读取该临时 HTML。
+- **b. 我是怎么修复的？** 把分支赋值改为回调块内的 const templet 条件表达式；保留 checked 与 unchecked 的原始 HTML 输出以及下拉菜单数据结构，不增加任何全局状态。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 静态检查真实 zixuan.js，确认存在块级 const templet，旧的裸赋值模式为 0。
+  - 在 Node vm 中加载并调用真实 ZiXuan.render_zixuan_opts，模拟两条自选记录，确认 unchecked/checked HTML 分别正确。
+  - 动态断言执行后 context 没有自有 templet 属性，证明没有全局泄漏。
+  - 运行 NX-18 与 MX-05 前端相邻测试，结果 6 passed（-W error）；node --check、CRLF 与 git diff --check 通过。
+- **e. 验证是否通过？** 通过（真实脚本输出保持正确，临时变量不再进入全局对象，6 项相邻测试及语法门禁通过）
+- **提交：** fix(NX-18): scope watchlist dropdown templates
+- **修改文件：** `web/tradingview_zy_chart/cl_app/static/js/zixuan.js`, `tests/test_nx18_zixuan_template_scope.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器未启动真实 Layui 页面；真实脚本已在 Node vm 执行并验证 DOM 模板数据，完整浏览器交互仍由 Chromium CI 门禁承担。
 - **原报告最新结论：** 当前 master 的相关实现路径（web/tradingview_zy_chart/cl_app/static/js/zixuan.js）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 块级 `const templet` 或表达式返回。
 

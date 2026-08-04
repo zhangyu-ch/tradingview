@@ -4129,16 +4129,32 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（自选模板变量作用域修正）",
+      "problem_verified": true,
+      "problem_summary": "zixuan.js 在 layui.each 回调的 checked/unchecked 两个分支中直接给 templet 赋值，却没有 let/const/var 声明；非严格模式会把它写到全局对象，多个组件或后续脚本可意外覆盖和读取该临时 HTML。",
+      "fix_summary": "把分支赋值改为回调块内的 const templet 条件表达式；保留 checked 与 unchecked 的原始 HTML 输出以及下拉菜单数据结构，不增加任何全局状态。",
+      "verification_performed": true,
+      "verification_method": [
+        "静态检查真实 zixuan.js，确认存在块级 const templet，旧的裸赋值模式为 0。",
+        "在 Node vm 中加载并调用真实 ZiXuan.render_zixuan_opts，模拟两条自选记录，确认 unchecked/checked HTML 分别正确。",
+        "动态断言执行后 context 没有自有 templet 属性，证明没有全局泄漏。",
+        "运行 NX-18 与 MX-05 前端相邻测试，结果 6 passed（-W error）；node --check、CRLF 与 git diff --check 通过。"
+      ],
+      "verification_result": "通过（真实脚本输出保持正确，临时变量不再进入全局对象，6 项相邻测试及语法门禁通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "web/tradingview_zy_chart/cl_app/static/js/zixuan.js",
+        "tests/test_nx18_zixuan_template_scope.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "当前容器未启动真实 Layui 页面；真实脚本已在 Node vm 执行并验证 DOM 模板数据，完整浏览器交互仍由 Chromium CI 门禁承担。"
+      ],
+      "commit_subject": "fix(NX-18): scope watchlist dropdown templates"
     }
   },
   {

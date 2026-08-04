@@ -683,3 +683,10 @@
 - 验证：真实模块不再暴露 fee_us，fee_a 买/卖样例仍为 32/42；NX-09/NX-08 共 6 passed（-W error），编译、CRLF 与 diff 门禁通过。
 - 过程修正：首次引用不存在的 NX-08 测试文件，按当前目录改为 test_nx08_position_close_profit.py 后复验。
 - 待提交主题：`fix(NX-09): remove unimplemented US fee stub`。
+
+### 问题 68：NX-18（恢复重建）
+- **状态：** complete
+- 验证结论：render_zixuan_opts 两个分支裸写 templet，非严格模式泄漏到全局对象，问题存在。
+- 修复：改为 each 回调块内 const 条件表达式，保留 checked/unchecked 模板输出和下拉数据结构。
+- 验证：Node vm 执行真实脚本后 context 无 templet 属性，两种 HTML 均正确；NX-18/MX-05 组合 6 passed（-W error），语法、CRLF 与 diff 门禁通过。
+- 待提交主题：`fix(NX-18): scope watchlist dropdown templates`。

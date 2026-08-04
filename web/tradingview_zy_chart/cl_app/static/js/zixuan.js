@@ -14,15 +14,14 @@ var ZiXuan = (function () {
         success: function (res) {
           let data = [];
           layui.each(res, function (i, e) {
-            if (e["exists"] === 0) {
-              templet =
-                '<span><input type="checkbox" /> ' + e["zx_name"] + "</span>";
-            } else {
-              templet =
-                '<span><input type="checkbox" checked /> ' +
-                e["zx_name"] +
-                "</span>";
-            }
+            const templet =
+              e["exists"] === 0
+                ? '<span><input type="checkbox" /> ' +
+                  e["zx_name"] +
+                  "</span>"
+                : '<span><input type="checkbox" checked /> ' +
+                  e["zx_name"] +
+                  "</span>";
             data.push({
               title: e["zx_name"],
               id: i,
