@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 46
-- **待处理：** 35
+- **已完成：** 47
+- **待处理：** 34
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -57,7 +57,7 @@
 |44|`ME-26`|中|Scheduler Lifecycle|❌ 未修复|已完成|通过（9 项 ME-26 专项、23 项可执行相邻组合通过；factory 零调度副作用、leader 唯一性、reconcile、状态快照和 CLI 退出码均已验证）|`fix(ME-26): `|
 |45|`ME-19`|中|Selection Tasks|❌ 未修复|已完成|通过（7 项 ME-19 专项、35 项相邻组合通过；第 N 条写入失败回滚、完整快照替换、零写入失败路径、跨市场状态隔离和 opt_type 删除均已验证）|`fix(ME-19): `|
 |46|`ME-18`|中|Strategy Runners|❌ 未修复|已完成|通过（13 项 ME-18 专项、52 项相邻组合通过；逐标的隔离、输入协议、命中/未命中/失败三态、选股零替换失败路径和监控部分成功可观测性均已验证）|`fix(ME-18): `|
-|47|`ME-14`|中|TDX US|❌ 未修复|待处理|—|—|
+|47|`ME-14`|中|TDX US|❌ 未修复|已完成|通过（17 项 ME-14 专项、40 项 TDX/前端相邻组合通过；DST、LMT、跨午夜交易日、trade/amount 映射、payload 故障注入和 CRLF 门禁均已验证）|`fix(ME-14): `|
 |48|`ME-30`|中|Trading Calendar|❌ 未修复|待处理|—|—|
 |49|`ME-22`|中|Utilities|❌ 未修复|待处理|—|—|
 |50|`ME-02`|中|Web UDF|❌ 未修复|待处理|—|—|
@@ -1149,16 +1149,26 @@
 ### 47. ME-14 · TDX 美股时区通过 replace(tzinfo=pytz_zone) 附着，可能产生 LMT 偏移
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / TDX US
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** TDX 美股适配器通过 `datetime.replace(tzinfo=pytz_zone)` 直接附着 `pytz` 时区；这种写法绕过时区本地化规则，纽约时间可能产生历史 LMT `-04:56` 偏移。日线与分钟线共用隐式 `_convert_dt`，凌晨中国墙钟的交易日归属和 DST 只靠未测试分支。同时适配器把 pytdx 的 `amount` 字段直接写入 canonical `volume`；仓库随附 pytdx parser 明确同时输出独立的 `trade` 与 `amount`，旧映射把两个供应商字段混为一谈，且没有缺列、非有限值、重复时间或 OHLC 一致性校验。
+- **b. 我是怎么修复的？** 新增无副作用的 `tdx_us_payloads.py` 边界：使用 `zoneinfo.ZoneInfo('Asia/Shanghai')` 与 `ZoneInfo('America/New_York')` 转换分钟墙钟，00:00–05:59 先推进源日再换算；日线及以上按 provider 交易日期锚定纽约 16:00。转换完成后再按纽约市场时间稳定排序，避免跨午夜源排序倒置。原始 payload 必须具备 datetime/OHLC/`trade`，价格和成交量必须有限、成交量非负、时间唯一、OHLC 自洽；输入 DataFrame 深拷贝且不被修改。canonical `volume` 只来自仓库内置 parser 的 `trade` 字段，缺失时明确失败，绝不静默回退到 `amount`。`ExchangeTDXUS` 删除 pytz 与旧 `_convert_dt`，统一通过该 normalizer，并把实例时区改为标准 IANA `America/New_York`。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前读取真实 `exchange_tdx_us.py`，确认 `pytz.timezone()` 配合 `replace(tzinfo=...)`、凌晨人工加日和 `volume = amount` 均处于可达 K 线路径。
+  - 直接读取仓库随附 `package/pytdx-1.72r2-py3-none-any.whl` 中 `ex_get_instrument_bars.py`，确认 parser 同时输出独立 `trade` 与 `amount` 字段，建立本仓库依赖版本的字段映射证据。
+  - 运行 `PYTHONPATH=src pytest -q -W error tests/test_me14_tdx_us_timezone.py`，17 项专项通过；参数化验证 2026 冬/夏令时 09:30 对应 -05:00/-04:00 与正确 UTC，日线不出现 -04:56 LMT。
+  - 注入 00:00–05:59 中国源墙钟和跨午夜乱序 bar，确认先转换后排序得到纽约 09:30→16:00 的市场顺序，并保持原美国交易日期。
+  - 故障注入缺少 trade、负/Inf 成交量、重复时间、null/aware 源时间和 OHLC 矛盾，全部 fail-closed；合法 payload 的 volume 来自 trade 而非 amount，源 DataFrame 保持不变。
+  - 运行全部 TDX 专项与相邻前端门禁：ME-14、ME-12、MX-17、NX-20、MX-05 共 40 passed；changed-file compileall、`git diff --check` 通过，两个源文件保持纯 CRLF。
+- **e. 验证是否通过？** 通过（17 项 ME-14 专项、40 项 TDX/前端相邻组合通过；DST、LMT、跨午夜交易日、trade/amount 映射、payload 故障注入和 CRLF 门禁均已验证）
+- **提交：** `fix(ME-14): normalize TDX US timezone and volume`
+- **修改文件：** `src/tradingview_zy/exchange/exchange_tdx_us.py`, `src/tradingview_zy/exchange/tdx_us_payloads.py`, `tests/test_me14_tdx_us_timezone.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器未连接真实 TDX ExHQ 服务；字段映射依据仓库实际随附的 pytdx parser 源码与协议桩，而不是在线供应商黄金样本。部署前仍建议抓取一组真实 bar 对照交易所成交量。
+  - 分钟源时间被视为现有适配器已使用的 Asia/Shanghai 墙钟协议；本条把该隐式假设显式化并测试，但上游若未来改变时钟语义必须同步更新协议版本。
+  - 日线及以上沿用项目既有的纽约常规收盘 16:00 锚点；NYSE 提前收市日的日 bar 精确收盘时刻属于更广的 ME-30 市场/品种 session 治理，不在本条伪造。
+  - 本条严格校验结构与基本 OHLCV 质量，不判断缺口、复权因子或供应商 `trade` 单位是否为股/手；这些需要真实数据黄金样本。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_tdx_us.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 使用 zoneinfo 或 pytz.localize，再 astimezone；为源字段建立映射文档和数据质量断言。
 

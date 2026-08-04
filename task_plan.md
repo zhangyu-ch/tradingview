@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 6（恢复重建中：已重新完成第 46 条，下一条为第 47 条 ME-14）
+阶段 6（恢复重建中：已重新完成第 47 条，下一条为第 48 条 ME-30）
 
 ## 各阶段
 
@@ -46,7 +46,7 @@
 - [x] 44. ME-26
 - [x] 45. ME-19
 - [x] 46. ME-18
-- [ ] 47. ME-14
+- [x] 47. ME-14
 - [ ] 48. ME-30
 - [ ] 49. ME-22
 - [ ] 50. ME-02
@@ -128,6 +128,10 @@
 
 | ME-18 首轮命中/未命中样例的低价 bar 使用了高于 close 的 low，触发正确的 OHLC 协议拒绝 | 1 | 修正测试 fixture 为 high=max(open,close)+0.5、low=min(open,close)-0.5；产品校验保持不变，13 项专项通过 |
 | ME-18 尝试运行历史 cl_app 集成测试时被容器缺失 pinyin 阻断 | 1 | 不伪造完整 Flask 包；使用最小协议桩动态加载真实 AlertTasks，并将完整包联调限制写入台账 |
+
+| ME-14 专项测试从 `tradingview_zy.exchange` 包导入纯 helper，触发归档中缺失的本地 config.py | 1 | 改用 `spec_from_file_location` 直接加载无副作用 helper；不伪造产品配置，17 项专项通过 |
+
+| ME-14 Inf 故障注入先向 int64 trade 列写浮点无穷，pandas 发 FutureWarning | 1 | 在测试中先显式转换 trade 为 float，并以 `-W error` 复验；产品 normalizer 不变 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

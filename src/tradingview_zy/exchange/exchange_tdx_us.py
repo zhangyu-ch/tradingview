@@ -4,7 +4,7 @@ from typing import Dict, List, Union
 
 import akshare as ak
 import pandas as pd
-import pytz
+from zoneinfo import ZoneInfo
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
 from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
@@ -15,6 +15,7 @@ from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_us_tdx_kline_frequency
 from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
+from tradingview_zy.exchange.tdx_us_payloads import normalize_tdx_us_bars
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.tools import tdx_best_ip as best_ip
 from tradingview_zy.trading_calendar import is_market_open
@@ -42,7 +43,7 @@ class ExchangeTDXUS(Exchange):
             print("通达信 美股行情接口初始化失败，美股行情不可用")
 
         # 设置时区
-        self.tz = pytz.timezone("US/Eastern")
+        self.tz = ZoneInfo("America/New_York")
 
         # 文件缓存
         self.fdb = FileCacheDB()
@@ -217,14 +218,11 @@ class ExchangeTDXUS(Exchange):
             )
             self.fdb.save_tdx_klines(Market.US.value, code, frequency, klines_df)
 
-            klines_df.loc[:, "date"] = klines_df["date"].apply(self._convert_dt)
-            klines_df = klines_df.sort_values("date")
-            klines_df.loc[:, "code"] = code
-            klines_df.loc[:, "volume"] = klines_df["amount"]
-
-            klines_df = klines_df[
-                ["code", "date", "open", "close", "high", "low", "volume"]
-            ]
+            klines_df = normalize_tdx_us_bars(
+                klines_df,
+                code=code,
+                frequency=frequency,
+            )
 
             if frequency in ["10m", "2m"]:
                 klines_df = convert_us_tdx_kline_frequency(klines_df, frequency)
@@ -240,21 +238,6 @@ class ExchangeTDXUS(Exchange):
             traceback.print_exc()
 
         return None
-
-    def _convert_dt(self, _dt: datetime.datetime):
-        """
-        将通达信的中国时间，转换成美国东部时间
-        """
-        if _dt.hour == 15 and _dt.minute == 0:
-            # 这个是日线及以上周期的数据
-            _dt = _dt.replace(hour=16, minute=0, tzinfo=self.tz)
-            return _dt
-
-        _dt = _dt.replace(tzinfo=pytz.timezone("Asia/Shanghai"))
-
-        if _dt.hour in [0, 1, 2, 3, 4, 5]:
-            _dt = _dt + datetime.timedelta(days=1)
-        return _dt.astimezone(self.tz)
 
     def stock_info(self, code: str) -> Union[Dict, None]:
         """

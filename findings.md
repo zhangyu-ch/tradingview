@@ -276,3 +276,14 @@
 - BatchRunResult 保留对 hits 的 `__iter__/__len__/__getitem__` 兼容视图，旧的只读信号列表调用可平滑迁移，但任务层已显式读取 failures，不能再把部分失败当成整批成功。
 - 选股任务的 `last_run_results` 保存最近尝试（包括部分 hits 与 failures），而 `running_tasks` 只保存最后一次完整成功；这把“最新尝试”和“最后可发布结果”从同一状态中分离。
 - 监控任务在同一批次中会保存正常 hits，并对失败标的记录 code/stage/error；整批返回 False，避免调度器把部分失败误标为成功。
+
+
+## ME-14 TDX 美股时间与成交量字段复核（恢复重建）
+- `ExchangeTDXUS._convert_dt()` 对日线直接 `replace(tzinfo=pytz_zone)`，分钟线先对上海 `pytz` 区域执行 replace；该用法绕过本地化规则，纽约历史 LMT 偏移和 DST 语义都不可靠。
+- 适配器在转换前按 naive 中国时间排序，跨午夜的美国交易日可能顺序错误；中国凌晨 00:00–05:59 bar 还依赖手工加一天修正交易日。
+- 仓库随附 `pytdx-1.72r2` wheel 的 ExHQ bar parser 同时解析独立字段 `trade` 和 `amount`；当前适配器把 `amount` 写入 canonical `volume`，没有供应商协议依据。
+- 修复应在纯 payload 边界完成：使用 zoneinfo 明确解释上海墙钟并转换纽约时间，转换后排序；日线按美国交易日锚定 16:00；volume 只接受 parser 的 `trade`，缺失时 fail-closed，并统一校验 OHLC、时间唯一性和数值质量。
+
+- 分钟源协议现在显式定义为“美国交易日标签 + 上海墙钟小时”：21:30 等晚间时刻直接本地化，00:00–05:59 先推进一个上海自然日，再转换纽约；这样凌晨 close bar 不会落到前一美国交易日。
+- 日线及以上不再猜测上海瞬间，而是只使用 provider 的交易日期并锚定纽约常规收盘 16:00；提前收市精细化留给 ME-30。
+- normalizer 在市场时区转换后才稳定排序，并严格拒绝 aware 源时间、重复市场时间和缺少 `trade`，避免双重转换或 amount 回退掩盖供应商协议漂移。

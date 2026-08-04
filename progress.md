@@ -452,3 +452,19 @@
 - 首轮测试 fixture 自身构造了 low>close 的无效 K 线，被新协议正确拒绝；修正 fixture 后产品实现未改。
 - 完整 cl_app 历史集成测试仍在 package import 前被容器缺失 pinyin 阻断；真实 AlertTasks 已通过最小依赖桩动态执行。
 - 提交：`fix(ME-18): isolate strategy batch failures`。
+
+
+### 问题 47：ME-14（验证阶段）
+- **状态：** in_progress
+- **开始时间：** 2026-08-04
+- 已确认问题存在：TDX US 使用 `replace(tzinfo=pytz_zone)` 附着时区，且把 pytdx ExHQ 的 `amount` 当作 canonical `volume`。仓库随附 parser 证明 `trade` 与 `amount` 是两个独立字段。
+- 正在抽取无网络副作用的 payload normalizer，并为冬/夏令时、跨午夜交易日、日线收盘锚点、字段映射和数据质量增加专项测试。
+
+### 问题 47：ME-14
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：TDX US 通过 pytz replace 附着时区、凌晨交易日修正缺少契约测试，并把 pytdx `amount` 映射为 volume；仓库内置 parser 证明 `trade`/`amount` 独立，问题存在。
+- 修复：新增纯 payload normalizer；zoneinfo 处理上海墙钟→纽约 DST，凌晨源时刻修正交易日，日线锚定纽约 16:00，转换后排序；volume 严格来自 `trade`，并校验时间、OHLC、有限值和非负成交量。
+- 专项测试 17 passed（以 warnings=error）；ME-14/ME-12/MX-17/NX-20/MX-05 组合共 40 passed；compileall、diff 和 CRLF 门禁通过。
+- 当前无真实 TDX ExHQ 网络；字段证据来自仓库随附 wheel，真实单位与黄金样本限制已写入台账。
+- 提交：`fix(ME-14): normalize TDX US timezone and volume`。
