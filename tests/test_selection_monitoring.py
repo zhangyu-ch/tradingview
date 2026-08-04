@@ -184,7 +184,7 @@ def test_alert_tasks_use_generic_db_methods(monkeypatch):
     )
 
     monkeypatch.setattr(alert_tasks.AlertTasks, "alert_get", lambda self, alert_id: alert_config)
-    monkeypatch.setattr(alert_tasks, "get_exchange", lambda market: SimpleNamespace(now_trading=lambda: True))
+    monkeypatch.setattr(alert_tasks, "get_exchange", lambda market: SimpleNamespace(now_trading=lambda code=None, at=None: True))
     monkeypatch.setattr(
         alert_tasks,
         "ZiXuan",
@@ -318,7 +318,7 @@ def test_alert_run_rejects_non_object_strategy_config(monkeypatch):
     )
 
     monkeypatch.setattr(alert_tasks.AlertTasks, "alert_get", lambda self, alert_id: alert_config)
-    monkeypatch.setattr(alert_tasks, "get_exchange", lambda market: SimpleNamespace(now_trading=lambda: True))
+    monkeypatch.setattr(alert_tasks, "get_exchange", lambda market: SimpleNamespace(now_trading=lambda code=None, at=None: True))
     monkeypatch.setattr(
         alert_tasks,
         "ZiXuan",
@@ -444,7 +444,7 @@ def test_tv_history_backfill_returns_ohlcv_when_market_is_closed(monkeypatch):
         def default_code(self):
             return "SH.000001"
 
-        def now_trading(self):
+        def now_trading(self, code=None, at=None):
             return False
 
         def klines(self, code, frequency):
@@ -500,7 +500,7 @@ def test_tv_history_first_request_returns_available_history_for_zoom_out(monkeyp
         def default_code(self):
             return "SH.000001"
 
-        def now_trading(self):
+        def now_trading(self, code=None, at=None):
             return True
 
         def klines(self, code, frequency):

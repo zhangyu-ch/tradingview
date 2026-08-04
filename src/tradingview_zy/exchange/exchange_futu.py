@@ -4,6 +4,7 @@ from tradingview_zy import config, fun
 from tradingview_zy.exchange.exchange import *
 
 from futu import *
+from tradingview_zy.trading_calendar import is_market_open
 
 g_ctx = None
 g_ttx = None
@@ -247,35 +248,23 @@ class ExchangeFutu(Exchange):
         )
         return data if ret == RET_OK else None
 
-    def now_trading(self):
-        """
-        返回当前是否是交易时间
-        :return:
-        """
-        if self.g_trade_days is None:
-            self.g_trade_days = self.market_trade_days("hk")
+    @staticmethod
+    def _calendar_market_for_code(code: str | None) -> str | None:
+        if not isinstance(code, str) or not code.strip():
+            return None
+        prefix = code.strip().split(".", 1)[0].upper()
+        if prefix in {"SH", "SZ", "BJ"}:
+            return "a"
+        if prefix == "HK":
+            return "hk"
+        return None
 
-        now_date = time.strftime("%Y-%m-%d")
-        if self.g_trade_days[-1]["time"] < now_date:
-            self.g_trade_days = self.market_trade_days("hk")
-
-        for _t in self.g_trade_days:
-            if _t["time"] == now_date:
-                hour = int(time.strftime("%H"))
-                minute = int(time.strftime("%M"))
-                # 上午的时间检查
-                if _t["trade_date_type"] in ["WHOLE", "MORNING"] and (
-                    (hour == 9 and minute >= 30) or hour in {10, 11}
-                ):
-                    return True
-                # 下午的时间检查
-                if _t["trade_date_type"] in ["WHOLE", "AFTERNOON"] and hour in {
-                    13,
-                    14,
-                    15,
-                }:
-                    return True
-        return False
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Resolve the A/HK calendar from the concrete Futu code prefix."""
+        market = self._calendar_market_for_code(code)
+        if market is None:
+            return False
+        return is_market_open(market, code=code, at=at)
 
     @staticmethod
     def query_kline_edu():

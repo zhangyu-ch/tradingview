@@ -632,7 +632,7 @@ def create_app(test_config=None):
         if (
             not first_data_request
             and from_timestamp >= int(now_time - (10 * 60))
-            and ex.now_trading() is False
+            and ex.now_trading(code) is False
         ):
             return {"s": "no_data", "nextTime": int(now_time + (10 * 60))}
         klines = ex.klines(code, frequency)
@@ -968,7 +968,9 @@ def create_app(test_config=None):
         try:
             ex = get_exchange(Market(tick_request.market))
             stock_ticks = tick_provider_caller.call(ex.ticks, list(tick_request.codes))
-            now_trading = bool(ex.now_trading())
+            now_trading = any(
+                ex.now_trading(code) for code in tick_request.codes
+            )
             res_ticks = [
                 {
                     "code": code,

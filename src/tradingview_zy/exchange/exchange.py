@@ -64,10 +64,14 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def now_trading(self):
-        """
-        返回当前是否可交易
-        :return bool
+    def now_trading(
+        self, code: str | None = None, at: datetime.datetime | None = None
+    ) -> bool:
+        """Return whether ``code`` is in an open, known trading session.
+
+        Futures providers require the instrument because session profiles vary
+        by product. Implementations must return a strict bool and fail closed
+        when the calendar, year, or instrument cannot be identified.
         """
 
     @abstractmethod

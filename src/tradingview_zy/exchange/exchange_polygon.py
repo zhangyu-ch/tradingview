@@ -12,6 +12,7 @@ from tenacity import retry_if_result, wait_random, stop_after_attempt, retry
 from tradingview_zy import config
 from tradingview_zy import fun
 from tradingview_zy.exchange.exchange import *
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -203,14 +204,9 @@ class ExchangePolygon(Exchange):
         #     )
         raise Exception("交易所不支持")
 
-    def now_trading(self):
-        """
-        返回当前是否是交易时间
-        """
-        resp = self.client.get_market_status()
-        if resp.market != "closed":
-            return True
-        return False
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('us', code=code, at=at)
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")
@@ -231,7 +227,7 @@ class ExchangePolygon(Exchange):
 if __name__ == "__main__":
     ex = ExchangePolygon()
 
-    # is_trading = ex.now_trading()
+    # is_trading = ex.now_trading(ex.default_code())
     # print(is_trading)
 
     # klines = ex.klines(ex.default_code(), "30m")

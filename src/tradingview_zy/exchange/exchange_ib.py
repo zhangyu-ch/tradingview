@@ -11,6 +11,7 @@ from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 from tradingview_zy import config, fun, rd
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_us_kline_frequency
 from tradingview_zy.exchange.ib_rpc import redis_rpc
+from tradingview_zy.trading_calendar import is_market_open
 
 ib_res_hkey = "ib_data_results"
 
@@ -83,21 +84,9 @@ class ExchangeIB(Exchange):
         self.cache[f"search_stock_{search}"] = res
         return res
 
-    def now_trading(self):
-        """
-        TODO 暂时还没有找到接口，直接硬编码
-        周一致周五，美国东部时间，9:30 - 16:00
-        """
-        tz = pytz.timezone("US/Eastern")
-        now = datetime.datetime.now(tz)
-        weekday = now.weekday()
-        hour = now.hour
-        minute = now.minute
-        if weekday in [0, 1, 2, 3, 4] and (
-            (10 <= hour < 16) or (hour == 9 and minute >= 30)
-        ):
-            return True
-        return False
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('us', code=code, at=at)
 
     @retry(
         stop=stop_after_attempt(2),

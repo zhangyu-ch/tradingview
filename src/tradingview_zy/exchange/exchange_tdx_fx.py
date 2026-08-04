@@ -317,9 +317,9 @@ class ExchangeTDXFX(Exchange):
                     )
         return ticks
 
-    def now_trading(self):
-        """Return a strict market-open bool from the shared calendar."""
-        return is_market_open("fx")
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('fx', code=code, at=at)
 
     def balance(self):
         raise Exception("交易所不支持")

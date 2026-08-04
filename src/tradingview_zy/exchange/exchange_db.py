@@ -286,13 +286,12 @@ class ExchangeDB(Exchange):
             for code in db.klines_codes(self.market)
         ]
 
-    def now_trading(self) -> bool:
+    def now_trading(self, code: str | None = None, at=None) -> bool:
         """Return an explicit fail-closed live-market state.
 
         A database-backed provider can serve stored bars and derived ticks, but it has no
-        authoritative exchange calendar or live session feed.  Returning ``False`` keeps
-        Python schedulers and the Web JSON contract aligned instead of exposing ``None``
-        as an ambiguous third state.
+        authoritative live session feed. Returning ``False`` keeps Python schedulers and
+        the Web JSON contract aligned instead of exposing an ambiguous third state.
         """
         return False
 

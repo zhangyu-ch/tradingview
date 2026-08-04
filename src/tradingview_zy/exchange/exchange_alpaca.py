@@ -9,6 +9,7 @@ import datetime as dt
 from tradingview_zy import config
 from tradingview_zy import fun
 from tradingview_zy.exchange.exchange import *
+from tradingview_zy.trading_calendar import is_market_open
 
 g_all_stocks = []
 
@@ -196,20 +197,9 @@ class ExchangeAlpaca(Exchange):
             )
         return code_ticks
 
-    def now_trading(self):
-        """
-        返回当前是否是交易时间
-        """
-        tz = pytz.timezone("US/Eastern")
-        now = datetime.datetime.now(tz)
-        weekday = now.weekday()
-        hour = now.hour
-        minute = now.minute
-        if weekday in [0, 1, 2, 3, 4] and (
-            (10 <= hour < 16) or (hour == 9 and minute >= 30)
-        ):
-            return True
-        return False
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('us', code=code, at=at)
 
     @staticmethod
     def __convert_date(_dt):

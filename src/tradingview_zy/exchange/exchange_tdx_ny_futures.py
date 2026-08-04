@@ -19,6 +19,7 @@ from tradingview_zy.exchange.tdx_reliability import (
     call_with_bounded_retry,
 )
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -381,11 +382,9 @@ class ExchangeTDXNYFutures(Exchange):
                     )
         return ticks
 
-    def now_trading(self):
-        """
-        返回当前是否是交易时间
-        """
-        return True
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('ny_futures', code=code, at=at)
 
     @staticmethod
     def __convert_date(dt: datetime.datetime):

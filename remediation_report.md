@@ -1175,16 +1175,29 @@
 ### 48. ME-30 · 多个市场 now_trading 使用粗粒度硬编码，未处理节假日、午休、夜盘品种差异和 DST
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Trading Calendar
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 复核全部可达 `now_trading()` 后确认问题范围比旧报告更广：QMT、Baostock、Alpaca、IB、Futu、Polygon 仍依赖服务器本地时间、硬编码现金时段或远端粗粒度状态；TQ/TDX 国内期货把所有品种统一视为可交易到 02:30；TDX 纽约期货无条件返回 True。原抽象接口没有 code/instrument 与可注入 aware instant，Web history、ticks 和 AlertTasks 也只查询单一市场布尔值，因此无法表达午休、节假日、半日市、美国 DST、国内期货 23:00/01:00/02:30 夜盘差异及 CFFEX 日盘差异。
+- **b. 我是怎么修复的？** 扩展 `trading_calendar.py` 为版本化、严格布尔、品种感知的统一 session 边界：现金市场保留 A/HK/US 2026 节假日、午休和半日市；FX 使用纽约时区 24x5 周界；数字货币显式 24x7；国内期货按 product root 映射到 23:00、01:00、02:30、商品日盘、CFFEX 股指日盘和国债日盘 profile，并处理节前无夜盘、跨午夜和未覆盖年份；纽约期货对明确支持的 Globex 产品处理周末、每日维护窗、DST 与保守节假日边界。未知期货品种、缺少 code 和未覆盖年份全部 fail-closed。`Exchange.now_trading` 统一升级为可选 `code + aware at` 契约，所有可达 provider 迁移到共享日历；Futu 根据 SH/SZ/BJ/HK 代码前缀选择 A/HK 日历。history、ticks 和 alert 调用方传递具体 instrument，监控任务只运行当前开市的合法标的，同时保留畸形目标给 ME-18 结构化校验。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 逐文件 AST/源码扫描全部 Exchange 子类与 Web/Alert 调用点，确认修复前存在本机时间、硬编码小时、远端状态、恒真和不传 instrument 的多套语义；修复后 16 个可达 provider、Futu 多市场分流与 DB fail-closed 均具备 `code, at -> bool` 契约。
+  - 运行 `PYTHONPATH=src pytest -q -W error tests/test_me30_trading_calendar.py tests/test_me12_tdx_contracts.py tests/test_mx04_exchange_db_trading_state.py`，22 项专项及既有契约全部通过。
+  - 国内期货故障注入覆盖商品 09:00/10:15/10:30/11:30/13:30 日盘边界、23:00/01:00/02:30 夜盘终点、CFFEX 股指与国债差异、周五晚至周六凌晨、周日关闭、春节前无夜盘、未知品种、缺少 code 和未覆盖年份 fail-closed。
+  - 纽约期货测试覆盖 Globex 每日 17:00–18:00 ET 维护窗、周末边界、圣诞闭市、节日前夜保守关闭，以及同一 UTC 输入在冬夏令时下由 ZoneInfo 得出不同 session 结果；数字货币 24x7、FX 24x5 与现金市场既有契约保持明确。
+  - 运行 ME-30、ME-12、MX-04、Baostock、QMT、IB、Binance、TQ、Web payload、参数校验、ME-18 和修复报告统计等相邻组合，共 152 passed。
+  - 单独运行完整 `test_selection_monitoring.py`：6 项通过，9 项在业务断言前被当前容器缺失 `pinyin`/`tzlocal` 阻断；尝试更广仓库收集时，另被归档未包含本地 `config.py` 阻断，均未执行到本条产品逻辑。
+  - 执行全量 `compileall`、`python -m json.tool`、`git diff --check` 和历史换行逐字节检查；全部通过，19 个既有 CRLF 文件保持 bare-LF=0，仓库可达源码/调用点不再出现无参数 `now_trading()`。
+- **e. 验证是否通过？** 通过（22 项专项/既有契约、152 项相邻组合通过；完整监控/Web 历史测试中 9 项因缺失 pinyin/tzlocal 在业务断言前阻断；编译、JSON、diff 与 19 个 CRLF 文件门禁通过）
+- **提交：** `fix(ME-30): unify instrument-aware market sessions`
+- **修改文件：** `src/tradingview_zy/trading_calendar.py`, `src/tradingview_zy/exchange/exchange.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_baostock.py`, `src/tradingview_zy/exchange/exchange_binance.py`, `src/tradingview_zy/exchange/exchange_binance_spot.py`, `src/tradingview_zy/exchange/exchange_db.py`, `src/tradingview_zy/exchange/exchange_futu.py`, `src/tradingview_zy/exchange/exchange_ib.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/exchange_qmt.py`, `src/tradingview_zy/exchange/exchange_tdx.py`, `src/tradingview_zy/exchange/exchange_tdx_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_fx.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_ny_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_us.py`, `src/tradingview_zy/exchange/exchange_tq.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `tests/test_me30_trading_calendar.py`, `tests/test_me12_tdx_contracts.py`, `tests/test_mx04_exchange_db_trading_state.py`, `tests/test_me18_strategy_runner_contracts.py`, `tests/test_selection_monitoring.py`, `tests/test_cr03_live_trading_disabled.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 版本化现金和期货节假日数据当前只覆盖 2026；其他年份严格返回闭市，必须在跨年部署前增加经官方核验的新版本。
+  - 国内期货 product root 映射覆盖当前仓库参数集和明确列出的常见品种；未知或新上市品种故意 fail-closed，不会继承相近品种的夜盘时段。
+  - CME/纽约期货使用明确产品白名单、常规周界/维护窗和保守整日节假日边界；CME 官方说明具体 holiday hours 会按产品调整且接近节日前才最终确认，因此复杂提前收市/晚开市仍需逐年产品表扩充。
+  - 当前容器缺 pinyin、tzlocal、完整 Flask 运行依赖以及归档外的本地 config.py；未连接真实行情 SDK 或启动完整 Web 服务，本轮以无副作用日历动态测试、AST 调用契约和可运行相邻测试为主。
+  - Futu 的 A/HK 交易状态已按代码前缀修复，但其全局上下文、目录和并发生命周期属于下一条 ME-15/后续 Futu 治理，不在本条混入。
+  - `/ticks` 现有响应仍只有市场级 `now_trading` 布尔值；混合多个期货 session 时采用“任一请求代码开市即继续轮询”，未扩展为逐代码状态以保持现有前端协议。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_tdx_hk.py、src/tradingview_zy/exchange/exchange_tdx_us.py、src/tradingview_zy/exchange/exchange_tdx_fx.py、src/tradingview_zy/exchange/exchange_ctp.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 引入版本化 exchange calendar；按 instrument/session 查询；无法确认时返回 Unknown，而非 True。
 

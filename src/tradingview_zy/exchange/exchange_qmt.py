@@ -13,6 +13,7 @@ from tradingview_zy import fun
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
 from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from xtquant import xtdata
+from tradingview_zy.trading_calendar import is_market_open
 
 """QMT 沪深行情适配器。"""
 
@@ -530,23 +531,9 @@ class ExchangeQMT(Exchange):
         xtdata.subscribe_whole_quote(qmt_codes, on_tick)
         xtdata.run()
 
-    def now_trading(self):
-        """
-        返回当前是否是交易时间
-        周一至周五，09:30-11:30 13:00-15:00
-        """
-        now_dt = datetime.datetime.now()
-        if now_dt.weekday() in [5, 6]:
-            return False
-        hour = now_dt.hour
-        minute = now_dt.minute
-        if hour == 9 and minute >= 30:
-            return True
-        if hour in [10, 13, 14]:
-            return True
-        if hour == 11 and minute < 30:
-            return True
-        return False
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('a', code=code, at=at)
 
     def stock_owner_plate(self, code: str):
         raise Exception("交易所不支持")

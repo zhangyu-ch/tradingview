@@ -468,3 +468,22 @@
 - 专项测试 17 passed（以 warnings=error）；ME-14/ME-12/MX-17/NX-20/MX-05 组合共 40 passed；compileall、diff 和 CRLF 门禁通过。
 - 当前无真实 TDX ExHQ 网络；字段证据来自仓库随附 wheel，真实单位与黄金样本限制已写入台账。
 - 提交：`fix(ME-14): normalize TDX US timezone and volume`。
+
+
+### 问题 48：ME-30（验证阶段）
+- **状态：** in_progress
+- **开始时间：** 2026-08-04
+- 已逐文件确认问题存在：QMT、Baostock、Alpaca、IB、Futu、Polygon、TQ、TDX 国内期货与 TDX 纽约期货仍分别使用服务器本地时间、硬编码现金时段、远端粗粒度状态、统一 02:30 夜盘或恒真返回。
+- 原 `Exchange.now_trading()` 没有 code/instant 参数；Web history、ticks 和 AlertTasks 也不传具体 instrument，因此无法表达节假日、午休、半日市、DST 与不同期货品种 session。
+- 修复边界：扩展版本化共享日历为 `market + code + aware instant`，未知品种/年份 fail-closed；迁移全部可达 provider 和调用方，并增加现金、FX、crypto、国内期货与纽约期货边界故障注入。
+
+
+### 问题 48：ME-30
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：全部可达 provider 仍存在本机时钟、硬编码现金时段、统一期货夜盘、远端粗粒度状态或恒真返回；调用方不传 instrument，问题存在。
+- 修复：统一 `market + code + aware at -> bool` 日历契约；现金/FX/crypto/国内期货/纽约期货按版本和品种解析，未知年份/品种 fail-closed；history、ticks 与监控任务传具体代码，Futu 按代码前缀分流 A/HK。
+- 验证：22 项 warnings-as-errors 专项、152 项相邻组合通过；国内六类 profile、跨午夜/周末/春节前夜盘、CME 维护窗/圣诞/DST、畸形目标保留均已故障注入。
+- 环境限制：完整 `test_selection_monitoring.py` 为 6 passed、9 项被缺失 pinyin/tzlocal 在业务断言前阻断；更广收集另受归档外 config.py 缺失阻断。
+- compileall、JSON、diff 和 19 个 CRLF 文件 bare-LF=0 门禁通过。
+- 提交：`fix(ME-30): unify instrument-aware market sessions`。

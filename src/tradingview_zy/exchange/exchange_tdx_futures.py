@@ -24,6 +24,7 @@ from tradingview_zy.exchange.tdx_reliability import (
     call_with_bounded_retry,
 )
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -405,20 +406,9 @@ class ExchangeTDXFutures(Exchange):
                     )
         return ticks
 
-    def now_trading(self):
-        """
-        返回当前是否是交易时间
-        TODO 简单判断 ：9-12 , 13:30-15:00 21:00-02:30
-        """
-        hour = int(time.strftime("%H"))
-        minute = int(time.strftime("%M"))
-        if (
-            hour in {9, 10, 11, 14, 21, 22, 23, 0, 1}
-            or (hour == 13 and minute >= 30)
-            or (hour == 2 and minute <= 30)
-        ):
-            return True
-        return False
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('futures', code=code, at=at)
 
     @staticmethod
     def __convert_date(dt: datetime.datetime):

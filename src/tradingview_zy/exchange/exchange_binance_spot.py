@@ -16,6 +16,7 @@ from tradingview_zy.exchange.binance_pagination import (
 )
 from tradingview_zy.exchange.exchange_db import ExchangeDB
 from tradingview_zy.utils import config_get_proxy
+from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
@@ -71,11 +72,9 @@ class ExchangeBinanceSpot(Exchange):
             "1m": "1m",
         }
 
-    def now_trading(self):
-        """
-        返回交易时间，数字货币 24 小时可交易
-        """
-        return True
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('currency_spot', code=code, at=at)
 
     def stock_info(self, code: str) -> Union[Dict, None]:
         """

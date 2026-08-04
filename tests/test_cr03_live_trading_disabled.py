@@ -30,7 +30,7 @@ class MarketDataOnlyExchange(Exchange):
     def default_code(self): return "TEST"
     def support_frequencys(self): return {"d": "Day"}
     def all_stocks(self): return []
-    def now_trading(self): return False
+    def now_trading(self, code=None, at=None): return False
     def klines(self, code, frequency, start_date=None, end_date=None, args=None): return None
     def ticks(self, codes): return {}
     def stock_info(self, code): return None

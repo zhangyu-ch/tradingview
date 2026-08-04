@@ -12,6 +12,7 @@ from tradingview_zy.exchange.baostock_reliability import (
 )
 
 from tradingview_zy.exchange.exchange import *
+from tradingview_zy.trading_calendar import is_market_open
 
 
 def market_date(tz) -> datetime.date:
@@ -152,23 +153,9 @@ class ExchangeBaostock(Exchange):
             "BaoStock did not return a stock catalog within the bounded lookback"
         )
 
-    def now_trading(self):
-        """
-        返回当前是否是交易时间
-        周一至周五，09:30-11:30 13:00-15:00
-        """
-        now_dt = datetime.datetime.now(self.tz)
-        if now_dt.weekday() in [5, 6]:  # 周六日不交易
-            return False
-        hour = now_dt.hour
-        minute = now_dt.minute
-        if hour == 9 and minute >= 30:
-            return True
-        if hour in [10, 13, 14]:
-            return True
-        if hour == 11 and minute < 30:
-            return True
-        return False
+    def now_trading(self, code: str | None = None, at=None) -> bool:
+        """Return a strict instrument-aware state from the shared calendar."""
+        return is_market_open('a', code=code, at=at)
 
     def klines(
         self,

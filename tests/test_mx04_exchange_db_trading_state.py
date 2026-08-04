@@ -32,7 +32,7 @@ def test_exchange_db_now_trading_is_a_strict_bool_contract() -> None:
     ast.fix_missing_locations(isolated)
     namespace: dict[str, object] = {}
     exec(compile(isolated, str(EXCHANGE_DB), "exec"), namespace)
-    result = namespace["now_trading"](object())
+    result = namespace["now_trading"](object(), "TEST", None)
     assert result is False
     assert type(result) is bool
 
@@ -61,6 +61,8 @@ def test_callers_share_the_same_false_semantics() -> None:
         ROOT / "web/tradingview_zy_chart/cl_app/static/js/zixuan.js"
     ).read_text(encoding="utf-8")
 
-    assert "ex.now_trading() is False" in alert_source
-    assert "ex.now_trading() is False" in web_source
+    assert "exchange.now_trading(code)" in alert_source
+    assert "ex.now_trading(code) is False" in web_source
+    assert ".now_trading()" not in alert_source
+    assert ".now_trading()" not in web_source
     assert "now_trading !== true" in frontend_source

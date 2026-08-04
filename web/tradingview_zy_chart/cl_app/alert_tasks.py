@@ -94,6 +94,26 @@ class AlertTasks(object):
             return BatchRunResult(hits=value)
         raise TypeError("monitoring runner must return BatchRunResult")
 
+    @staticmethod
+    def _stocks_in_open_sessions(exchange, stocks):
+        """Filter valid targets by instrument session without hiding bad targets.
+
+        Malformed entries stay in the batch so the ME-18 target validator can
+        report a structured failure instead of silently dropping them.
+        """
+        eligible = []
+        for stock in stocks:
+            if not isinstance(stock, dict):
+                eligible.append(stock)
+                continue
+            code = stock.get("code")
+            if not isinstance(code, str) or not code.strip():
+                eligible.append(stock)
+                continue
+            if exchange.now_trading(code):
+                eligible.append(stock)
+        return eligible
+
     def alert_run(self, alert_id):
         alert_config = self.alert_get(alert_id)
         if alert_config is None:
@@ -101,14 +121,16 @@ class AlertTasks(object):
             return False
 
         ex = get_exchange(Market(alert_config.market))
-        if ex.now_trading() is False:
-            return True
-
         zx = ZiXuan(alert_config.market)
-        stocks = zx.zx_stocks(alert_config.zx_group)
+        all_stocks = zx.zx_stocks(alert_config.zx_group)
+        stocks = self._stocks_in_open_sessions(ex, all_stocks)
         self.log.info(
-            f"执行 {alert_config.task_name} 警报提醒，获取 {alert_config.zx_group} 自选组中 {len(stocks)} 数量股票"
+            f"执行 {alert_config.task_name} 警报提醒，获取 {alert_config.zx_group} "
+            f"自选组中 {len(all_stocks)} 个标的，当前可执行 {len(stocks)} 个"
         )
+        if not stocks:
+            self.last_batch_result = BatchRunResult()
+            return True
 
         try:
             strategy_config = json.loads(alert_config.strategy_config or "{}")

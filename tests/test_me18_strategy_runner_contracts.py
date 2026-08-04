@@ -360,7 +360,7 @@ def test_alert_task_persists_good_hits_and_reports_partial_batch_failure(monkeyp
     exchange_instance = MappingExchange(
         {"BAD": _frame("BAD").drop(columns=["volume"]), "GOOD": _frame("GOOD")}
     )
-    exchange_instance.now_trading = lambda: True
+    exchange_instance.now_trading = lambda code=None, at=None: True
 
     config_module = types.ModuleType("tradingview_zy.config")
     config_module.ALERT_STRATEGIES = {"demo": {"strategy_path": "trusted:Demo"}}
