@@ -62,3 +62,17 @@ invalid ports, and control characters. Health output may identify the environmen
 whether an endpoint is configured, but logs, exceptions, and diagnostics must not expose
 credentials or other secrets. Restoring these settings is permitted only together with
 the full CR-05 provider review and simulation acceptance tests described above.
+
+### ZB TLS restoration contract (`NX-25`)
+
+A future ZB or replacement cryptocurrency adapter must use TLS with both certificate-chain
+and hostname verification enabled. It must rely on the system trust store or an explicitly
+configured CA bundle, and a verification failure must abort the connection without a
+plaintext or verification-disabled fallback.
+
+Runtime code must not use `verify=False`, `ssl.CERT_NONE`, `check_hostname=False`, or
+WebSocket `sslopt` settings that disable certificate or hostname checks. Certificate errors
+may be reported by a stable, secret-free error code, but credentials, authorization headers,
+private endpoints, or request bodies must not be copied into logs. Restoring the provider is
+a new reviewed capability and also requires maintained API, pagination, rate-limit, and
+provider-contract tests.

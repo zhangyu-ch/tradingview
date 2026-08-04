@@ -557,3 +557,13 @@
 - 验证：4 项 NX-01 专项和包含 HI-01 移除门禁的 7 项组合通过；AST 确认 tombstone 位于全部 provider import/cache 写入前。
 - 限制：能力移除不代表 CTP 可用；未连接 OpenCTP 仿真环境。
 - 提交：`fix(NX-01): guard removed CTP front configuration`。
+
+
+### 问题 55：NX-25
+- **状态：** complete（不安全 provider 已删除）
+- **完成时间：** 2026-08-04
+- 验证结论：旧 `ExchangeZB`/TLS 绕过已随 MX-02 从运行树删除，当前工厂在 provider import/cache 前拒绝。
+- 修复：保持删除；文档和门禁强制未来恢复启用证书链/主机名校验、系统信任库或显式 CA、验证失败不降级，并禁止 `verify=False/CERT_NONE/check_hostname=False/sslopt` 绕过。
+- 验证：5 项专项和 10 项仓库卫生/Secret 安全组合通过；运行树扫描无等价 TLS 绕过。
+- 限制：静态扫描不覆盖第三方依赖内部实现；恢复 ZB 仍是新功能。
+- 提交：`fix(NX-25): guard removed ZB TLS security`。

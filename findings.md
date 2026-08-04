@@ -346,3 +346,10 @@
 - “属性不存在”和“属性存在但为空”是不同状态；未来地址解析必须采用显式 schema，不能依赖 `getattr` 是否返回属性。
 - provider tombstone 必须在惰性 import 和缓存写入前执行，防止删除的 SDK 模块因误配置重新产生副作用。
 - 恢复地址必须在 SDK 构造前验证为非空 `tcp://host:port`；缺 scheme、凭据、路径、query、fragment、非法端口和控制字符全部拒绝。
+
+
+## NX-25 遗留 provider 的 TLS 删除证明
+- “工厂未注册”只降低默认可达性，不能消除可直接导入的 TLS 绕过；安全关闭需要把实现从运行包删除。
+- TLS 恢复契约必须同时覆盖证书链、主机名、信任库和失败策略；只删除一个 `verify=False` 参数并不足够。
+- 仓库门禁应扫描语义等价绕过，包括 `CERT_NONE`、`check_hostname=False` 和 WebSocket `sslopt`。
+- TLS 验证失败必须中止连接且不得降级；日志只能包含稳定、无秘密的错误类型。

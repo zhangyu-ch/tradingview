@@ -1366,17 +1366,26 @@
 ### 55. NX-25 · 孤立 ExchangeZB 显式关闭 TLS 证书校验
 
 - **原始状态 / 严重度 / 领域：** 🛡️ 未完全修复（已阻断或缓解） / 中 / Legacy Exchange Security
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（通过删除不安全遗留 provider）
+- **问题是否存在：** 否
+- **a. 这个问题是什么？** 原报告固定点中的孤立 `ExchangeZB` 可被直接导入并通过 `verify=False` 关闭 TLS。当前代码已在第 22 条 MX-02 删除 `exchange_zb.py`、配置声明与工厂可达性；标准工厂在 provider import/cache 前拒绝 `zb`。因此当前运行树已不存在该 TLS 绕过。
+- **b. 我是怎么修复的？** 保持 ZB provider 删除和 fail-closed tombstone，不恢复过时接口。扩展恢复规范：证书链与主机名校验必须开启，使用系统信任库或显式 CA bundle，校验失败必须拒绝且不得降级；`verify=False`、`ssl.CERT_NONE`、`check_hostname=False` 或 WebSocket `sslopt` 等效绕过全部禁止。错误只允许以稳定、无秘密的类型暴露。增加 NX-25 专项扫描，覆盖运行树 TLS 绕过模式、工厂拒绝顺序和恢复文档。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
-- **原报告最新结论：** 标准工厂不注册 ZB，降低默认可达性；但 ExchangeZB 仍在运行源码树并显式 params["verify"]=False，可被直接导入使用。
+  - 确认 `src/tradingview_zy/exchange/exchange_zb.py` 不存在，配置模板无 ZB 凭据或支持声明。
+  - 扫描 `src/script/web` Python 运行树，未发现 `verify=False`、`CERT_NONE`、`check_hostname=False` 或 `sslopt` 证书绕过。
+  - AST 验证 CURRENCY 分支在 binance/db import 和缓存写入前调用 `_reject_removed_provider`，且 `get_exchange` 中没有 `exchange_zb` import。
+  - 文档契约验证证书链、主机名、系统信任库/CA bundle、失败拒绝、日志脱敏和所有已知绕过模式均被明确规定。
+  - 运行 `tests/test_nx25_zb_tls_removal.py`：5 passed（`-W error`）。
+  - 运行 NX-25、仓库卫生与 Secret 安全组合：10 passed。
+  - 执行 `git diff --check` 与 JSON/AST 解析。
+- **e. 验证是否通过？** 通过（当前运行树不存在 ZB/TLS 绕过；5 项专项、10 项安全相邻组合通过，恢复安全契约已固定）
+- **提交：** `fix(NX-25): guard removed ZB TLS security`
+- **修改文件：** `docs/unsupported-providers.md`, `tests/test_nx25_zb_tls_removal.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 本条通过删除 provider 关闭风险，不代表 ZB 行情能力可用；恢复必须作为新 provider 重新完成 API、TLS、分页、限流和契约测试。
+  - 静态扫描覆盖仓库 Python 运行树；第三方依赖内部 TLS 配置仍由其版本和供应链治理承担。
+- **原报告最新结论：** 标准工厂不注册 ZB，降低默认可达性；但 `ExchangeZB` 仍在运行源码树并显式 `params["verify"]=False`，可被直接导入使用。
 - **原报告建议：** 删除/归档该适配器，或恢复 TLS 验证、证书配置与测试；保持标准入口不支持。
 
 ### 56. ME-29 · 当前提交无可见 CI 状态，测试集中在少数协议单元，核心风险无门禁
