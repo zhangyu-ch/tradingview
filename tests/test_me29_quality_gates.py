@@ -124,3 +124,33 @@ def test_footprint_uses_public_timestamp_api() -> None:
     source = (ROOT / "src/tradingview_zy/footprint.py").read_text(encoding="utf-8")
     assert "from tradingview_zy.web_payloads import datetime_to_timestamp_seconds" in source
     assert "_datetime_to_timestamp_seconds" not in source
+
+
+def test_supply_chain_gate_requires_lock_evidence_osv_and_exact_uv_pin(tmp_path: Path) -> None:
+    _copy_gate_files(tmp_path)
+    workflow = tmp_path / ".github/workflows/tests.yml"
+    text = workflow.read_text(encoding="utf-8")
+    text = text.replace('python -m pip install "uv==0.10.0"', 'python -m pip install uv', 1)
+    text = text.replace("      - name: Run live fail-closed OSV scan\n", "      - name: OSV scan removed\n", 1)
+    text = text.replace(
+        "        run: >-\n          python script/remediation/scan_osv.py\n          --output .artifacts/supply-chain/vulnerability-report.json\n",
+        "        run: echo scan removed\n",
+        1,
+    )
+    workflow.write_text(text, encoding="utf-8")
+    violations = find_quality_gate_violations(tmp_path)
+    assert any("exact uv 0.10.0" in value for value in violations)
+    assert any("scan_osv.py" in value for value in violations)
+
+
+def test_supply_chain_gate_and_uv_download_policy_are_documented_and_stable(tmp_path: Path) -> None:
+    _copy_gate_files(tmp_path)
+    workflow = tmp_path / ".github/workflows/tests.yml"
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            "env:\n  UV_PYTHON_DOWNLOADS: never\n", "", 1
+        ),
+        encoding="utf-8",
+    )
+    violations = find_quality_gate_violations(tmp_path)
+    assert any("UV_PYTHON_DOWNLOADS" in value for value in violations)

@@ -1,4 +1,0 @@
-# Compatibility install entry point.
-# pyproject.toml is the only hand-maintained dependency source.
-# This preserves `pip install -r requirements.txt` without duplicating constraints.
--e .

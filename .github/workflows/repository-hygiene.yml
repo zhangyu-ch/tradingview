@@ -22,5 +22,9 @@ jobs:
         run: python script/remediation/check_repository_hygiene.py
       - name: Verify dependency sources and lock compatibility
         run: python script/remediation/check_dependency_contract.py
+      - name: Verify local artifacts and generated supply-chain evidence
+        run: python script/remediation/check_supply_chain.py
+      - name: Reject stale deterministic supply-chain evidence
+        run: python script/remediation/generate_supply_chain_artifacts.py --check
       - name: Reject persisted secret exposure in settings UI
         run: python script/remediation/check_secret_exposure.py

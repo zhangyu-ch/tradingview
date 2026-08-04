@@ -170,3 +170,7 @@ my_**.py
 my_**.ipynb
 # 无用的排除
 /my_debug
+
+# Generated CI/runtime evidence
+/.artifacts/
+/.ci-test-runtime/

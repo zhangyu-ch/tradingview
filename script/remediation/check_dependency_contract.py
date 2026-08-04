@@ -12,6 +12,15 @@ EXPECTED_PYTHON = ">=3.11,<3.12"
 EXPECTED_LOCK_PYTHON = "==3.11.*"
 EXPECTED_WEBSOCKETS = ">=13.1,<14"
 EXPECTED_WEBSOCKETS_VERSION = "13.1"
+FORBIDDEN_SECONDARY_SOURCES = (
+    "requirements.txt",
+    "requirements-dev.txt",
+    "setup.py",
+    "setup.cfg",
+    "Pipfile",
+    "Pipfile.lock",
+    "poetry.lock",
+)
 
 
 def _project_name(raw: str) -> str:
@@ -26,16 +35,22 @@ def _dependency_name(requirement: str) -> str:
 
 
 def validate(root: Path) -> list[str]:
+    root = root.resolve()
     errors: list[str] = []
     pyproject_path = root / "pyproject.toml"
     lock_path = root / "uv.lock"
-    requirements_path = root / "requirements.txt"
 
     try:
         pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
         lock = tomllib.loads(lock_path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
         return [f"cannot read dependency metadata: {exc}"]
+
+    for relative in FORBIDDEN_SECONDARY_SOURCES:
+        if (root / relative).exists():
+            errors.append(
+                f"{relative} is a forbidden second dependency source; use pyproject.toml + uv.lock"
+            )
 
     project = pyproject.get("project", {})
     if project.get("requires-python") != EXPECTED_PYTHON:
@@ -54,17 +69,6 @@ def validate(root: Path) -> list[str]:
             f"{EXPECTED_WEBSOCKETS}; got {direct.get('websockets')!r}"
         )
 
-    meaningful = [
-        line.strip()
-        for line in requirements_path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    ]
-    if meaningful != ["-e ."]:
-        errors.append(
-            "requirements.txt must delegate to pyproject.toml with exactly '-e .' "
-            f"(comments are allowed); got {meaningful!r}"
-        )
-
     if lock.get("requires-python") != EXPECTED_LOCK_PYTHON:
         errors.append(
             f"uv.lock requires-python must be {EXPECTED_LOCK_PYTHON!r}; "
@@ -72,21 +76,31 @@ def validate(root: Path) -> list[str]:
         )
 
     packages = lock.get("package", [])
-    by_name = {_project_name(package.get("name", "")): package for package in packages}
+    by_name: dict[str, list[dict]] = {}
+    for package in packages:
+        by_name.setdefault(_project_name(package.get("name", "")), []).append(package)
     if "chardet" in by_name:
         errors.append("uv.lock still contains the incompatible chardet package")
-    websockets = by_name.get("websockets")
-    if not websockets or websockets.get("version") != EXPECTED_WEBSOCKETS_VERSION:
+    websockets = by_name.get("websockets", [])
+    versions = sorted({str(package.get("version")) for package in websockets})
+    if versions != [EXPECTED_WEBSOCKETS_VERSION]:
         errors.append(
-            f"uv.lock must pin websockets {EXPECTED_WEBSOCKETS_VERSION}; "
-            f"got {None if not websockets else websockets.get('version')!r}"
+            f"uv.lock must pin websockets {EXPECTED_WEBSOCKETS_VERSION}; got {versions!r}"
         )
 
     root_name = _project_name(project.get("name", ""))
-    root_package = by_name.get(root_name)
+    root_candidates = by_name.get(root_name, [])
+    root_package = next(
+        (
+            package
+            for package in root_candidates
+            if package.get("source", {}).get("virtual") == "."
+        ),
+        root_candidates[0] if root_candidates else None,
+    )
     if not root_package:
         errors.append(f"uv.lock has no root package {root_name!r}")
-        return errors
+        return sorted(set(errors))
 
     locked_direct = {
         _project_name(item.get("name", ""))
@@ -110,7 +124,7 @@ def validate(root: Path) -> list[str]:
             "uv.lock root metadata must preserve the websockets compatibility range"
         )
 
-    return errors
+    return sorted(set(errors))
 
 
 def main() -> int:
@@ -122,7 +136,7 @@ def main() -> int:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print("dependency contract OK")
+    print("dependency contract OK: pyproject.toml + uv.lock are the only resolution source")
     return 0
 
 

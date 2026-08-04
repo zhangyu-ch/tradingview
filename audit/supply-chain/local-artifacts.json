@@ -1,0 +1,237 @@
+{
+  "artifacts": [
+    {
+      "acquisition_evidence": "The file hash is locked in uv.lock. Original acquisition URL is unknown and is not inferred.",
+      "license_review": "manual-review-required",
+      "marker": null,
+      "origin": "Present in the user-provided TradingView.zip baseline; the repository does not record the original download URL.",
+      "origin_type": "user-provided-baseline-artifact",
+      "package": "pytdx",
+      "path": "package/pytdx-1.72r2-py3-none-any.whl",
+      "sha256": "71898dd32cb83112d196b38899ba460a48ed98a06b7f73c84c9f55b3843f48fb",
+      "size": 107490,
+      "upstream_download_url": null,
+      "upstream_project": "https://github.com/wenxingxing/pytdx",
+      "version": "1.72.post2",
+      "wheel_metadata": {
+        "home_page": "https://github.com/wenxingxing/pytdx",
+        "license": "hard study everyday",
+        "license_classifiers": [],
+        "license_expression": null,
+        "license_files": [],
+        "metadata_path": "pytdx-1.72r1.dist-info/METADATA",
+        "name": "pytdx",
+        "project_urls": [],
+        "summary": "A Python Interface to TDX protocol",
+        "version": "1.72r2"
+      }
+    },
+    {
+      "acquisition_evidence": "The local SHA-256 exactly matches the uv.lock registry wheel URL for the same TA-Lib version and platform.",
+      "license_review": "license-file-present",
+      "marker": "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+      "origin": "Present in the user-provided TradingView.zip baseline and byte-identical to the registry artifact recorded in uv.lock.",
+      "origin_type": "locked-registry-artifact-copied-into-baseline",
+      "package": "ta-lib",
+      "path": "package/ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl",
+      "sha256": "f823d0f6b04a6797fbe253bcf91666e71a6b63c290683819650c68b2468ebe64",
+      "size": 1094199,
+      "upstream_download_url": "https://mirrors.aliyun.com/pypi/packages/2f/8b/f0da03cb80bd7f92a362ef86b64c6aede5485cb4b1a5ef1a669a28e974f1/ta_lib-0.6.8-cp311-cp311-macosx_13_0_x86_64.whl",
+      "upstream_project": "https://github.com/ta-lib/ta-lib-python",
+      "version": "0.6.8",
+      "wheel_metadata": {
+        "home_page": null,
+        "license": null,
+        "license_classifiers": [],
+        "license_expression": null,
+        "license_files": [
+          {
+            "path": "ta_lib-0.6.8.dist-info/licenses/LICENSE",
+            "sha256": "78dbb65a3526ca5cf3c9eb8a0648d6293651ca40f6d414a626b45ef2406ae5d0"
+          }
+        ],
+        "metadata_path": "ta_lib-0.6.8.dist-info/METADATA",
+        "name": "TA-Lib",
+        "project_urls": [
+          "download, https://github.com/ta-lib/ta-lib-python/releases",
+          "homepage, http://github.com/ta-lib/ta-lib-python"
+        ],
+        "summary": "Python wrapper for TA-Lib",
+        "version": "0.6.8"
+      }
+    },
+    {
+      "acquisition_evidence": "The local SHA-256 exactly matches the uv.lock registry wheel URL for the same TA-Lib version and platform.",
+      "license_review": "license-file-present",
+      "marker": "sys_platform == 'darwin' and platform_machine == 'arm64'",
+      "origin": "Present in the user-provided TradingView.zip baseline and byte-identical to the registry artifact recorded in uv.lock.",
+      "origin_type": "locked-registry-artifact-copied-into-baseline",
+      "package": "ta-lib",
+      "path": "package/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl",
+      "sha256": "30de46b55873b51be945a09edf486afcc190dc47eff9fb5d2b12c9f7e3d743da",
+      "size": 1000124,
+      "upstream_download_url": "https://mirrors.aliyun.com/pypi/packages/33/7a/35dcba621814e0c94f222791255bf0c90bb57db870491e375c3cc748ea50/ta_lib-0.6.8-cp311-cp311-macosx_14_0_arm64.whl",
+      "upstream_project": "https://github.com/ta-lib/ta-lib-python",
+      "version": "0.6.8",
+      "wheel_metadata": {
+        "home_page": null,
+        "license": null,
+        "license_classifiers": [],
+        "license_expression": null,
+        "license_files": [
+          {
+            "path": "ta_lib-0.6.8.dist-info/licenses/LICENSE",
+            "sha256": "78dbb65a3526ca5cf3c9eb8a0648d6293651ca40f6d414a626b45ef2406ae5d0"
+          }
+        ],
+        "metadata_path": "ta_lib-0.6.8.dist-info/METADATA",
+        "name": "TA-Lib",
+        "project_urls": [
+          "download, https://github.com/ta-lib/ta-lib-python/releases",
+          "homepage, http://github.com/ta-lib/ta-lib-python"
+        ],
+        "summary": "Python wrapper for TA-Lib",
+        "version": "0.6.8"
+      }
+    },
+    {
+      "acquisition_evidence": "The local SHA-256 exactly matches the uv.lock registry wheel URL for the same TA-Lib version and platform.",
+      "license_review": "license-file-present",
+      "marker": "sys_platform == 'linux' and platform_machine == 'aarch64'",
+      "origin": "Present in the user-provided TradingView.zip baseline and byte-identical to the registry artifact recorded in uv.lock.",
+      "origin_type": "locked-registry-artifact-copied-into-baseline",
+      "package": "ta-lib",
+      "path": "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "sha256": "490e19a45cd3cdd6dfe6b46019f7ffe1103500750b41b51996a870e7c1c5f066",
+      "size": 4040093,
+      "upstream_download_url": "https://mirrors.aliyun.com/pypi/packages/52/4a/79dc81240708bd6ab5489b73b6fce52a49b90f16ca80326155c106a0cca4/ta_lib-0.6.8-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "upstream_project": "https://github.com/ta-lib/ta-lib-python",
+      "version": "0.6.8",
+      "wheel_metadata": {
+        "home_page": null,
+        "license": null,
+        "license_classifiers": [],
+        "license_expression": null,
+        "license_files": [
+          {
+            "path": "ta_lib-0.6.8.dist-info/licenses/LICENSE",
+            "sha256": "78dbb65a3526ca5cf3c9eb8a0648d6293651ca40f6d414a626b45ef2406ae5d0"
+          }
+        ],
+        "metadata_path": "ta_lib-0.6.8.dist-info/METADATA",
+        "name": "TA-Lib",
+        "project_urls": [
+          "download, https://github.com/ta-lib/ta-lib-python/releases",
+          "homepage, http://github.com/ta-lib/ta-lib-python"
+        ],
+        "summary": "Python wrapper for TA-Lib",
+        "version": "0.6.8"
+      }
+    },
+    {
+      "acquisition_evidence": "The local SHA-256 exactly matches the uv.lock registry wheel URL for the same TA-Lib version and platform.",
+      "license_review": "license-file-present",
+      "marker": "sys_platform == 'linux' and platform_machine == 'x86_64'",
+      "origin": "Present in the user-provided TradingView.zip baseline and byte-identical to the registry artifact recorded in uv.lock.",
+      "origin_type": "locked-registry-artifact-copied-into-baseline",
+      "package": "ta-lib",
+      "path": "package/ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "a395524b0fafa10446d11e11acb4742e919523de58aac03b791f26d7a783bcf0",
+      "size": 4110325,
+      "upstream_download_url": "https://mirrors.aliyun.com/pypi/packages/3c/3b/49f5524798ab407abc6125047de031bfe3dac41218ad99b3932185743719/ta_lib-0.6.8-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "upstream_project": "https://github.com/ta-lib/ta-lib-python",
+      "version": "0.6.8",
+      "wheel_metadata": {
+        "home_page": null,
+        "license": null,
+        "license_classifiers": [],
+        "license_expression": null,
+        "license_files": [
+          {
+            "path": "ta_lib-0.6.8.dist-info/licenses/LICENSE",
+            "sha256": "78dbb65a3526ca5cf3c9eb8a0648d6293651ca40f6d414a626b45ef2406ae5d0"
+          }
+        ],
+        "metadata_path": "ta_lib-0.6.8.dist-info/METADATA",
+        "name": "TA-Lib",
+        "project_urls": [
+          "download, https://github.com/ta-lib/ta-lib-python/releases",
+          "homepage, http://github.com/ta-lib/ta-lib-python"
+        ],
+        "summary": "Python wrapper for TA-Lib",
+        "version": "0.6.8"
+      }
+    },
+    {
+      "acquisition_evidence": "The local SHA-256 exactly matches the uv.lock registry wheel URL for the same TA-Lib version and platform.",
+      "license_review": "license-file-present",
+      "marker": "sys_platform == 'win32' and platform_machine == 'amd64'",
+      "origin": "Present in the user-provided TradingView.zip baseline and byte-identical to the registry artifact recorded in uv.lock.",
+      "origin_type": "locked-registry-artifact-copied-into-baseline",
+      "package": "ta-lib",
+      "path": "package/ta_lib-0.6.8-cp311-cp311-win_amd64.whl",
+      "sha256": "c01809fb602e2fefc8cbfb3b603bb59d2a2eaee8708410896d48a835ba00e7c5",
+      "size": 920197,
+      "upstream_download_url": "https://mirrors.aliyun.com/pypi/packages/2f/83/dcd76d7253a2d159d5e58821aea917fb7b4671eb07a71d0d3c770d7077d3/ta_lib-0.6.8-cp311-cp311-win_amd64.whl",
+      "upstream_project": "https://github.com/ta-lib/ta-lib-python",
+      "version": "0.6.8",
+      "wheel_metadata": {
+        "home_page": null,
+        "license": null,
+        "license_classifiers": [],
+        "license_expression": null,
+        "license_files": [
+          {
+            "path": "ta_lib-0.6.8.dist-info/licenses/LICENSE",
+            "sha256": "c62694ec6b052e93d8f6c252385db1f3f4f3ade9a975536ac6c6a1631059ec8f"
+          }
+        ],
+        "metadata_path": "ta_lib-0.6.8.dist-info/METADATA",
+        "name": "TA-Lib",
+        "project_urls": [
+          "download, https://github.com/ta-lib/ta-lib-python/releases",
+          "homepage, http://github.com/ta-lib/ta-lib-python"
+        ],
+        "summary": "Python wrapper for TA-Lib",
+        "version": "0.6.8"
+      }
+    },
+    {
+      "acquisition_evidence": "The local SHA-256 exactly matches the uv.lock registry wheel URL for the same TA-Lib version and platform.",
+      "license_review": "license-file-present",
+      "marker": "sys_platform == 'win32' and platform_machine == 'arm64'",
+      "origin": "Present in the user-provided TradingView.zip baseline and byte-identical to the registry artifact recorded in uv.lock.",
+      "origin_type": "locked-registry-artifact-copied-into-baseline",
+      "package": "ta-lib",
+      "path": "package/ta_lib-0.6.8-cp311-cp311-win_arm64.whl",
+      "sha256": "a89734a7bcb2ea3b6fd600a74d6fbcdb8d3fa3f7917dbd978e039710b5509c9c",
+      "size": 760103,
+      "upstream_download_url": "https://mirrors.aliyun.com/pypi/packages/5b/9b/8e997dfbd94e30c0dff29b914cae832fbf7d573933fd9faf7fcdd7247608/ta_lib-0.6.8-cp311-cp311-win_arm64.whl",
+      "upstream_project": "https://github.com/ta-lib/ta-lib-python",
+      "version": "0.6.8",
+      "wheel_metadata": {
+        "home_page": null,
+        "license": null,
+        "license_classifiers": [],
+        "license_expression": null,
+        "license_files": [
+          {
+            "path": "ta_lib-0.6.8.dist-info/licenses/LICENSE",
+            "sha256": "c62694ec6b052e93d8f6c252385db1f3f4f3ade9a975536ac6c6a1631059ec8f"
+          }
+        ],
+        "metadata_path": "ta_lib-0.6.8.dist-info/METADATA",
+        "name": "TA-Lib",
+        "project_urls": [
+          "download, https://github.com/ta-lib/ta-lib-python/releases",
+          "homepage, http://github.com/ta-lib/ta-lib-python"
+        ],
+        "summary": "Python wrapper for TA-Lib",
+        "version": "0.6.8"
+      }
+    }
+  ],
+  "lock_sha256": "e262513147de4bf778215277c06cadd607008d104c3689afd43512026894b479",
+  "policy": "Every file in package/ must be referenced by [tool.uv.sources], locked by SHA-256, and listed here. Unknown provenance remains explicit.",
+  "schema_version": 1
+}

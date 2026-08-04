@@ -6,6 +6,9 @@ on:
   push:
     branches: [main, master]
 
+env:
+  UV_PYTHON_DOWNLOADS: never
+
 permissions:
   contents: read
 
@@ -22,8 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install uv
-        run: python -m pip install uv
+      - name: Install exact uv
+        run: python -m pip install "uv==0.10.0"
       - name: Verify lock file and install dependencies
         run: uv sync --locked
       - name: Prepare isolated test configuration
@@ -41,8 +44,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install uv
-        run: python -m pip install uv
+      - name: Install exact uv
+        run: python -m pip install "uv==0.10.0"
       - name: Install locked environment
         run: uv sync --locked
       - name: Prepare isolated test configuration
@@ -85,8 +88,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install uv
-        run: python -m pip install uv
+      - name: Install exact uv
+        run: python -m pip install "uv==0.10.0"
       - name: Install locked environment
         run: uv sync --locked
       - name: Prepare isolated test configuration
@@ -110,8 +113,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install uv
-        run: python -m pip install uv
+      - name: Install exact uv
+        run: python -m pip install "uv==0.10.0"
       - name: Install locked environment
         run: uv sync --locked
       - name: Install Chromium
@@ -121,3 +124,38 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/src
           RUN_BROWSER_TESTS: "1"
         run: uv run pytest -q -W error tests/test_me29_browser_dom.py
+
+  supply-chain-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install exact uv
+        run: python -m pip install "uv==0.10.0"
+      - name: Prove the lock is current
+        run: uv lock --check
+      - name: Install locked environment
+        run: uv sync --locked
+      - name: Validate local artifacts and committed evidence
+        run: python script/remediation/check_supply_chain.py
+      - name: Prove deterministic generated evidence
+        run: python script/remediation/generate_supply_chain_artifacts.py --check
+      - name: Generate installed-environment evidence
+        run: >-
+          python script/remediation/generate_supply_chain_artifacts.py
+          --output-dir .artifacts/supply-chain
+          --installed-licenses
+      - name: Run live fail-closed OSV scan
+        run: >-
+          python script/remediation/scan_osv.py
+          --output .artifacts/supply-chain/vulnerability-report.json
+      - name: Upload supply-chain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-evidence
+          path: .artifacts/supply-chain
+          if-no-files-found: error

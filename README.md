@@ -15,11 +15,12 @@
 
 ## 环境
 
-项目优先使用 Python 3.11：
+项目只支持 Python 3.11，并固定使用 `uv 0.10.0`。`uv.lock` 是唯一受支持的依赖解析结果：
 
 ```bash
+uv --version  # 必须是 uv 0.10.0
 uv venv --python=3.11 .venv
-uv sync
+uv sync --locked
 export PYTHONPATH="$PWD/src"
 ```
 
@@ -52,6 +53,20 @@ Web worker 不再启动 APScheduler。多个 Web worker 可以共享同一数据
 第二个实例会以退出码 2 结束。配置保存后最多等待
 `SCHEDULER_RECONCILE_SECONDS`（默认 30 秒）同步到实际任务。`/jobs` 页面读取调度进程
 写入的原子状态快照；快照缺失或损坏时显示为空，不会在 Web 进程补启动调度器。
+
+## 供应链证据
+
+依赖、仓库内 wheel、SBOM、许可证和漏洞扫描的治理方式见
+[`docs/supply-chain.md`](docs/supply-chain.md)。仓库不提供可绕过锁文件的
+`requirements.txt`；正常安装、Windows 脚本和 CI 都只执行 `uv sync --locked`。
+
+本地复核：
+
+```bash
+python script/remediation/check_dependency_contract.py
+python script/remediation/check_supply_chain.py
+python script/remediation/generate_supply_chain_artifacts.py --check
+```
 
 ## Web 安全配置
 

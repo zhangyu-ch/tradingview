@@ -595,3 +595,14 @@
 - 测试过程：首个非 list 容器参数误用含 dict 的不可哈希 StrategySignal set，改为普通 set 后产品代码不变；ME-10 顺序隔离测试单独保留。
 - compileall、py_compile、JSON、diff 与 7 个历史 CRLF 文件 bare-LF=0 门禁通过。
 - 提交：`fix(ME-20): validate versioned strategy signals`。
+
+
+### 问题 59：ME-25（恢复重建）
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：requirements.txt、未固定 uv、内置 uv 可执行文件、未登记 wheel 及缺少 SBOM/许可证/漏洞门禁仍在，旧 setup.py 删除只完成部分治理。
+- 修复：pyproject+uv.lock 成为唯一安装源；固定 uv 0.10.0/locked sync；删除二次解析入口和不透明二进制；建立 7 个 wheel 的 SHA-256/来源/许可证清单、155 组件 CycloneDX、许可证库存、离线未扫描报告、到期豁免策略和 live fail-closed OSV CI。
+- 验证：28 项专项/相邻测试通过；3 类 wheel 篡改/登记故障、stale SBOM、过期/重复豁免、OSV advisory 和响应数量失配全部按预期阻断；154 个 OSV package/version fixture clean=0、vulnerable=1。
+- 过程修正：TA-Lib Project-URL 顺序改为确定性排序；测试复制 helper 补目标目录。
+- 限制：当前容器无 Python 3.11 且本轮未联网访问 OSV；真实 locked sync 与 live scan 由新增 CI job 执行，离线报告不声称无漏洞。
+- 提交：`fix(ME-25): add verifiable supply-chain manifests`。

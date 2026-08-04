@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 50
-- **待处理：** 31
+- **已完成：** 59
+- **待处理：** 22
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -58,18 +58,18 @@
 |45|`ME-19`|中|Selection Tasks|❌ 未修复|已完成|通过（7 项 ME-19 专项、35 项相邻组合通过；第 N 条写入失败回滚、完整快照替换、零写入失败路径、跨市场状态隔离和 opt_type 删除均已验证）|`fix(ME-19): `|
 |46|`ME-18`|中|Strategy Runners|❌ 未修复|已完成|通过（13 项 ME-18 专项、52 项相邻组合通过；逐标的隔离、输入协议、命中/未命中/失败三态、选股零替换失败路径和监控部分成功可观测性均已验证）|`fix(ME-18): `|
 |47|`ME-14`|中|TDX US|❌ 未修复|已完成|通过（17 项 ME-14 专项、40 项 TDX/前端相邻组合通过；DST、LMT、跨午夜交易日、trade/amount 映射、payload 故障注入和 CRLF 门禁均已验证）|`fix(ME-14): `|
-|48|`ME-30`|中|Trading Calendar|❌ 未修复|已完成|通过（22 项专项、152 项相邻组合通过；日历、品种 session、DST 与调用方传码已验证）|`fix(ME-30)`|
-|49|`ME-22`|中|Utilities|❌ 未修复|已完成|通过（13 项专项、51 项直接组合、326 项可运行仓库回归通过；3 skipped）|`fix(ME-22)`|
-|50|`ME-02`|中|Web UDF|❌ 未修复|已完成|通过（8 项专项、48 项直接相邻组合通过）|`fix(ME-02)`|
+|48|`ME-30`|中|Trading Calendar|❌ 未修复|已完成|通过（22 项专项/既有契约、152 项相邻组合通过；完整监控/Web 历史测试中 9 项因缺失 pinyin/tzlocal 在业务断言前阻断；编译、JSON、diff 与 19 个 CRLF 文件门禁通过）|`fix(ME-30): `|
+|49|`ME-22`|中|Utilities|❌ 未修复|已完成|通过（13 项 ME-22 专项、51 项直接相邻组合、326 项可运行仓库回归通过；3 skipped；消息失败语义、有限重试/幂等、显式时区/DST 和并发 singleton 均已故障注入）|`fix(ME-22)`|
+|50|`ME-02`|中|Web UDF|❌ 未修复|已完成|通过（8 项 ME-02 专项、48 项直接相邻组合通过；并发原子性、TTL/LRU/容量、身份隔离和 firstDataRequest 旁路均已验证）|`fix(ME-02)`|
 |51|`NX-10`|中|Database Schema|❌ 未修复|已完成|通过（6 项专项、53 项可运行相邻组合通过；2 项既有环境阻断被明确排除；迁移、长 JSON 往返、MySQL TEXT DDL、保存后完整性和请求边界均已验证）|`fix(NX-10)`|
 |52|`RV-06`|中|Web Storage / Availability|❌ 未修复|已完成|通过（14 项专项、45 项聚焦、112 项直接相邻通过；3 项既有跳过；字段边界、配额、旧表迁移、MEDIUMTEXT 和 SQLite 并发竞态均有自动化证明）|`fix(RV-06)`|
-|53|`ME-15`|中|Futu|❌ 未修复|待处理|—|—|
-|54|`NX-01`|中|CTP|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
-|55|`NX-25`|中|Legacy Exchange Security|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
-|56|`ME-29`|中|Quality Gates|🟡 部分修复|待处理|—|—|
-|57|`ME-10`|中|Adapter Architecture|🟡 部分修复|待处理|—|—|
-|58|`ME-20`|中|Strategy Protocol|🟡 部分修复|待处理|—|—|
-|59|`ME-25`|中|Supply Chain|🟡 部分修复|待处理|—|—|
+|53|`ME-15`|中|Futu|❌ 未修复|已完成|通过（9 项 ME-15 专项、52 项直接相邻通过；并发、失败隔离、有界重建、PID/fork 与关闭生命周期均已故障注入；广泛回归中 377 项执行成功、3 skipped，环境/基线阻断已记录）|`fix(ME-15)`|
+|54|`NX-01`|中|CTP|🛡️ 未完全修复（已阻断或缓解）|已完成（通过保持 CTP 能力移除并固定恢复契约）|通过（当前运行时不存在该错误路径；4 项专项及 7 项移除/fail-closed 组合通过，恢复契约和防回归门禁已固定）|`fix(NX-01)`|
+|55|`NX-25`|中|Legacy Exchange Security|🛡️ 未完全修复（已阻断或缓解）|已完成（通过删除不安全遗留 provider）|通过（当前运行树不存在 ZB/TLS 绕过；5 项专项、10 项安全相邻组合通过，恢复安全契约已固定）|`fix(NX-25)`|
+|56|`ME-29`|中|Quality Gates|🟡 部分修复|已完成（仓库内质量门禁；托管状态待推送后验证）|通过（18 项专项、82 项 provider 严格矩阵、414 项可运行仓库回归通过；环境阻断和专用集成 gate 已明确区分）|`fix(ME-29)`|
+|57|`ME-10`|中|Adapter Architecture|🟡 部分修复|已完成（能力绑定运行边界；旧宽接口保留为迁移兼容）|通过（7 项专项、31 项聚焦、125 项直接相邻测试通过）|`fix(ME-10)`|
+|58|`ME-20`|中|Strategy Protocol|🟡 部分修复|已完成（版本化信号协议与 runner 输出边界）|通过（60 项 ME-20 专项、91 项核心聚焦和 108 项任务相邻测试通过；无版本输出、用途错配、时间/metadata/数量边界和裸 list 绕过根因已关闭）|`fix(ME-20)`|
+|59|`ME-25`|中|Supply Chain|🟡 部分修复|已完成（锁定安装、制品来源、SBOM/许可证/OSV 门禁）|通过（28 项专项/相邻测试通过；确定性制品、篡改/未登记/缺 provenance、过期策略、OSV advisory 与响应失配故障注入均按预期阻断）|`fix(ME-25)`|
 |60|`ME-27`|中|Secrets|🟡 部分修复|待处理|—|—|
 |61|`ME-04`|中|Web Payload|🟡 部分修复|待处理|—|—|
 |62|`ME-01`|中|Web Storage|🟡 部分修复|待处理|—|—|
@@ -1206,24 +1206,26 @@
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Utilities
 - **本轮状态：** 已完成
 - **问题是否存在：** 是
-- **a. 这个问题是什么？** `send_fs_msg()` 没有为 lark SDK 配置请求 timeout，SDK 业务失败或异常最终仍返回 `True`，也没有有限重试和幂等键；`fun.py` 通过 `time.localtime/mktime` 和 naive `astimezone()` 隐式采用宿主机时区，同一输入在不同服务器会得到不同 epoch；`singleton` 在并发首次调用时没有锁，可能构造并发布多个昂贵连接对象。
-- **b. 我是怎么修复的？** 飞书 client 显式配置每次请求 timeout，并在 request body 写入每次逻辑发送唯一、重试间复用的 UUID；异常、HTTP 429/5xx 采用最多 3 次的有限指数退避，业务 4xx 不重试，只有确认成功才返回 `True`，所有失败返回 `False` 且日志脱敏。新增纯标准库重试策略模块。时间工具删除 `tzlocal/localtime/mktime`，使用 `zoneinfo`；Unix 边界要求 aware datetime，naive 值必须传 `assume_tz`，纽约 DST 歧义/不存在时间明确失败；相关 DB/Web/TDX/Alpaca/Polygon 调用补市场时区。singleton 使用 `RLock` 双重检查，构造成功后才发布，并提供 `reset_instance()`。
+- **a. 这个问题是什么？** 消息发送、时间转换与 singleton 三个共享工具边界均存在确定性缺口：send_fs_msg 未设置 SDK timeout，失败仍返回 True，没有有限重试或幂等键；fun.py 的 localtime/mktime/naive astimezone 使同一输入依赖宿主机时区；singleton 的首次构造没有锁，并发可发布多个实例。
+- **b. 我是怎么修复的？** 飞书调用使用 lark-oapi 1.5.3 官方 ClientBuilder.timeout，并为同一逻辑发送生成/复用 message UUID；只对异常、HTTP 429 和 5xx 进行有限指数退避，业务拒绝不重试，未配置/失败返回 False，日志对 app_id/app_secret/user_id 脱敏。新增纯标准库重试策略模块。时间工具移除 tzlocal 与 localtime/mktime，统一 zoneinfo 和显式时区；Unix 转换要求 aware datetime，naive 值必须提供 assume_tz，DST 歧义/不存在时间 fail-closed。singleton 改为 RLock 双重检查，构造成功后才发布，并提供显式 reset_instance 生命周期钩子。DB、Web、TDX US/A/HK、Alpaca 与 Polygon 的相关时间边界同步改为市场时区。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
   - 运行 `PYTHONPATH=src pytest -q -W error tests/test_me22_utility_contracts.py`，13 项专项测试全部通过。
-  - 24 worker 并发 72 次首次访问只构造一个 singleton；首次构造抛错不会缓存，reset 后会创建新实例。
-  - 验证 Unix 零点在 Shanghai/UTC 的确定性转换、naive epoch 拒绝/显式本地化，以及纽约 DST nonexistent、ambiguous 与 fold 两分支。
-  - 使用协议等价 fake lark SDK 验证 per-attempt timeout、同一 UUID 跨 503/429 重试复用、400 不重试、异常耗尽返回 `False`、secret 不进入日志。
-  - ME-22/NX-03/MX-01/ME-30/ME-14/ME-16/MX-04 组合 51 passed；排除已知环境/基线收集阻断的仓库回归 326 passed、3 skipped。
-  - 执行 `compileall`、`python -m json.tool`、`git diff --check` 和 CRLF 字节检查。
-- **e. 验证是否通过？** 通过（13 项专项、51 项直接相邻组合、326 项可运行仓库回归通过；3 skipped；消息错误语义、有限重试/幂等、显式时区/DST 与线程安全 singleton 均已故障注入）
-- **提交：** `fix(ME-22): harden messaging time and singleton utilities`
+  - 并发 24 worker/72 次首次访问仅构造一个 singleton；首次构造异常不缓存，reset 后可重新构造。
+  - 验证上海/UTC Unix 零点、naive epoch 拒绝、显式 assume_tz、纽约 DST nonexistent/ambiguous/fold 和无 mktime/localtime。
+  - 使用协议等价 fake lark SDK 验证 timeout=0.5、同一 UUID 跨 503/429 重试复用、400 不重试、异常耗尽返回 False 和 secret 日志脱敏。
+  - 运行 ME-22、NX-03、MX-01、ME-30、ME-14、ME-16、MX-04 组合测试，51 passed。
+  - 排除已知缺失 config.py、pinyin、empyrical 与 footprint 收集阻断的仓库回归，326 passed、3 skipped。
+  - 执行 compileall、JSON、git diff --check 与 CRLF 字节门禁。
+- **e. 验证是否通过？** 通过（13 项 ME-22 专项、51 项直接相邻组合、326 项可运行仓库回归通过；3 skipped；消息失败语义、有限重试/幂等、显式时区/DST 和并发 singleton 均已故障注入）
+- **提交：** fix(ME-22): harden messaging time and singleton utilities
 - **修改文件：** `src/tradingview_zy/messaging_reliability.py`, `src/tradingview_zy/utils.py`, `src/tradingview_zy/fun.py`, `src/tradingview_zy/config.py.demo`, `src/tradingview_zy/file_db.py`, `src/tradingview_zy/exchange/exchange_db.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/exchange_tdx.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_us.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me22_utility_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - 当前容器没有 lark-oapi/真实飞书凭据，未发送真实消息；fake SDK 按锁定 v1.5.3 builder/response 契约执行，timeout 与 UUID 能力已对照官方源码。
-  - lark SDK 暴露单个 per-request timeout，而不是独立 connect/read 数值；默认 3 次、最多 5 次使总等待仍然有界。
-  - singleton 是进程内线程安全语义；多进程唯一性仍需专用 leader lock 或外部协调。
-  - 时间字符串默认明确解释为 Asia/Shanghai；其他市场必须显式传时区，DST 歧义不会被自动猜测。
+  - 当前容器未安装 lark-oapi，未向真实飞书租户发送消息；协议测试严格模拟 v1.5.3 的 builder/response 结构，timeout 与 UUID 能力另由官方仓库源码核对。
+  - SDK timeout 是每次 HTTP attempt 的统一上限，不提供独立 connect/read 数值；最多 5 次、默认 3 次使总等待有界。
+  - 只有 transport 异常、429 和 5xx 使用同一 UUID 重试；业务 4xx/SDK 拒绝不自动重试，避免扩大不可恢复请求。
+  - singleton 只保证单进程线程安全；多进程资源唯一性必须由专用 leader lock/外部服务管理。
+  - 默认字符串时区明确为 Asia/Shanghai；US/UTC 等外部调用方必须传入自己的市场时区，未知或 DST 歧义不能依赖宿主机猜测。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/utils.py、src/tradingview_zy/fun.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 统一 HTTP client，设置连接/读取 deadline、状态检查、重试和幂等；所有时间边界要求 aware datetime；单例改为依赖注入或线程安全初始化。
 
@@ -1232,26 +1234,25 @@
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web UDF
 - **本轮状态：** 已完成
 - **问题是否存在：** 是
-- **a. 这个问题是什么？** `/tv/history` 在 app factory 闭包里维护普通 `__history_req_counter` 字典。键只包含 symbol/resolution，没有会话或来源地址；字典没有 TTL、容量上限或锁。长期不同键会无界增长，并发线程对 `counter/tm` 的读改写会丢更新。原清单同时明确：`firstDataRequest=true` 返回全部可用历史是已有产品测试规定的行为，不能把它误修掉。
-- **b. 我是怎么修复的？** 新增独立 `HistoryRequestTracker`：用 `OrderedDict` 实现严格有界 LRU，用 entry TTL 回收冷键，用 `RLock` 将清理、计数、LRU 更新和淘汰放在同一原子临界区，并使用 `time.monotonic()` 避免系统时钟回拨。请求键扩展为登录 user、remote IP、market、code 和 resolution。默认保持旧节奏：连续前 6 次 follow-up 返回 `ok`，第 7 次返回 `no_data` 并按旧 counter 语义复位。四项 `WEB_HISTORY_*` 配置在应用启动时校验；tracker 注册到 `app.extensions`。首次数据请求仍完全绕过 tracker，因此完整历史与 `update=false` 契约不变。
+- **a. 这个问题是什么？** /tv/history 在 Flask app factory 闭包中维护普通 __history_req_counter 字典。键仅由 symbol/resolution 组成，既不区分登录会话或来源地址，也没有 TTL、容量上限或锁；并发请求会竞态读改写，长期不同标的/周期请求会让进程内状态持续增长。firstDataRequest=true 返回全部可用历史是已有产品测试明确要求的行为，不属于本条修复对象。
+- **b. 我是怎么修复的？** 新增 HistoryRequestTracker：使用 OrderedDict LRU、entry TTL、严格 max_entries、RLock 和 monotonic clock，在一个原子临界区完成过期清理、计数、LRU 更新和淘汰；连续请求仍保持旧路由的前 6 次 ok、第 7 次 no_data、随后按旧计数语义继续循环。请求键扩展为 user_id、remote_addr、market、code、resolution；所有边界均可由 WEB_HISTORY_* 配置覆盖并在应用启动时校验。首次数据请求继续完全绕过 tracker，历史全量返回和 update=false 契约不变。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_me02_history_request_tracker.py`，8 项专项测试通过。
-  - 使用手动 monotonic clock 验证 burst quiet reset、TTL 过期删除、严格容量和 LRU 顺序；无效上限/时间配置在启动前明确失败。
-  - 使用 24 个 worker 并发记录同一 key 100 次，精确得到 16 次 `no_data` 和 84 次 `ok`，且只保留一个状态条目，证明读改写原子。
-  - 参数化验证 user/IP/market/code/resolution 五个维度完全隔离，空 user/IP 使用稳定 fallback。
-  - AST/源码门禁确认旧 `__history_req_counter` 不再存在，`record()` 只在 `not first_data_request` 分支调用，原 firstDataRequest 分支未改。
-  - 运行 `tests/test_me02_history_request_tracker.py tests/test_rv07_web_parameter_validation.py tests/test_web_payloads.py`，48 项组合测试通过。
-  - 尝试运行历史 `test_tv_history_first_request_returns_available_history_for_zoom_out`，当前容器在业务断言前因缺少 `pinyin`（并且完整 Web 运行依赖也未安装）停止；没有伪造生产 Flask 环境，保留原测试文件和 AST 旁路门禁。
-  - 执行 `py_compile/compileall`、`python -m json.tool`、`git diff --check` 以及两个历史 CRLF 文件 bare-LF=0 检查。
-- **e. 验证是否通过？** 通过（8 项专项、48 项直接相邻组合通过；并发原子性、TTL/LRU/容量、身份隔离和 firstDataRequest 旁路均已验证）
-- **提交：** `fix(ME-02): bound history request tracking`
+  - 运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_me02_history_request_tracker.py`，8 项专项测试全部通过。
+  - 使用 24 个线程并发提交同一 key 的 100 次请求，得到与旧计数语义一致的 16 次 no_data、84 次 ok，状态始终只有 1 个条目。
+  - 使用手动 monotonic clock 验证 5 秒 burst reset、TTL 过期清理、严格容量上限和 LRU 淘汰顺序。
+  - 验证 user/IP/market/code/resolution 任一维度变化都会形成独立 key；空身份和地址使用稳定 fallback。
+  - AST/源码门禁确认旧 __history_req_counter 已删除，record() 只位于 `not first_data_request` 分支，tracker 暴露在 app.extensions 便于诊断。
+  - 运行 ME-02、RV-07 与 Web payload 组合测试，48 passed；历史 firstDataRequest 动态测试在业务断言前被缺失 pinyin/Flask 运行依赖阻断，保留 AST 契约与原测试不改。
+  - 执行 py_compile/compileall、JSON、git diff --check 与 CRLF bare-LF 字节门禁。
+- **e. 验证是否通过？** 通过（8 项 ME-02 专项、48 项直接相邻组合通过；并发原子性、TTL/LRU/容量、身份隔离和 firstDataRequest 旁路均已验证）
+- **提交：** fix(ME-02): bound history request tracking
 - **修改文件：** `src/tradingview_zy/history_request_tracker.py`, `src/tradingview_zy/config.py.demo`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me02_history_request_tracker.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - tracker 是单进程 UI 节奏状态，不是跨 worker 授权/全局限流器；每个 worker 的状态仍严格有界。
-  - 旧 `no_data` 节奏被有意保留，本轮不改变 TradingView 客户端协议。
-  - 当前容器缺少 Flask、flask-login、pinyin、tzlocal 和本地 `config.py`，完整 Web 路由无法导入；纯状态机、真实路由 AST 和相邻 payload 测试已覆盖本条根因。
-  - `request.remote_addr` 依赖部署的可信代理配置正确传递来源地址。
+  - tracker 是单进程内的 UI 请求节奏状态，不是授权或跨 worker 的全局限流器；多 worker 各自维护严格有界状态。
+  - 现有 no_data cadence 原样保留，包括第 7 次抑制后按旧 counter=0 语义继续计数；本轮不改变 TradingView 客户端行为。
+  - 当前容器缺少 Flask、flask-login、pinyin、tzlocal 及本地 config.py，无法导入完整 cl_app 执行历史路由；纯 tracker、AST 路由契约和相邻 payload 参数测试已执行。
+  - remote_addr 是 Flask 解析的对端地址；反向代理部署仍应由可信代理配置正确提供来源地址。
 - **原报告最新结论：** /tv/history 仍维护进程内 __history_req_counter 普通字典；键没有过期回收/容量上限，也没有并发同步。
 - **原报告建议：** 使用有界 TTL/LRU 或外部限流器；加入锁/原子操作；按会话/IP/标的设计稳定限流键，并覆盖并发测试。
 
@@ -1292,12 +1293,13 @@
 - **b. 我是怎么修复的？** 新增不可变 TVStoragePolicy，Web 与 DB 共用同一规范化/配额契约：chart 512 KiB、template 256 KiB、drawing 512 KiB；每主体分别最多 100/200/2000 条，三类持久化 blob 合计 16 MiB，全部按 UTF-8 实际字节计算。标识符拒绝控制字符、NUL 与非法 Unicode。MySQL content/state 使用 MEDIUMTEXT；启动迁移保留同名最新行、建立主体索引及 chart/template 唯一索引。同名 chart/template 与 drawing 键均改为事务内 upsert。配额读取、投影和写入处于同一事务：MySQL 使用主体锁行与 FOR UPDATE，SQLite 在任何占用读取前执行 BEGIN IMMEDIATE，关闭双请求同时越过配额的竞态。历史主体若已超过后来收紧的配额，只允许保持或缩小，禁止继续增长。Web 保留全局 request_too_large/413，并为字段和配额超限返回稳定的 storage_field_too_large 或 storage_quota_exceeded/422；NX-14 的 404 和 NX-15 的 drawing_save_failed/request_id 契约保持不变。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 修复前用 SQLite 最小复现确认 90,000 字节文本可直接保存、同名模板可生成多个 ID，且持续创建 chart/drawing 没有任何配额拒绝。
-  - 运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_rv06_tv_storage_limits.py`：14 项专项全部通过，覆盖多字节 UTF-8/非法 Unicode、配置归一化、MySQL MEDIUMTEXT DDL、旧表去重迁移与幂等、同名 upsert、记录/总字节配额、失败回滚、历史超限只减不增、重名更新合并和 SQLite 双线程竞态。
+  - 运行 `PYTHONPATH=src PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -W error tests/test_rv06_tv_storage_limits.py`，14 项专项通过。
   - 运行 RV-06 + NX-14 + NX-15 + NX-10 聚焦组合，45 项通过；404、绘图失败/request_id 和策略存储未回退。
   - 运行 RV-06、NX-10、NX-14、NX-15、RV-07、Web payload、安全认证、CSRF、上传、lazy-startup 与 watchlist 直接相邻组合，112 passed、3 skipped。
-  - 15 个旧 selection_monitoring 集成测试在导入 cl_app package 时被当前容器缺少 Flask/pinyin 阻断；backtesting_base_generic 缺 empyrical，footprint 保留既有私有函数导入漂移，均在产品断言前阻断并单独记录。
-  - 执行 py_compile、`git diff --check`、JSON 解析、MySQL 方言编译、迁移二次执行，以及 db.py/config.py.demo/Web init 的 CRLF bare-LF=0 检查。
+  - 在真实 SQLite 文件库执行同名 upsert、跨类型总字节配额、历史超限缩小规则、旧表去重与二次迁移。
+  - 使用两个线程同时创建不同布局且 `max_charts=1`，确认只产生一个成功和一个 `storage_quota_exceeded`，最终仅一行。
+  - 编译 MySQL DDL，确认 chart content 与 drawing state 为 MEDIUMTEXT，chart owner/name 唯一约束存在。
+  - 执行 py_compile、git diff --check 与 db.py/Web/config CRLF bare-LF=0 检查。
 - **e. 验证是否通过？** 通过（14 项专项、45 项聚焦、112 项直接相邻通过；3 项既有跳过；字段边界、配额、旧表迁移、MEDIUMTEXT 和 SQLite 并发竞态均有自动化证明）
 - **提交：** fix(RV-06): bound TradingView storage
 - **修改文件：** `src/tradingview_zy/tv_storage.py`, `src/tradingview_zy/db.py`, `src/tradingview_zy/config.py.demo`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_rv06_tv_storage_limits.py`, `tests/test_nx15_drawing_save_errors.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
@@ -1315,26 +1317,26 @@
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Futu
 - **本轮状态：** 已完成
 - **问题是否存在：** 是
-- **a. 这个问题是什么？** `exchange_futu.py` 以模块级 `g_ctx/g_ttx` 懒创建行情和交易上下文，没有锁、所有权或关闭协议。并发首次调用可能创建多个 SDK 对象；同一个上下文会被多个线程无序调用；业务失败或异常后坏连接仍被缓存。`CTX()` 还用随机数触发全局 `unsubscribe_all()`，使任意请求带有不可预测的跨请求副作用。进程退出和 fork 后都没有确定性资源处理。
-- **b. 我是怎么修复的？** 新增无 Futu SDK 依赖的 `FutuContextManager`，分别持有 quote/trade 上下文与独立 `RLock`；构造候选只有成功返回后才发布，同类操作串行，quote 与 trade 可独立并发，行情失败只关闭/降级行情上下文而不污染交易上下文。每个逻辑操作最多两次尝试，失败缓存被关闭并清除，下一次可恢复；空 `FUTU_HOST` 与已关闭 manager 明确 fail-closed。manager 记录无秘密的 ready/degraded/closed、generation、最近成功和错误类型，检测 PID 变化并丢弃 fork 继承连接，同时注册 at-fork child 与 atexit，`close()` 幂等。`ExchangeFutu` 删除 `g_ctx/g_ttx`、随机清订阅、tenacity 和 wildcard import，所有 SDK 调用经统一 quote/trade 运行边界与 `RET_OK` 检查；增加 `close()/health()`，目录缓存改为实例级防御性副本。
+- **a. 这个问题是什么？** exchange_futu.py 以模块级 g_ctx/g_ttx 懒创建行情和交易上下文，没有锁、所有权或关闭协议。并发首次调用可能创建多个 SDK 对象；同一个上下文会被多个线程无序调用；业务失败或异常后坏连接仍被缓存。CTX() 还用随机数触发全局 unsubscribe_all，使任意请求带有不可预测副作用。进程退出和 fork 后都没有确定性资源处理。
+- **b. 我是怎么修复的？** 新增无 Futu SDK 依赖的 FutuContextManager，分别持有 quote/trade 上下文与独立 RLock；构造候选只有成功后才发布，同类操作串行而 quote/trade 可独立并发，行情失败只关闭/降级行情上下文而不污染交易上下文。每个逻辑操作最多两次尝试，失败缓存被关闭清除，下一次可恢复；空 FUTU_HOST 与已关闭 manager 明确 fail-closed。manager 记录无秘密的 ready/degraded/closed、generation、最近成功和错误类型，检测 PID 变化并丢弃 fork 继承连接，注册 at-fork/atexit 且 close 幂等。ExchangeFutu 删除 g_ctx/g_ttx、随机清订阅、tenacity 和 wildcard import，所有 SDK 调用经统一 quote/trade 运行边界与 RET_OK 检查；增加 close()/health()，缓存改为实例级防御性副本。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
   - 运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_me15_futu_context_lifecycle.py`：9 项专项通过。
-  - 20 线程并发故障注入确认同一个 quote context 只创建一次、同类 SDK 操作最大并发为 1，全部线程在 2 秒内结束；另验证 quote 与 trade 能通过各自锁同时进入。
-  - 构造器持续异常最多调用两次且 generation 保持 0；quote 操作失败会关闭旧 quote 并创建新 generation，同时已创建的 trade context 不关闭、不重建。
-  - 验证空 host 不调用工厂、`close()` 幂等、关闭后拒绝继续使用、PID 变化关闭继承对象并重新创建、health 不含 host/账户/原始错误消息且可观测 degraded。
-  - 源码 AST 门禁确认不存在 wildcard import、`g_ctx/g_ttx`、随机清订阅与 `@retry`；adapter 显式使用 `FutuContextManager`、`close`、`health` 及 quote/trade 边界。
+  - 20 线程并发故障注入确认同一个 quote context 只创建一次、同类 SDK 操作最大并发为 1；quote 与 trade 可通过独立锁同时执行。
+  - 构造器持续异常最多两次且不发布对象；quote 操作失败关闭旧 quote 并创建新 generation，已创建 trade context 不关闭、不重建。
+  - 验证空 host 不调用工厂、close 幂等、关闭后拒绝使用、PID 变化关闭继承对象并重建、health 不含 host/账户/原始错误消息。
+  - 源码 AST 门禁确认不存在 wildcard import、g_ctx/g_ttx、random 清订阅与 @retry；adapter 显式使用 FutuContextManager、close、health 和 quote/trade 边界。
   - 运行 ME-15、ME-30、ME-05、NEW-06、ME-12、ME-14 相邻组合：52 passed。
-  - 尝试仓库级回归：完整收集被缺失 `empyrical`、归档外 `config.py` 和既有 footprint 私有导入阻断；排除四个收集阻断后有 377 passed、3 skipped，另 11 项旧集成测试在业务断言前被缺失 `pinyin/config.py` 阻断。
-  - 执行 `py_compile`、`git diff --check` 和 `exchange_futu.py` CRLF bare-LF=0 门禁。
-- **e. 验证是否通过？** 通过（9 项专项和 52 项直接相邻全部通过；并发、失败隔离、有界重建、fork/PID 与关闭生命周期均有自动化证明；广泛回归中 377 项执行成功、3 项既有跳过，环境/基线阻断已单独记录）
-- **提交：** `fix(ME-15): manage Futu context lifecycle`
+  - 广泛回归中 377 项执行通过、3 skipped；其余在产品断言前被缺失 pinyin、归档外 config.py、empyrical 或既有 footprint 私有导入阻断。
+  - 执行 py_compile、JSON、git diff --check 与 exchange_futu.py CRLF bare-LF=0 门禁。
+- **e. 验证是否通过？** 通过（9 项 ME-15 专项、52 项直接相邻通过；并发、失败隔离、有界重建、PID/fork 与关闭生命周期均已故障注入；广泛回归中 377 项执行成功、3 skipped，环境/基线阻断已记录）
+- **提交：** fix(ME-15): manage Futu context lifecycle
 - **修改文件：** `src/tradingview_zy/futu_context.py`, `src/tradingview_zy/exchange/exchange_futu.py`, `tests/test_me15_futu_context_lifecycle.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - 当前容器未安装 `futu-api`，也未连接 Futu OpenD；真实 SDK 线程、连接断开回调、服务器重启和订阅配额需在沙箱 OpenD 联调。
-  - Python 无法强杀已经阻塞在第三方 C 扩展/网络调用中的线程；本条串行化生命周期并有界重建，但单次 SDK 调用 deadline 仍取决于 Futu SDK/OpenD。
+  - 当前容器未安装 futu-api，也未连接 Futu OpenD；真实 SDK 线程、连接断开回调、服务器重启和订阅配额需在沙箱 OpenD 联调。
+  - Python 无法强杀已经阻塞在第三方 C 扩展/网络调用中的线程；本条串行化生命周期和有界重建，但单次 SDK 调用 deadline 仍取决于 Futu SDK/OpenD。
   - quote 与 trade 分别串行，优先保证 SDK 状态安全；若未来证明 SDK 支持更高并发，应通过连接池与官方契约测试扩展，而不是共享同一对象无锁调用。
-  - `ExchangeFutu` 仍使用项目 singleton 保持一个 adapter；manager 已处理线程和 fork 边界，跨进程连接仍各进程独立。
+  - ExchangeFutu 仍使用项目 singleton 保持一个 adapter；manager 已处理线程和 fork 边界，跨进程连接仍各进程独立。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_futu.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** Context manager + connection pool/lock；健康状态和重连状态机；显式 imports；进程退出钩子。
 
@@ -1343,49 +1345,49 @@
 - **原始状态 / 严重度 / 领域：** 🛡️ 未完全修复（已阻断或缓解） / 中 / CTP
 - **本轮状态：** 已完成（通过保持 CTP 能力移除并固定恢复契约）
 - **问题是否存在：** 否
-- **a. 这个问题是什么？** 原条目描述的空字符串前置地址兜底错误曾存在于已删除的 CTP 实现；当前运行树中 `exchange_ctp.py`、`trader_ctp.py`、OpenCTP 依赖和全部 `CTP_*` 配置均已在 CR-05 删除。标准期货工厂在任何 CTP import 或缓存写入前 fail-closed，因此当前代码没有可执行的前置地址解析路径，不能再复现该后续阻断。
-- **b. 我是怎么修复的？** 不重新引入未验收 CTP。保留 CR-05 的运行时删除与工厂 tombstone，并把恢复要求补充为明确的前置地址协议：行情/交易地址必须是经过校验的非空 `tcp://host:port`；空字符串必须在 SDK 构造前被明确拒绝或通过唯一文档化默认值解析，不能只对“属性是否存在”做判断。缺 scheme、嵌入凭据、路径/query/fragment、非法端口与控制字符全部拒绝；健康状态可以说明环境和是否已配置，但日志不得暴露凭据。新增 NX-01 专项门禁，禁止 CTP front 配置或消费者在未评审时重新进入运行树。
+- **a. 这个问题是什么？** 原条目描述的空字符串前置地址兜底错误曾存在于已删除的 CTP 实现；当前运行树中 exchange_ctp.py、trader_ctp.py、OpenCTP 依赖和全部 CTP_* 配置均已在 CR-05 删除。标准期货工厂在任何 CTP import 或缓存写入前 fail-closed，因此当前代码没有可执行的前置地址解析路径，不能再复现该后续阻断。
+- **b. 我是怎么修复的？** 不重新引入未验收 CTP。保留 CR-05 的运行时删除与工厂 tombstone，并把恢复要求补充为明确的前置地址协议：行情/交易地址必须是经过校验的非空 tcp://host:port；空字符串必须在 SDK 构造前被明确拒绝或通过唯一文档化默认值解析，不能只对属性是否存在做判断；危险 URL 组成全部拒绝，日志不得暴露凭据。新增 NX-01 专项门禁，禁止 CTP front 配置或消费者在未评审时重新进入运行树。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 静态确认 `exchange_ctp.py`、`trader_ctp.py`、OpenCTP 依赖与 `config.py.demo` 中 `CTP_*` 配置均不存在。
-  - AST 检查 `get_exchange()` 的 FUTURES 分支：`_reject_removed_provider` 位于全部支持 provider import 和首个缓存写入之前，函数内没有 `exchange_ctp` import。
-  - 全运行树扫描 `ctp_front/md_front/td_front/front_md/front_td`，无任何前置地址消费者。
-  - 文档门禁确认恢复 CTP 必须校验非空 `tcp://host:port`，并在 SDK 构造前处理空值和拒绝危险 URL 组成。
-  - 运行 `tests/test_nx01_ctp_front_address_removed.py`：4 passed（`-W error`）。
+  - 静态确认 exchange_ctp.py、trader_ctp.py、OpenCTP 依赖与 config.py.demo 中 CTP_* 配置均不存在。
+  - AST 检查 get_exchange() 的 FUTURES 分支：_reject_removed_provider 位于全部支持 provider import 和缓存写入之前，且函数内没有 exchange_ctp import。
+  - 全运行树扫描 ctp_front/md_front/td_front 等名称，无任何前置地址消费者。
+  - 文档门禁确认恢复 CTP 必须校验非空 tcp://host:port，并在 SDK 构造前处理空值和危险 URL。
+  - 运行 NX-01 专项：4 passed（-W error）。
   - 运行 NX-01 与 HI-01 移除/fail-closed 组合：7 passed。
-  - 执行 `git diff --check` 与 Python AST/JSON 解析。
+  - 执行 git diff --check 与 Python AST/JSON 解析。
 - **e. 验证是否通过？** 通过（当前运行时不存在该错误路径；4 项专项及 7 项移除/fail-closed 组合通过，恢复契约和防回归门禁已固定）
-- **提交：** `fix(NX-01): guard removed CTP front configuration`
+- **提交：** fix(NX-01): guard removed CTP front configuration
 - **修改文件：** `docs/unsupported-providers.md`, `tests/test_nx01_ctp_front_address_removed.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
   - 本条通过能力移除关闭当前根因，不代表 CTP 功能可用；恢复 CTP 仍是新功能，必须完成 CR-05 列出的行情、订单、重连、对账和资源释放验收。
   - 未连接 OpenCTP 仿真环境，因为当前运行包有意不包含 SDK 与适配器。
-- **原报告最新结论：** CTP 的空字符串前置地址兜底逻辑没有修改，底层问题仍在。最新工厂会在导入 CTP 前直接拒绝 `EXCHANGE_FUTURES="ctp"`，标准路径不会触发该后续错误；这是风险封堵，不是功能修复。
-- **原报告建议：** 修复 CR-05 时仍必须把地址读取改为 `getattr(..., "") or DEFAULT` 或明确要求必填，并做地址 schema 校验。
+- **原报告最新结论：** CTP 的空字符串前置地址兜底逻辑没有修改，底层问题仍在。最新工厂会在导入 CTP 前直接拒绝 EXCHANGE_FUTURES="ctp"，标准路径不会触发该后续错误；这是风险封堵，不是功能修复。
+- **原报告建议：** 修复 CR-05 时仍必须把地址读取改为 getattr(..., "") or DEFAULT 或明确要求必填，并做地址 schema 校验。
 
 ### 55. NX-25 · 孤立 ExchangeZB 显式关闭 TLS 证书校验
 
 - **原始状态 / 严重度 / 领域：** 🛡️ 未完全修复（已阻断或缓解） / 中 / Legacy Exchange Security
 - **本轮状态：** 已完成（通过删除不安全遗留 provider）
 - **问题是否存在：** 否
-- **a. 这个问题是什么？** 原报告固定点中的孤立 `ExchangeZB` 可被直接导入并通过 `verify=False` 关闭 TLS。当前代码已在第 22 条 MX-02 删除 `exchange_zb.py`、配置声明与工厂可达性；标准工厂在 provider import/cache 前拒绝 `zb`。因此当前运行树已不存在该 TLS 绕过。
-- **b. 我是怎么修复的？** 保持 ZB provider 删除和 fail-closed tombstone，不恢复过时接口。扩展恢复规范：证书链与主机名校验必须开启，使用系统信任库或显式 CA bundle，校验失败必须拒绝且不得降级；`verify=False`、`ssl.CERT_NONE`、`check_hostname=False` 或 WebSocket `sslopt` 等效绕过全部禁止。错误只允许以稳定、无秘密的类型暴露。增加 NX-25 专项扫描，覆盖运行树 TLS 绕过模式、工厂拒绝顺序和恢复文档。
+- **a. 这个问题是什么？** 原报告固定点中的孤立 ExchangeZB 可被直接导入并通过 verify=False 关闭 TLS。当前代码已在第 22 条 MX-02 删除 exchange_zb.py、配置声明与工厂可达性；标准工厂在 import/cache 前拒绝 zb。因此当前运行树已不存在该 TLS 绕过。
+- **b. 我是怎么修复的？** 保持 ZB provider 删除和 fail-closed tombstone，不恢复过时接口。扩展恢复规范：证书链与主机名校验必须开启，使用系统信任库或显式 CA bundle，校验失败必须拒绝且不得降级；verify=False、CERT_NONE、check_hostname=False 或 WebSocket sslopt 等效绕过全部禁止。增加 NX-25 专项扫描，覆盖运行树 TLS 绕过模式、工厂拒绝顺序和恢复文档。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 确认 `src/tradingview_zy/exchange/exchange_zb.py` 不存在，配置模板无 ZB 凭据或支持声明。
-  - 扫描 `src/script/web` Python 运行树，未发现 `verify=False`、`CERT_NONE`、`check_hostname=False` 或 `sslopt` 证书绕过。
-  - AST 验证 CURRENCY 分支在 binance/db import 和缓存写入前调用 `_reject_removed_provider`，且 `get_exchange` 中没有 `exchange_zb` import。
-  - 文档契约验证证书链、主机名、系统信任库/CA bundle、失败拒绝、日志脱敏和所有已知绕过模式均被明确规定。
-  - 运行 `tests/test_nx25_zb_tls_removal.py`：5 passed（`-W error`）。
+  - 确认 exchange_zb.py 不存在，配置模板无 ZB 凭据/支持声明。
+  - 扫描 src/script/web Python 运行树，未发现 verify=False、CERT_NONE、check_hostname=False 或 sslopt cert bypass。
+  - AST 验证 CURRENCY 分支在 binance/db import/cache 前调用 _reject_removed_provider，且 get_exchange 中没有 exchange_zb import。
+  - 文档契约验证证书链、主机名、CA bundle、失败拒绝和所有已知绕过模式。
+  - 运行 NX-25 专项：5 passed（-W error）。
   - 运行 NX-25、仓库卫生与 Secret 安全组合：10 passed。
-  - 执行 `git diff --check` 与 JSON/AST 解析。
+  - 执行 git diff --check 与 JSON/AST 解析。
 - **e. 验证是否通过？** 通过（当前运行树不存在 ZB/TLS 绕过；5 项专项、10 项安全相邻组合通过，恢复安全契约已固定）
-- **提交：** `fix(NX-25): guard removed ZB TLS security`
+- **提交：** fix(NX-25): guard removed ZB TLS security
 - **修改文件：** `docs/unsupported-providers.md`, `tests/test_nx25_zb_tls_removal.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
   - 本条通过删除 provider 关闭风险，不代表 ZB 行情能力可用；恢复必须作为新 provider 重新完成 API、TLS、分页、限流和契约测试。
   - 静态扫描覆盖仓库 Python 运行树；第三方依赖内部 TLS 配置仍由其版本和供应链治理承担。
-- **原报告最新结论：** 标准工厂不注册 ZB，降低默认可达性；但 `ExchangeZB` 仍在运行源码树并显式 `params["verify"]=False`，可被直接导入使用。
+- **原报告最新结论：** 标准工厂不注册 ZB，降低默认可达性；但 ExchangeZB 仍在运行源码树并显式 params["verify"]=False，可被直接导入使用。
 - **原报告建议：** 删除/归档该适配器，或恢复 TLS 验证、证书配置与测试；保持标准入口不支持。
 
 ### 56. ME-29 · 当前提交无可见 CI 状态，测试集中在少数协议单元，核心风险无门禁
@@ -1393,25 +1395,23 @@
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Quality Gates
 - **本轮状态：** 已完成（仓库内质量门禁；托管状态待推送后验证）
 - **问题是否存在：** 是
-- **a. 这个问题是什么？** 恢复后的本地权威仓库只有仓库卫生工作流，没有运行完整项目测试的持久 GitHub Actions；真实 MySQL、浏览器 DOM 和独立 provider 可靠性矩阵也没有稳定检查名。因而 SQLite/MySQL 差异、Secret DOM 回显、适配器分页/重试/时区/线程边界以及完整 pytest 是否可收集，都可能在合并前缺少门禁。实际复核还发现 `footprint.py` 继续导入已经删除的私有时间函数，完整收集会在业务断言前失败。
-- **b. 我是怎么修复的？** 新增只读、带 job timeout 和并发取消的 `.github/workflows/tests.yml`，提供四个稳定 job：`unit-contracts` 在 Python 3.11、`uv sync --locked` 环境运行完整 pytest；`provider-contracts` 以 warnings-as-errors 执行 11 个核心适配器与 footprint 矩阵；`mysql-contracts` 使用真实 MySQL 8.0 service 验证迁移及长文本往返；`browser-contracts` 安装 Chromium 并验证 Secret 不进入渲染 DOM。新增标准库 `check_quality_gates.py`，检查触发分支、只读权限、超时、锁定安装、关键矩阵、MySQL/浏览器标记与分支保护文档，并让 repository-hygiene 在安装依赖前自举执行。新增原子生成、权限为 0600 且被 Git 忽略的隔离测试配置脚本。修复 footprint 私有导入漂移，改用公开 `datetime_to_timestamp_seconds`。首次实际执行 provider job 时发现 BaoStock 测试文件名写错，已更正为真实的 `test_me11_baostock_reliability.py`，防止“静态检查通过、CI 立即失败”的伪门禁。
+- **a. 这个问题是什么？** 本地权威仓库缺少完整项目测试、真实 MySQL、浏览器 DOM 和独立 provider 可靠性矩阵的稳定 CI 门禁；footprint 还导入已删除私有时间函数，完整收集会提前失败。
+- **b. 我是怎么修复的？** 新增四个稳定 GitHub Actions job、质量门禁静态检查器、隔离测试配置生成器、MySQL/Chromium 专用测试和质量门禁文档；修复 footprint 私有导入；实际执行 provider job 后修正错误的 BaoStock 测试文件名。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 运行 `python script/remediation/check_quality_gates.py`、repository hygiene、依赖契约和 Secret 暴露检查，全部通过。
-  - 运行 ME-29/footprint 专项：18 passed、2 skipped；两个 skip 只在普通本地环境未设置 `RUN_MYSQL_TESTS`/`RUN_BROWSER_TESTS` 时生效。
-  - 真实按 workflow 列出的 provider 文件运行严格告警矩阵：82 passed。首次执行准确发现并修复了不存在的 BaoStock 测试文件名。
-  - 生成隔离 `config.py` 后运行除当前环境缺少 `empyrical` 的收集阻断外的仓库回归：414 passed、5 skipped；另外 8 项在进入业务断言前被本容器缺少 `pinyin` 阻断。完整套件直接运行则在 `test_backtesting_base_generic.py` 收集阶段因缺少 `empyrical` 中止；没有把这些环境阻断伪装成产品通过。
-  - 验证 MySQL 与浏览器专用测试在未显式启用时稳定 skip，工作流分别提供真实 MySQL service 与 Chromium 安装/执行路径。
-  - 执行 `py_compile`、`git diff --check`、JSON 解析，并确认 `footprint.py` 保持纯 CRLF（bare-LF=0）。
-- **e. 验证是否通过？** 通过（仓库内门禁契约已实现；18 项专项、82 项 provider 严格矩阵和 414 项可运行仓库回归通过；5 项按设计跳过；8 项及一次完整收集受当前容器缺失依赖阻断）
-- **提交：** `fix(ME-29): add executable quality gates`
+  - 质量门禁、仓库卫生、依赖契约与 Secret 暴露检查全部通过。
+  - ME-29/footprint 专项 18 passed、2 skipped。
+  - provider 严格告警矩阵 82 passed。
+  - 排除当前环境缺 empyrical 的收集阻断后，仓库回归 414 passed、5 skipped；8 项因缺 pinyin 在业务断言前阻断。
+  - py_compile、git diff --check、JSON 解析和 footprint CRLF bare-LF=0 通过。
+- **e. 验证是否通过？** 通过（18 项专项、82 项 provider 严格矩阵、414 项可运行仓库回归通过；环境阻断和专用集成 gate 已明确区分）
+- **提交：** fix(ME-29): add executable quality gates
 - **修改文件：** `.github/workflows/tests.yml`, `.github/workflows/repository-hygiene.yml`, `docs/quality-gates.md`, `script/remediation/check_quality_gates.py`, `script/remediation/prepare_test_config.py`, `src/tradingview_zy/footprint.py`, `tests/test_me29_quality_gates.py`, `tests/test_me29_mysql_gate.py`, `tests/test_me29_browser_dom.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - 用户要求只做本地提交、不推送远程，所以当前本地 SHA 不可能已有 GitHub Actions 可见状态；workflow 只有在推送或 PR 后才会运行。
-  - branch protection/required checks 是 GitHub 托管设置，仓库文件只能固定检查名与部署步骤，不能替代仓库管理员启用规则。
-  - 当前容器没有 MySQL/Docker 服务，也没有可用 Chromium 安装缓存；真实 MySQL/DOM 代码与 CI service 已实现，但本地结果明确为 skipped。
-  - 离线 provider contract 使用协议桩和故障注入，不能替代真实券商、交易所、OpenD、TQ/IB/TDX 网络与账号沙箱验收。
-  - 当前 Python 3.13 环境缺 `empyrical`、`pinyin`；新增 CI 使用项目声明的 Python 3.11 和锁文件安装完整依赖，首次远程运行仍可能暴露平台依赖问题，届时必须按失败证据修复，不能绕过。
+  - 本地提交未推送，无法产生托管 CI 状态或自动启用 required checks。
+  - 当前容器无 MySQL/Docker/Chromium，真实集成 gate 由新增 CI job 执行。
+  - 当前 Python 3.13 环境缺 empyrical、pinyin，相关收集/集成阻断未伪装为产品通过。
+  - 离线 provider 协议桩不能替代真实账户与网络沙箱。
 - **原报告最新结论：** 仓库已有持久化 GitHub Actions：Python 3.11 使用 uv sync --locked 运行完整 pytest 且 warnings-as-errors，Python 3.13 单独验证依赖 warning 基线。PR #15 最终合并检查为 172 passed。浏览器、MySQL 和真实外部 SDK 仍不在门禁内。
 - **原报告建议：** 增加 MySQL、浏览器/DOM、核心 provider mock/沙箱矩阵；在仓库分支保护中把 checks 设为 required，并验证合并提交 push 检查。
 
@@ -1420,25 +1420,24 @@
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Adapter Architecture
 - **本轮状态：** 已完成（能力绑定运行边界；旧宽接口保留为迁移兼容）
 - **问题是否存在：** 是
-- **a. 这个问题是什么？** 当前本地权威代码仍由一个要求所有 provider 同时实现行情、目录、板块、账户、持仓和订单方法的宽泛 `Exchange` ABC 作为统一接口；标准工厂通过大型 if/elif 返回原始适配器，没有可靠能力声明、调用前拒绝、行为级响应校验或统一领域错误。多个 provider 用 `pass`、固定空值或宽泛 `Exception` 表示不支持，构造异常还可能把 SDK 原始文本暴露给上层。远程固定点虽有能力注册表，但 DB provider 过报 `SECURITY_MASTER/PLATES`，不能原样照搬。
-- **b. 我是怎么修复的？** 新增细粒度 `Capability`、Protocol 和 secret-safe `ExchangeError` 层级；新增可直接导入且无 SDK/config 副作用的 `MarketRegistry`，为 24 个 market/provider 组合保守声明真实行为。DB 只声明 metadata、market data、ticks、持久化 code catalog 和 session，不声明 authoritative `SECURITY_MASTER`、`PLATES`、账户、持仓或实盘订单；全部内置 provider 都不声明 `LIVE_ORDERS`。标准 `get_exchange()` 改为惰性 registry 解析、构造、声明方法校验和 `ContractedExchange` 包装，只有完整成功后才发布缓存；CTP/ZB tombstone 在 registry、import 和 cache 前执行。facade 在调用前要求能力，把连接/协议/普通 SDK 异常转成稳定且不反射 Secret 的领域错误，并校验 metadata、K 线、Tick、目录、交易状态、板块等基本响应形状。旧 broad provider 类及非 ABC helper 通过 facade 的迁移兼容转发保留。
+- **a. 这个问题是什么？** 标准工厂返回宽泛 Exchange 对象，没有可靠能力声明、调用前拒绝、响应校验或统一 secret-safe 错误；DB 还可能被过报为 security master/plates。
+- **b. 我是怎么修复的？** 新增细粒度 Capability/Protocol/领域错误、无副作用 MarketRegistry 和 ContractedExchange facade；24 个 provider 组合保守声明，DB 不声明 SECURITY_MASTER/PLATES，所有 provider 不声明 LIVE_ORDERS；工厂只在构造和契约验证成功后缓存。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 运行 `tests/test_me10_exchange_contracts.py`：7 passed（`-W error`），覆盖 8 个市场/24 个 provider 的注册表完整性、DB/实盘保守声明、声明方法非空桩、调用前拒绝、secret-safe 错误、连接错误 retryable 语义、响应形状与构造失败不缓存。
-  - 运行 ME-10 + NEW-06 + CTP/ZB tombstone + DB catalog 聚焦组合：31 passed（`-W error`）。
-  - 运行 21 个 provider/factory/calendar/重试/目录直接相邻文件：125 passed（`-W error`）。
-  - 在隔离 SQLite 配置下真实构造 DB provider，确认标准工厂返回 `ContractedExchange`，metadata/catalog/market data/ticks/session 可见；`SECURITY_MASTER/PLATES` 不可见，plate 调用在进入 DB 的 `pass` 前即抛 `UnsupportedCapabilityError`。
-  - 故障注入 provider 抛出含 `api_secret=SENTINEL token=SENTINEL` 的异常，公开 `str()` 和 `to_dict()` 均不含哨兵；连接类异常被标记 retryable，畸形 K 线被拒绝。
-  - 直接在不存在本地 `config.py` 的环境导入 `tradingview_zy.market_registry`，确认注册表可独立加载且不触发 SDK/配置副作用。
-  - 执行 `py_compile`、`git diff --check`、JSON 解析，并确认历史 `exchange/__init__.py` 保持纯 CRLF（bare-LF=0）。
-- **e. 验证是否通过？** 通过（7 项专项、31 项聚焦及 125 项 provider/工厂直接相邻测试以 warnings-as-errors 通过；能力过报、空桩调用、通用异常泄漏和构造前缓存根因已关闭）
-- **提交：** `fix(ME-10): add capability-bound exchange contracts`
+  - ME-10 专项 7 passed（-W error）。
+  - ME-10 + NEW-06 + tombstone + DB catalog 聚焦 31 passed。
+  - 21 个 provider/factory/calendar 相邻文件 125 passed（-W error）。
+  - 真实 SQLite DB factory 返回 facade，支持 metadata/catalog/session，plate 在调用 provider 前拒绝。
+  - Secret 哨兵异常不进入 str/to_dict；连接异常 retryable，畸形响应被拒绝。
+  - 无 config.py 直接导入 registry 成功；py_compile、diff、CRLF 检查通过。
+- **e. 验证是否通过？** 通过（7 项专项、31 项聚焦、125 项直接相邻测试通过）
+- **提交：** fix(ME-10): add capability-bound exchange contracts
 - **修改文件：** `src/tradingview_zy/domain.py`, `src/tradingview_zy/exchange/contracts.py`, `src/tradingview_zy/exchange/contracted.py`, `src/tradingview_zy/market_registry.py`, `src/tradingview_zy/exchange/__init__.py`, `docs/provider-capabilities.md`, `tests/test_me10_exchange_contracts.py`, `tests/test_new06_db_capability_guard.py`, `tests/test_nx01_ctp_front_address_removed.py`, `tests/test_nx23_exchange_db_catalog.py`, `tests/test_nx25_zb_tls_removal.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - 旧 provider 类继续继承宽泛 `Exchange` ABC，供直接 provider 测试与外部代码迁移；只有标准 factory 路径强制 capability/error/response 边界。
-  - 响应校验是轻量领域边界，不验证每个第三方字段的全部业务语义；真实 SDK、账号权限、网络和回报时序仍需各 provider 沙箱验收。
-  - 账户/持仓能力只表示当前读取方法存在，不等于实盘下单已启用；`LIVE_ORDERS` 对全部内置 provider 明确禁用。
-  - `CATALOG` 只保证可枚举 code/name 形状；DB 的 code=name 目录仍不是 authoritative security master。
+  - 旧 provider 类仍保留 broad Exchange ABC，标准 factory 才强制新边界。
+  - 轻量响应 schema 不能替代真实 SDK/网络/账号沙箱。
+  - 账户/持仓读取能力不等于实盘订单已启用；LIVE_ORDERS 全部禁用。
+  - DB CATALOG 不是 authoritative security master。
 - **原报告最新结论：** 新增 Capability、统一领域错误、MarketRegistry 和 require_capability；未知市场/provider fail-closed，构造失败前不缓存。但旧 Exchange 大接口及部分 provider 的声明/实现一致性尚未完全解决。
 - **原报告建议：** 拆分细粒度 Protocol；对每个 provider 做“声明能力必须有真实实现”的契约测试；修正 DB provider 的 security_master/plates 声明。
 
@@ -1447,40 +1446,51 @@
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Strategy Protocol
 - **本轮状态：** 已完成（版本化信号协议与 runner 输出边界）
 - **问题是否存在：** 是
-- **a. 这个问题是什么？** ME-18 已经增加结构化批次结果与基础 K 线/输出检查，但策略输出仍是可被任意值填充的 dataclass：没有 schema 版本，name 未绑定目标，动作没有 Selection/Monitoring 用途隔离，message/metadata 无字符、UTF-8、深度或节点预算，naive event_time 的市场语义不明确，ignore 会被当作命中，单目标输出数量和重复信号没有上限。XuanguTasks/AlertTasks 还接受历史裸 list，可信进程内调用方可以绕过 runner 输出边界。
-- **b. 我是怎么修复的？** 建立 `StrategySignal` v1 协议：新增 `StrategyAction`/`StrategyPurpose` StrEnum、`schema_version=1` 和稳定 `to_payload()`；SelectionRunner/MonitoringRunner 在策略返回后逐项创建新的 canonical signal。边界严格绑定 target 的 code/name/frequency，按用途限制动作，score 只接受有限实数，message 按字符、UTF-8 和控制字符约束，event_time 与 context.now 使用明确市场时区并拒绝异常未来时间，metadata 递归限制为有界 JSON object、保持值语义并深拷贝隔离，禁止非有限或可执行对象。单目标最多 64 个 materialized signal，拒绝 generator、非信号成员和完全重复；ignore 转为 miss，不进入持久化命中。任务层删除裸 list 兼容，只接受 `BatchRunResult`。新增协议文档和 ME-20 故障注入测试，并把既有测试 fake runner 迁移到结构化返回。
+- **a. 这个问题是什么？** ME-18 已提供结构化批次结果和基础 K 线/输出检查，但 StrategySignal 仍无 schema 版本，name 未绑定目标，动作没有 selection/monitoring 用途隔离，message/metadata 无资源边界，naive 时间缺少明确市场语义，ignore、重复信号、无界输出和任务层裸 list 绕过仍可能进入持久化。
+- **b. 我是怎么修复的？** 建立 StrategySignal v1：新增 StrategyAction/StrategyPurpose StrEnum、schema_version 和稳定 JSON payload；runner 逐项生成 canonical signal，严格绑定 code/name/frequency，按用途限制动作，校验有限 score、消息文本、市场时区 event_time 和有界 JSON metadata。单目标最多 64 个 materialized signal，拒绝 generator、非信号成员及完全重复；ignore 转为 miss。XuanguTasks/AlertTasks 仅接受 BatchRunResult，删除历史裸 list 绕过，并补充协议文档和故障注入测试。
 - **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 运行 `tests/test_me20_strategy_signal_protocol.py`：60 passed（warnings-as-errors），覆盖 schema、领域动作、用途隔离、目标身份字段、有限 score、message、市场时区、未来时间、metadata JSON/深度/节点/字节边界、深拷贝、输出数量、重复信号、ignore miss 和任务裸 list 门禁。
-  - 运行 ME-20 + ME-18 + ME-19 + strategy loader 聚焦组合：91 passed（warnings-as-errors），确认逐标的失败隔离、K 线输入协议、事务替换和可信策略加载没有回退。
-  - 加入 ME-26 scheduler 与 ME-30 instrument calendar 任务相邻路径：108 passed（warnings-as-errors）。
-  - 独立运行完整 `test_selection_monitoring.py` 时，6 项通过，1 项因缺本地 `config.py`、8 项因缺 Flask/`pinyin` 在产品断言前阻断；随后用隔离生成的 `config.py` 单独复验 DB 模型项通过，因此共 7 项历史断言已执行，剩余 8 项环境阻断未计入产品通过数量。
-  - 验证 canonical action 为 `StrategyAction`、event_time 为 Asia/Shanghai aware datetime、`to_payload()` 可 JSON 往返；修改原始嵌套 metadata 后 canonical metadata 不变。
-  - 执行 compileall、py_compile、`git diff --check`、audit JSON 解析，并确认 strategies/selection/monitoring/AlertTasks/XuanguTasks 与历史组合测试文件保持纯 CRLF（bare-LF=0）。
-- **e. 验证是否通过？** 通过（60 项 ME-20 专项、91 项核心聚焦和 108 项任务相邻测试均以 warnings-as-errors 通过；旧裸 list 绕过、无版本输出、动作/时间/metadata/数量边界根因已关闭）
-- **提交：** `fix(ME-20): validate versioned strategy signals`
+  - 运行 tests/test_me20_strategy_signal_protocol.py：60 passed（-W error）。
+  - 运行 ME-20、ME-18、ME-19 与 strategy loader 聚焦组合：91 passed（-W error）。
+  - 加入 ME-26 scheduler 与 ME-30 instrument calendar 任务相邻路径：108 passed（-W error）。
+  - 独立运行完整 tests/test_selection_monitoring.py 时 6 项通过、1 项因缺本地 config.py、8 项因缺 Flask/pinyin 在产品断言前阻断；随后用隔离生成的 config.py 单独复验 DB 模型项通过，合计 7 项历史断言已执行。
+  - 验证 canonical action 枚举、Asia/Shanghai aware 时间、JSON payload 往返、metadata 深拷贝及深度/节点/字节预算。
+  - 执行 compileall、py_compile、git diff --check、audit JSON 解析，并确认 7 个历史 CRLF 文件 bare-LF=0。
+- **e. 验证是否通过？** 通过（60 项 ME-20 专项、91 项核心聚焦和 108 项任务相邻测试通过；无版本输出、用途错配、时间/metadata/数量边界和裸 list 绕过根因已关闭）
+- **提交：** fix(ME-20): validate versioned strategy signals
 - **修改文件：** `src/tradingview_zy/strategies/base.py`, `src/tradingview_zy/strategies/__init__.py`, `src/tradingview_zy/selection.py`, `src/tradingview_zy/monitoring.py`, `web/tradingview_zy_chart/cl_app/xuangu_tasks.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `docs/strategy-protocol.md`, `tests/test_me20_strategy_signal_protocol.py`, `tests/test_me18_strategy_runner_contracts.py`, `tests/test_me19_selection_task_atomicity.py`, `tests/test_selection_monitoring.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
 - **验证限制：**
-  - 标准 SelectionRunner/MonitoringRunner 路径强制协议；Python 外部代码仍可手工构造未校验 `StrategySignal` 或 `BatchRunResult`，持久化前应继续使用标准 runner。
-  - metadata 是有界 JSON 数据但不是签名或可信授权载荷；消费者不得把其中字符串当作代码、模块路径或 HTML 执行。
-  - 本条只收敛选股/监控 `StrategySignal`；回测 `Operation` 是独立领域协议，跨场景 Signal→Decision→Order 转换留给第 73 条 MX-18。
-  - 当前容器缺少 Flask/`pinyin`，8 个历史 cl_app 集成断言未执行到产品逻辑；缺本地 `config.py` 的 DB 模型断言已用隔离生成配置单独验证通过。ME-29 的 Python 3.11 锁定 CI 会安装项目依赖后运行完整套件。
+  - 标准 SelectionRunner/MonitoringRunner 路径强制协议；外部 Python 仍可手工构造未校验对象，持久化前必须继续使用标准 runner。
+  - metadata 是有界 JSON 数据，不是签名或授权载荷；消费者不得把其中字符串当作代码、模块路径或 HTML 执行。
+  - 本条只收敛选股/监控 StrategySignal；回测 Operation 的跨场景转换由 MX-18 单独处理。
+  - 当前容器缺少 Flask/pinyin；8 个历史 cl_app 集成断言未执行到产品逻辑。缺 config.py 的 DB 模型断言已用隔离生成配置单独验证通过。
 - **原报告最新结论：** 策略加载器现在会验证目标是类、具有 run()、构造参数签名和参数类型，这修复了“构造前无边界”的一部分。可是 StrategySignal 返回值的 action、score、时间、code/frequency 和有限数值仍未在 runner 边界统一校验。
 - **原报告建议：** 为策略输出建立版本化 schema/validated dataclass，并在 SelectionRunner/MonitoringRunner 接受结果时逐项验证。
 
 ### 59. ME-25 · 依赖范围宽、旧 setup.py 与 pyproject 不一致，缺少可验证供应链清单
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Supply Chain
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（锁定安装、制品来源、SBOM/许可证/OSV 门禁）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 仓库仍保留 requirements.txt 第二解析入口、未固定 uv 安装、三个不透明 Windows uv 可执行文件、一个未被 pyproject/uv.lock 引用的 wheel；其余本地 wheel 没有独立来源/哈希/许可证清单，且没有确定性 SBOM、许可证库存或联网漏洞阻断。旧 setup.py 已删除只关闭了原问题的一部分。
+- **b. 我是怎么修复的？** 将 pyproject.toml + uv.lock 设为唯一受支持安装契约，删除 requirements/.readthedocs、内置 uv 可执行文件和未引用 wheel；所有 CI/Windows 路径固定 uv 0.10.0 并使用 uv sync --locked。建立 7 个本地 wheel 的路径、大小、SHA-256、marker、锁定、来源和 wheel METADATA/许可证证据；从锁图确定性生成 CycloneDX 1.6 SBOM、许可证库存及明确标为离线未扫描的漏洞报告。新增无默认豁免、带负责人/原因/到期日的漏洞策略，以及对 OSV querybatch 的联网 fail-closed 扫描；响应错误、数量不符、过期/重复豁免和未豁免 advisory 均使门禁失败。新增第五个稳定 supply-chain-contracts CI job并由 repository-hygiene 防止弱化。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 tests/test_me25_supply_chain.py、test_new03_dependency_contract.py、test_me29_quality_gates.py、test_new02_repository_hygiene.py、test_me24_check_env.py：28 passed。
+  - 运行 check_dependency_contract.py、check_quality_gates.py、check_supply_chain.py 与 generate_supply_chain_artifacts.py --check，全部通过。
+  - 对本地 wheel 分别注入内容篡改、清单外制品和缺失 provenance；门禁分别识别 SHA-256 mismatch、untracked artifact 和缺失来源字段。
+  - 篡改已提交 SBOM，确定性生成门禁返回 stale generated artifact。
+  - 使用 154 个锁定非 virtual 包的离线 OSV fixture：干净响应退出 0；注入 OSV-TEST 后报告 1 个未豁免 advisory 并退出 1；响应数量不符 fail closed。
+  - 验证 SBOM 组件数为 155、锁定 OSV package/version 对为 154，并两次生成字节完全一致。
+  - 执行 py_compile/compileall、JSON 解析、git diff --check；本地 uv 0.10.0 已确认，但当前容器没有 Python 3.11，因此 UV_PYTHON_DOWNLOADS=never 下的 uv lock --check 留给 setup-python 3.11 CI。
+- **e. 验证是否通过？** 通过（28 项专项/相邻测试通过；确定性制品、篡改/未登记/缺 provenance、过期策略、OSV advisory 与响应失配故障注入均按预期阻断）
+- **提交：** fix(ME-25): add verifiable supply-chain manifests
+- **修改文件：** `.github/workflows/tests.yml`, `.github/workflows/repository-hygiene.yml`, `.gitignore`, `.readthedocs.yaml`, `README.md`, `pyproject.toml`, `requirements.txt`, `windows_install.bat`, `windows_run.bat`, `script/bin/uv.exe`, `script/bin/uvw.exe`, `script/bin/uvx.exe`, `package/ta_lib-0.6.8-cp311-cp311-musllinux_1_2_x86_64.whl`, `script/remediation/supply_chain_lib.py`, `script/remediation/check_supply_chain.py`, `script/remediation/generate_supply_chain_artifacts.py`, `script/remediation/scan_osv.py`, `script/remediation/check_dependency_contract.py`, `script/remediation/check_quality_gates.py`, `audit/supply-chain/local-artifacts.json`, `audit/supply-chain/sbom.cdx.json`, `audit/supply-chain/license-report.json`, `audit/supply-chain/vulnerability-report.json`, `audit/supply-chain/vulnerability-policy.json`, `docs/supply-chain.md`, `docs/quality-gates.md`, `tests/test_me25_supply_chain.py`, `tests/test_new03_dependency_contract.py`, `tests/test_me29_quality_gates.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器没有 Python 3.11，无法在 UV_PYTHON_DOWNLOADS=never 条件下本地执行 uv lock --check/uv sync --locked；该真实安装证明由新增的 setup-python 3.11 CI job执行。
+  - 当前环境未联网调用 OSV；已提交漏洞报告明确标记 not-run-offline，不能据空 advisory 列表宣称无漏洞。联网 CI 失败或未豁免 advisory 会 fail closed。
+  - SBOM覆盖锁定的 Python 图，不自动覆盖操作系统包、Chromium、券商原生客户端或容器镜像。
+  - 许可证库存是元数据与 wheel 文件证据，不构成法律意见；registry 依赖的完整许可证字段在安装环境中由 CI 补充。
 - **原报告最新结论：** 旧 setup.py 和 MANIFEST.in 已删除，Apache-2.0 与 setup.py 中 MIT 的许可证冲突、重复打包入口以及 PyArmor 依赖均已消除。仍存在大量仅设下界的依赖、本地 wheel 缺少显式哈希/来源说明、SBOM/漏洞审计门禁缺失等问题。
 - **原报告建议：** 以 uv.lock 为唯一受支持安装路径并在 CI 校验；记录本地 wheel SHA-256/来源并生成 SBOM、许可证和漏洞报告。
 

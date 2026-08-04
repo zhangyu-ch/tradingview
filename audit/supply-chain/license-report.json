@@ -1,0 +1,2033 @@
+{
+  "component_count": 155,
+  "components": [
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "aiodns",
+      "normalized_name": "aiodns",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.0.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "aiohappyeyeballs",
+      "normalized_name": "aiohappyeyeballs",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.6.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "aiohttp",
+      "normalized_name": "aiohttp",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.13.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "aiosignal",
+      "normalized_name": "aiosignal",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.4.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "akracer",
+      "normalized_name": "akracer",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.0.14"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "akshare",
+      "normalized_name": "akshare",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.18.39"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "alpaca-py",
+      "normalized_name": "alpaca-py",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.43.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "annotated-types",
+      "normalized_name": "annotated-types",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.7.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "anyio",
+      "normalized_name": "anyio",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.12.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "apscheduler",
+      "normalized_name": "apscheduler",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.11.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "asttokens",
+      "normalized_name": "asttokens",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.0.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "async-timeout",
+      "normalized_name": "async-timeout",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "5.0.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "attrs",
+      "normalized_name": "attrs",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "25.4.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "baostock",
+      "normalized_name": "baostock",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.8.9"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "beautifulsoup4",
+      "normalized_name": "beautifulsoup4",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.14.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "blinker",
+      "normalized_name": "blinker",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.9.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "bottleneck",
+      "normalized_name": "bottleneck",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.6.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "build",
+      "normalized_name": "build",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.4.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "ccxt",
+      "normalized_name": "ccxt",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.4.88"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "certifi",
+      "normalized_name": "certifi",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2025.11.12"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "cffi",
+      "normalized_name": "cffi",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.0.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "charset-normalizer",
+      "normalized_name": "charset-normalizer",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.4.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "click",
+      "normalized_name": "click",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "8.3.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "colorama",
+      "normalized_name": "colorama",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.4.6"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "comm",
+      "normalized_name": "comm",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.2.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "contourpy",
+      "normalized_name": "contourpy",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.3.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "cryptography",
+      "normalized_name": "cryptography",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "46.0.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "curl-cffi",
+      "normalized_name": "curl-cffi",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.14.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "cycler",
+      "normalized_name": "cycler",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.12.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "dbutils",
+      "normalized_name": "dbutils",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.1.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "decorator",
+      "normalized_name": "decorator",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "5.2.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "distro",
+      "normalized_name": "distro",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.9.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "dtaidistance",
+      "normalized_name": "dtaidistance",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.4.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "empyrical-reloaded",
+      "normalized_name": "empyrical-reloaded",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.5.10"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "et-xmlfile",
+      "normalized_name": "et-xmlfile",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.0.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "eventkit",
+      "normalized_name": "eventkit",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.0.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "executing",
+      "normalized_name": "executing",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.2.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "filelock",
+      "normalized_name": "filelock",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.25.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "flask",
+      "normalized_name": "flask",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.1.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "flask-login",
+      "normalized_name": "flask-login",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.6.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "fonttools",
+      "normalized_name": "fonttools",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.62.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "frozenlist",
+      "normalized_name": "frozenlist",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.8.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "futu-api",
+      "normalized_name": "futu-api",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "10.0.6008"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "gevent",
+      "normalized_name": "gevent",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "25.9.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "graphql-core",
+      "normalized_name": "graphql-core",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.2.8"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "greenlet",
+      "normalized_name": "greenlet",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.3.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "h11",
+      "normalized_name": "h11",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.16.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "html5lib",
+      "normalized_name": "html5lib",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "httpcore",
+      "normalized_name": "httpcore",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.0.9"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "httpx",
+      "normalized_name": "httpx",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.28.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "ib-insync",
+      "normalized_name": "ib-insync",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.9.86"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "idna",
+      "normalized_name": "idna",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.11"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "iniconfig",
+      "normalized_name": "iniconfig",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.3.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "ipython",
+      "normalized_name": "ipython",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "9.10.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "ipython",
+      "normalized_name": "ipython",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "9.11.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "ipython-pygments-lexers",
+      "normalized_name": "ipython-pygments-lexers",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.1.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "ipywidgets",
+      "normalized_name": "ipywidgets",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "8.1.8"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "itsdangerous",
+      "normalized_name": "itsdangerous",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.2.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "jedi",
+      "normalized_name": "jedi",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.19.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "jinja2",
+      "normalized_name": "jinja2",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.1.6"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "jiter",
+      "normalized_name": "jiter",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.13.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "joblib",
+      "normalized_name": "joblib",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.5.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "jsonpath",
+      "normalized_name": "jsonpath",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.82.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "jupyterlab-widgets",
+      "normalized_name": "jupyterlab-widgets",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.0.16"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "kiwisolver",
+      "normalized_name": "kiwisolver",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.5.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "lark-oapi",
+      "normalized_name": "lark-oapi",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.5.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "lxml",
+      "normalized_name": "lxml",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "6.0.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "markupsafe",
+      "normalized_name": "markupsafe",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.0.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "matplotlib",
+      "normalized_name": "matplotlib",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.10.8"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "matplotlib-inline",
+      "normalized_name": "matplotlib-inline",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.2.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "mini-racer",
+      "normalized_name": "mini-racer",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.14.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "msgpack",
+      "normalized_name": "msgpack",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.1.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "multidict",
+      "normalized_name": "multidict",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "6.7.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "mytt",
+      "normalized_name": "mytt",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.9.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "nest-asyncio",
+      "normalized_name": "nest-asyncio",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.6.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "numpy",
+      "normalized_name": "numpy",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.26.4"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "openai",
+      "normalized_name": "openai",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.26.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "openpyxl",
+      "normalized_name": "openpyxl",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.1.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "packaging",
+      "normalized_name": "packaging",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "26.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pandas",
+      "normalized_name": "pandas",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.1.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "parso",
+      "normalized_name": "parso",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.8.6"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "peewee",
+      "normalized_name": "peewee",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.17.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pexpect",
+      "normalized_name": "pexpect",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.9.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pillow",
+      "normalized_name": "pillow",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "12.1.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pinyin",
+      "normalized_name": "pinyin",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.4.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "playwright",
+      "normalized_name": "playwright",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.58.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pluggy",
+      "normalized_name": "pluggy",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.6.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "polygon-api-client",
+      "normalized_name": "polygon-api-client",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.16.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "prettytable",
+      "normalized_name": "prettytable",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.17.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "prompt-toolkit",
+      "normalized_name": "prompt-toolkit",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.0.52"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "propcache",
+      "normalized_name": "propcache",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.4.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "protobuf",
+      "normalized_name": "protobuf",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.20.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "psutil",
+      "normalized_name": "psutil",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "7.2.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "ptyprocess",
+      "normalized_name": "ptyprocess",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.7.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pure-eval",
+      "normalized_name": "pure-eval",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.2.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "py-mini-racer",
+      "normalized_name": "py-mini-racer",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.6.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pyarrow",
+      "normalized_name": "pyarrow",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "23.0.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pycares",
+      "normalized_name": "pycares",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "5.0.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pycparser",
+      "normalized_name": "pycparser",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pycryptodome",
+      "normalized_name": "pycryptodome",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.23.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pydantic",
+      "normalized_name": "pydantic",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.12.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pydantic-core",
+      "normalized_name": "pydantic-core",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.41.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pyecharts",
+      "normalized_name": "pyecharts",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.0.8"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pyee",
+      "normalized_name": "pyee",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "13.0.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pyfolio-reloaded",
+      "normalized_name": "pyfolio-reloaded",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.9.9"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pygments",
+      "normalized_name": "pygments",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.19.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pyjwt",
+      "normalized_name": "pyjwt",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.12.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pymysql",
+      "normalized_name": "pymysql",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.1.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pyparsing",
+      "normalized_name": "pyparsing",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.3.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pyproject-hooks",
+      "normalized_name": "pyproject-hooks",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.2.0"
+    },
+    {
+      "license": "hard study everyday",
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pytdx",
+      "normalized_name": "pytdx",
+      "review": "manual-review-required",
+      "source_kinds": [
+        "path"
+      ],
+      "version": "1.72.post2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pytest",
+      "normalized_name": "pytest",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "9.0.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "python-dateutil",
+      "normalized_name": "python-dateutil",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.9.0.post0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "pytz",
+      "normalized_name": "pytz",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2026.1.post1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "redis",
+      "normalized_name": "redis",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "7.3.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "requests",
+      "normalized_name": "requests",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.32.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "requests-toolbelt",
+      "normalized_name": "requests-toolbelt",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "scikit-learn",
+      "normalized_name": "scikit-learn",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.8.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "scipy",
+      "normalized_name": "scipy",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.17.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "seaborn",
+      "normalized_name": "seaborn",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.13.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "setuptools",
+      "normalized_name": "setuptools",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "82.0.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "sgqlc",
+      "normalized_name": "sgqlc",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "18"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "shinny-structlog",
+      "normalized_name": "shinny-structlog",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.0.4"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "simplejson",
+      "normalized_name": "simplejson",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.20.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "six",
+      "normalized_name": "six",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.17.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "sniffio",
+      "normalized_name": "sniffio",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.3.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "soupsieve",
+      "normalized_name": "soupsieve",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.8.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "sqlalchemy",
+      "normalized_name": "sqlalchemy",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.0.48"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "sseclient-py",
+      "normalized_name": "sseclient-py",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.9.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "stack-data",
+      "normalized_name": "stack-data",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.6.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [
+        {
+          "path": "ta_lib-0.6.8.dist-info/licenses/LICENSE",
+          "sha256": "c62694ec6b052e93d8f6c252385db1f3f4f3ade9a975536ac6c6a1631059ec8f"
+        }
+      ],
+      "name": "ta-lib",
+      "normalized_name": "ta-lib",
+      "review": "license-file-present",
+      "source_kinds": [
+        "path",
+        "registry"
+      ],
+      "version": "0.6.8"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tabulate",
+      "normalized_name": "tabulate",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.10.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tenacity",
+      "normalized_name": "tenacity",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "9.1.4"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "threadpoolctl",
+      "normalized_name": "threadpoolctl",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.6.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tornado",
+      "normalized_name": "tornado",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "6.5.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tqdm",
+      "normalized_name": "tqdm",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.67.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tqsdk",
+      "normalized_name": "tqsdk",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.9.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tqsdk-ctpse",
+      "normalized_name": "tqsdk-ctpse",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.0.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tqsdk-sm",
+      "normalized_name": "tqsdk-sm",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.0.5"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tradingview-zy",
+      "normalized_name": "tradingview-zy",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "virtual"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "traitlets",
+      "normalized_name": "traitlets",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "5.14.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "typing-extensions",
+      "normalized_name": "typing-extensions",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.15.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "typing-inspection",
+      "normalized_name": "typing-inspection",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.4.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tzdata",
+      "normalized_name": "tzdata",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2025.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "tzlocal",
+      "normalized_name": "tzlocal",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "5.3.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "urllib3",
+      "normalized_name": "urllib3",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.6.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "wcwidth",
+      "normalized_name": "wcwidth",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.6.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "webencodings",
+      "normalized_name": "webencodings",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "0.5.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "websockets",
+      "normalized_name": "websockets",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "13.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "werkzeug",
+      "normalized_name": "werkzeug",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "3.1.6"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "widgetsnbextension",
+      "normalized_name": "widgetsnbextension",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "4.0.15"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "xlrd",
+      "normalized_name": "xlrd",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.0.2"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "yarl",
+      "normalized_name": "yarl",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "1.23.0"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "zope-event",
+      "normalized_name": "zope-event",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "6.1"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "zope-interface",
+      "normalized_name": "zope-interface",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "8.2"
+    }
+  ],
+  "limitations": [
+    "This is a metadata inventory, not legal advice.",
+    "Registry package license metadata is enriched only in an installed environment."
+  ],
+  "schema_version": 1,
+  "source": "uv.lock + local wheel evidence",
+  "uv_lock_sha256": "e262513147de4bf778215277c06cadd607008d104c3689afd43512026894b479"
+}

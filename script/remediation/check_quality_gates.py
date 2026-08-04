@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Validate the repository's stable, executable quality-gate contract."""
+"""Validate the repository's executable quality-gate contract."""
 from __future__ import annotations
 
 import argparse
 import re
 from pathlib import Path
 
+UV_PIN = 'python -m pip install "uv==0.10.0"'
 REQUIRED_JOBS = (
     "unit-contracts",
     "provider-contracts",
     "mysql-contracts",
     "browser-contracts",
+    "supply-chain-contracts",
 )
 REQUIRED_PROVIDER_TESTS = (
     "test_hi13_binance_pagination.py",
@@ -50,6 +52,8 @@ def find_quality_gate_violations(root: Path) -> list[str]:
         violations.append("tests workflow must use read-only contents permission")
     if "cancel-in-progress: true" not in workflow:
         violations.append("tests workflow must cancel superseded runs")
+    if not re.search(r'(?m)^env:\n\s+UV_PYTHON_DOWNLOADS:\s+never\s*$', workflow):
+        violations.append("tests workflow must set UV_PYTHON_DOWNLOADS=never")
 
     for job in REQUIRED_JOBS:
         segment = _job_segment(workflow, job)
@@ -60,8 +64,13 @@ def find_quality_gate_violations(root: Path) -> list[str]:
             violations.append(f"job {job} must define timeout-minutes")
         if 'python-version: "3.11"' not in segment:
             violations.append(f"job {job} must run Python 3.11")
+        if UV_PIN not in segment:
+            violations.append(f"job {job} must install exact uv 0.10.0")
         if "uv sync --locked" not in segment:
             violations.append(f"job {job} must install from uv.lock")
+
+    if re.search(r"python -m pip install uv(?:\s|$)", workflow):
+        violations.append("tests workflow must not install unpinned uv")
 
     unit = _job_segment(workflow, "unit-contracts")
     if "uv run pytest -q" not in unit:
@@ -93,12 +102,32 @@ def find_quality_gate_violations(root: Path) -> list[str]:
     if "tests/test_me29_browser_dom.py" not in browser:
         violations.append("browser-contracts must execute the DOM gate test")
 
+    supply = _job_segment(workflow, "supply-chain-contracts")
+    for command in (
+        "uv lock --check",
+        "python script/remediation/check_supply_chain.py",
+        "python script/remediation/generate_supply_chain_artifacts.py --check",
+        "python script/remediation/scan_osv.py",
+        "actions/upload-artifact@v4",
+    ):
+        if command not in supply:
+            violations.append(f"supply-chain-contracts missing {command}")
+
     if not hygiene_path.is_file():
         violations.append("missing repository-hygiene workflow")
     else:
         hygiene = hygiene_path.read_text(encoding="utf-8", errors="replace")
-        if "python script/remediation/check_quality_gates.py" not in hygiene:
-            violations.append("repository hygiene must bootstrap the quality-gate checker")
+        hygiene_commands = (
+            "python script/remediation/check_quality_gates.py",
+            "python script/remediation/check_supply_chain.py",
+            "python script/remediation/generate_supply_chain_artifacts.py --check",
+        )
+        for command in hygiene_commands:
+            if command not in hygiene:
+                if command.endswith("check_quality_gates.py"):
+                    violations.append("repository hygiene must bootstrap the quality-gate checker")
+                else:
+                    violations.append(f"repository hygiene must run {command}")
 
     if not docs_path.is_file():
         violations.append("missing docs/quality-gates.md")
@@ -111,6 +140,8 @@ def find_quality_gate_violations(root: Path) -> list[str]:
             violations.append("quality-gate documentation must describe branch protection")
         if "sandbox" not in docs.lower():
             violations.append("quality-gate documentation must preserve real-provider sandbox limits")
+        if "osv" not in docs.lower() or "cyclonedx" not in docs.lower():
+            violations.append("quality-gate documentation must describe OSV and CycloneDX evidence")
 
     return sorted(set(violations))
 
@@ -125,7 +156,7 @@ def main() -> int:
         for violation in violations:
             print(f"- {violation}")
         return 1
-    print("Quality-gate contract passed: four stable executable jobs are present.")
+    print("Quality-gate contract passed: five stable executable jobs are present.")
     return 0
 
 

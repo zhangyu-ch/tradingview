@@ -63,7 +63,7 @@
 - [x] 56. ME-29
 - [x] 57. ME-10
 - [x] 58. ME-20
-- [ ] 59. ME-25
+- [x] 59. ME-25
 - [ ] 60. ME-27
 - [ ] 完成 51–60
 - [ ] 生成完整仓库归档 06
@@ -172,6 +172,9 @@
 
 | ME-20 首次参数化测试用包含 dict metadata 的 StrategySignal 构造 set，收集阶段因对象不可哈希失败 | 1 | 测试目的只是验证非 list 容器，改用普通字符串 set；产品实现未变，60 项专项通过 |
 | ME-20 扩展组合把 ME-10 测试放在已导入 strategy 包之后，ME-10 的无 config.py 隔离前提被破坏 | 1 | 不把测试顺序污染归因于产品；ME-10 保留原独立门禁，ME-20 使用 91/108 项直接相邻组合验证 |
+| ME-25 首次本地 wheel 证据复验因 METADATA 中 Project-URL 原始顺序与清单排序不同而报 stale | 1 | 对多值 Project-URL 做确定性排序后重新生成；清单与实际 7 个 wheel 全部一致 |
+| ME-25 故障注入测试首次未创建目标临时根目录，4 项 copy2 报 FileNotFoundError | 1 | 在 fixture helper 开头显式 mkdir；20 项供应链/质量聚焦测试随后通过 |
+| 本地 uv 0.10.0 在 UV_PYTHON_DOWNLOADS=never 下找不到 Python 3.11 | 1 | 不允许静默下载；保留本地限制，并由 setup-python 3.11 的 supply-chain-contracts 执行 uv lock --check 与 uv sync --locked |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

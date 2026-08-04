@@ -381,3 +381,13 @@
 - `ignore` 是显式未命中，不应保存为事件。单目标输出必须 materialized、有数量上限且去重，避免 generator 延迟副作用和无界持久化。
 - 任务层只接受 `BatchRunResult`，否则可信进程内 fake/custom runner 可绕过标准 runner 已完成的输出校验。
 - 回测 `Operation` 仍是独立协议；本条不提前吞并 MX-18 的跨场景 Signal→Decision→Order 架构选择。
+
+
+## ME-25 可验证供应链证据复核（恢复重建）
+- 直接依赖声明和可复现解析结果必须分工：`pyproject.toml` 声明意图，`uv.lock` 是唯一安装结果；保留手写 requirements 会重新打开未审计解析路径。
+- 锁文件只证明解析内容，不自动证明仓库内本地 wheel 的来源；每个制品还需要路径、大小、SHA-256、marker、锁定哈希、upstream/provenance 和许可证证据。
+- wheel METADATA 的多值字段没有可依赖的语义顺序；生成证据前必须排序，否则同一字节制品会产生不稳定报告。
+- committed vulnerability report 在离线生成时必须显式标记 `not-run-offline`；空 advisory 数组不等于安全结论。
+- 在线 OSV 查询必须对 HTTP/JSON/结果基数异常 fail closed；豁免需要 advisory+package 精确绑定、负责人、原因和短期到期日。
+- SBOM、许可证和漏洞输出应由锁图确定性生成并由 hygiene 检查 stale，CI 再生成安装环境增强证据作为 artifact，不能回写带时间戳的实时结果。
+- 固定 uv 版本和 `UV_PYTHON_DOWNLOADS=never` 把 Python 解释器也纳入环境契约；本地没有 3.11 时应明确失败，而不是静默下载另一个运行时。
