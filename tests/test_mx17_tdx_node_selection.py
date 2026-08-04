@@ -124,21 +124,51 @@ def test_selected_node_cache_expiry_is_finite_and_absolute() -> None:
         cache_expiry_epoch(0)
 
 
-def test_every_tdx_adapter_persists_selected_nodes_with_a_ttl() -> None:
-    for path in TDX_ADAPTERS:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        cache_calls = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
+def test_stock_adapter_and_shared_exhq_lifecycle_persist_nodes_with_ttl() -> None:
+    stock_path = ROOT / "src/tradingview_zy/exchange/exchange_tdx.py"
+    stock_tree = ast.parse(stock_path.read_text(encoding="utf-8"), filename=str(stock_path))
+    stock_cache_calls = [
+        node
+        for node in ast.walk(stock_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "cache_set"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value == "tdx_connect_ip"
+    ]
+    assert len(stock_cache_calls) == 1
+    stock_expire = next(
+        (kw.value for kw in stock_cache_calls[0].keywords if kw.arg == "expire"), None
+    )
+    assert isinstance(stock_expire, ast.Call)
+    assert ast.unparse(stock_expire.func) == "best_ip.cache_expiry_epoch"
+
+    lifecycle_path = ROOT / "src/tradingview_zy/exchange/tdx_reliability.py"
+    lifecycle_tree = ast.parse(
+        lifecycle_path.read_text(encoding="utf-8"), filename=str(lifecycle_path)
+    )
+    lifecycle_cache_calls = [
+        node
+        for node in ast.walk(lifecycle_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "cache_set"
+    ]
+    assert len(lifecycle_cache_calls) == 1
+    expire = next(
+        (kw.value for kw in lifecycle_cache_calls[0].keywords if kw.arg == "expire"), None
+    )
+    assert isinstance(expire, ast.Name) and expire.id == "expiry"
+    assert "cache_expiry_epoch" in lifecycle_path.read_text(encoding="utf-8")
+
+    for path in TDX_ADAPTERS[1:]:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        assert "TdxExHqLifecycleMixin" in source
+        assert not any(
+            isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "cache_set"
-            and node.args
-            and isinstance(node.args[0], ast.Constant)
-            and node.args[0].value in {"tdx_connect_ip", "tdxex_connect_ip"}
-        ]
-        assert len(cache_calls) == 1, path
-        expire = next((kw.value for kw in cache_calls[0].keywords if kw.arg == "expire"), None)
-        assert isinstance(expire, ast.Call), path
-        assert isinstance(expire.func, ast.Attribute), path
-        assert ast.unparse(expire.func) == "best_ip.cache_expiry_epoch", path
+            for node in ast.walk(tree)
+        ), path

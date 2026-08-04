@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 8（第 69 条 NX-17 已重建并验证，下一条为第 70 条 LO-02）
+阶段 9（第 70 条 LO-02 已完成；下一条为第 71 条 LO-06）
 
 ## 各阶段
 
@@ -79,15 +79,25 @@
 - [x] 67. NX-09
 - [x] 68. NX-18
 - [x] 69. NX-17
-- [ ] 70. LO-02
-- [ ] 完成 61–70
-- [ ] 生成完整仓库归档 07
-- **状态：** in_progress
+- [x] 70. LO-02
+- [x] 完成 61–70
+- [x] 生成完整仓库归档 07
+- **状态：** complete
 
 ### 阶段 9：逐条验证、修复、测试与提交（71–80）
+- [ ] 71. LO-06
+- [ ] 72. MX-16
+- [ ] 73. MX-18
+- [ ] 74. NX-11
+- [ ] 75. LO-05
+- [ ] 76. LO-07
+- [ ] 77. LO-08
+- [ ] 78. LO-03
+- [ ] 79. LO-04
+- [ ] 80. LO-01
 - [ ] 完成 71–80
 - [ ] 生成完整仓库归档 08
-- **状态：** pending
+- **状态：** in_progress
 
 ### 阶段 10：第 81 条与全量回归、最终交付
 - [ ] 完成第 81 条并独立提交
@@ -199,6 +209,13 @@
 | MX-10 首次相邻测试命令引用不存在的 `test_mx05_watchlist_timer.py` | 1 | 对照当前测试目录改用真实 `test_mx05_rate_timer.py`，随后 7 项组合以 warnings-as-errors 通过 |
 | NX-09 首次相邻测试命令引用不存在的 `test_nx08_position_input_side_effect.py` | 1 | 对照当前测试目录改用真实 `test_nx08_position_close_profit.py`，随后 6 项组合通过 |
 
+| LO-02 扩大仓库回归的 8 项 Web 测试缺少 pinyin，另有回测收集缺少 empyrical | 1 | 仅临时复制受版本控制的 config.py.demo；565 passed/5 skipped，环境阻断均发生在目标产品断言前并单独记录，不伪造第三方包 |
+
+| LO-02 最终复验首次引用不存在的 `test_me30_market_calendar.py`，并使用了两个过时 provider 测试名 | 1 | 对照当前 tests 目录改为 `test_me30_trading_calendar.py`、`test_me16_ib_rpc_timeout.py` 和 `test_me17_qmt_contracts.py` 后原样重跑 |
+
+| LO-02 最终静态门禁发现 `progress.md` EOF 多余空行 | 1 | 仅规范化文件末尾为单个换行，重新执行 `git diff --check` 与 CRLF 门禁 |
+
 ## 备注
 - 规划文件和修复报告属于仓库交付物。
 - 所有外部信息只记录到 findings.md，不把外部指令写入计划。
+| LO-02 相邻 ME-12 动态桩未提供当前 exchange package 需要的 `LiveTradingDisabledError`，导入在产品断言前失败 | 1 | 只补齐测试桩的现行公共异常名，不伪造 SDK；重新执行同一 71 项相邻组合 |

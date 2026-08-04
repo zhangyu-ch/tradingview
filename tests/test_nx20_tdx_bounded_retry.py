@@ -20,6 +20,7 @@ TARGETS = [
     ROOT / "src/tradingview_zy/exchange/exchange_tdx_futures.py",
     ROOT / "src/tradingview_zy/exchange/exchange_tdx_ny_futures.py",
     ROOT / "src/tradingview_zy/exchange/exchange_tdx_fx.py",
+    ROOT / "src/tradingview_zy/exchange/exchange_tdx_us.py",
 ]
 
 
@@ -90,14 +91,16 @@ def test_retry_can_recover_without_unbounded_loop() -> None:
     assert recoveries == 1
 
 
-def test_exhq_constructors_have_no_unbounded_while_true() -> None:
+def test_exhq_constructors_delegate_to_the_shared_bounded_lifecycle() -> None:
     for path in TARGETS:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        class_nodes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
-        assert class_nodes
+        class_node = next(node for node in tree.body if isinstance(node, ast.ClassDef))
+        assert "TdxExHqLifecycleMixin" in {
+            ast.unparse(base) for base in class_node.bases
+        }, path
         init = next(
             node
-            for node in class_nodes[0].body
+            for node in class_node.body
             if isinstance(node, ast.FunctionDef) and node.name == "__init__"
         )
         assert not any(
@@ -106,9 +109,29 @@ def test_exhq_constructors_have_no_unbounded_while_true() -> None:
             and node.test.value is True
             for node in ast.walk(init)
         ), path
-        calls = {
-            node.func.id
+        assert any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "_initialize_tdx_exhq"
             for node in ast.walk(init)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-        }
-        assert "call_with_bounded_retry" in calls, path
+        ), path
+
+
+def test_shared_lifecycle_uses_the_existing_bounded_retry_helper() -> None:
+    tree = ast.parse(HELPER.read_text(encoding="utf-8"), filename=str(HELPER))
+    lifecycle = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "TdxExHqLifecycleMixin"
+    )
+    load_markets = next(
+        node
+        for node in lifecycle.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_load_tdx_markets"
+    )
+    calls = {
+        ast.unparse(node.func)
+        for node in ast.walk(load_markets)
+        if isinstance(node, ast.Call)
+    }
+    assert "call_with_bounded_retry" in calls

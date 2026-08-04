@@ -21,14 +21,12 @@ sys.modules[_spec.name] = sync
 _spec.loader.exec_module(sync)
 
 WRAPPERS = [
-    ROOT / "script/crontab/reboot_sync_a_klines.py",
-    ROOT / "script/crontab/reboot_sync_us_klines.py",
-    ROOT / "script/crontab/reboot_sync_currency_klines.py",
+    ROOT / f"script/crontab/reboot_sync_{market}_klines.py"
+    for market in ["a", "us", "currency", "currency_spot", "hk", "futures"]
 ]
 CONFIGS = {
-    "a": ROOT / "script/crontab/sync_configs/a_klines.json",
-    "us": ROOT / "script/crontab/sync_configs/us_klines.json",
-    "currency": ROOT / "script/crontab/sync_configs/currency_klines.json",
+    market: ROOT / f"script/crontab/sync_configs/{market}_klines.json"
+    for market in ["a", "us", "currency", "currency_spot", "hk", "futures"]
 }
 
 
@@ -77,7 +75,7 @@ def _frame(*dates: str) -> pd.DataFrame:
     )
 
 
-def test_three_scripts_are_import_safe_thin_main_wrappers() -> None:
+def test_six_scripts_are_import_safe_thin_main_wrappers() -> None:
     for path in WRAPPERS:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(path))
@@ -95,9 +93,7 @@ def test_three_scripts_are_import_safe_thin_main_wrappers() -> None:
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                 forbidden_top_level.append(node)
         assert not forbidden_top_level, path
-        assert "ExchangeBaostock" not in source
-        assert "ExchangeIB" not in source
-        assert "ExchangeBinance" not in source
+        assert "tradingview_zy.exchange." not in source
 
 
 def test_importing_wrappers_does_not_import_or_construct_providers() -> None:
@@ -105,6 +101,9 @@ def test_importing_wrappers_does_not_import_or_construct_providers() -> None:
         "tradingview_zy.exchange.exchange_baostock",
         "tradingview_zy.exchange.exchange_ib",
         "tradingview_zy.exchange.exchange_binance",
+        "tradingview_zy.exchange.exchange_binance_spot",
+        "tradingview_zy.exchange.exchange_futu",
+        "tradingview_zy.exchange.exchange_tq",
         "tradingview_zy.exchange.exchange_db",
     }
     before = provider_modules.intersection(sys.modules)
@@ -119,13 +118,21 @@ def test_importing_wrappers_does_not_import_or_construct_providers() -> None:
 
 
 def test_universes_and_frequency_contracts_are_externalized() -> None:
-    a = json.loads(CONFIGS["a"].read_text(encoding="utf-8"))
-    us = json.loads(CONFIGS["us"].read_text(encoding="utf-8"))
-    currency = json.loads(CONFIGS["currency"].read_text(encoding="utf-8"))
+    configs = {
+        name: json.loads(path.read_text(encoding="utf-8"))
+        for name, path in CONFIGS.items()
+    }
+    a = configs["a"]
+    us = configs["us"]
+    currency = configs["currency"]
 
     assert len(a["universe"]["codes"]) == 1210
     assert len(us["universe"]["codes"]) == 495
     assert currency["universe"] == {"type": "provider_all_stocks"}
+    assert configs["currency_spot"]["universe"]["codes"] == ["BTC/USDT"]
+    assert configs["hk"]["universe"]["allow_empty"] is True
+    assert configs["futures"]["universe"]["include_contains"] == ["KQ.m@"]
+    assert "2022" not in json.dumps(configs["futures"])
     assert set(a["frequencies"]) == {"m", "w", "d", "30m", "5m"}
     assert us["frequencies"]["d"]["args"]["timeout"] == 45
     assert all(

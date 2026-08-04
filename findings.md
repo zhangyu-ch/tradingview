@@ -449,3 +449,16 @@
 - 国内期货不能使用一个统一夜盘：23:00、01:00、02:30、股指、国债和无夜盘产品必须按 instrument profile 映射。
 - 未识别产品宁可声明保守日盘，也不能猜测夜盘或退化为 24x7；节假日仍由运行时 calendar 决定。
 - 搜索请求中的 type 是筛选条件，不是服务端返回类型的授权来源。
+
+## LO-02 重复行情与同步工作流复核（恢复重建）
+- 五个 TDX ExHq 适配器仍分别复制 `tdxex_connect_ip` 缓存读取、节点重选、client 构造、market map 有界加载及异常转换；它们的差异只有 category/market 过滤和少量 client 参数，适合收敛为依赖注入式生命周期 mixin。
+- Alpaca 与 Polygon 重复美国历史区间解析和 OHLCV frame 构造；两者在显式 `start_date` 分支都错误检查已经转为 datetime 的 `end_date` 长度，属于可确定复现的类型错误，而不只是可维护性问题。
+- A/US/币本位三份同步脚本已使用 `sync_batch.py`，但港股、币现货、期货仍在 import 时构造 provider 并执行顶层循环；期货脚本还保留 2022 年具体合约列表。剩余入口应改为同一薄 CLI + 外部 JSON universe。
+- 共享层必须保留此前可靠性契约：ExHq 总 deadline/有限重试、节点 TTL、provider 失败 fail-closed；同步显式空 universe 只能通过 `allow_empty`，且应在实例化 provider 前安全退出。
+
+## LO-02 共享边界最终结论
+- 可复用代码的边界应是失败语义而不是表面相似片段：ExHq 共享层统一 cache/node/client/deadline/map 发布，provider 只声明真实 market 差异。
+- 历史日期解析必须把 start/end 独立 canonicalize；先把字符串转成 datetime 再继续使用 `len()` 是重复实现漂移已经产生的确定性故障。
+- 美国历史数据应先转换到市场时区，再排序、去重和锚定日线收盘；provider 只负责把 SDK 记录映射为共享字段。
+- 通用批处理的显式空 universe 是安全配置，不等于意外过滤为空；前者可以在任何 provider import 前零副作用完成，后者必须 fail-closed。
+- 对有网络副作用的脚本，薄 main guard + 外部 JSON + 共享 checkpoint runner 同时减少重复、恢复风险和维护者误 import 的危险。

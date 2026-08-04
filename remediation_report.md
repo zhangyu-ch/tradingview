@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 69
-- **待处理：** 12
+- **已完成：** 70
+- **待处理：** 11
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -80,7 +80,7 @@
 |67|`NX-09`|低|Backtesting Fees|❌ 未修复|已完成（未实现公开费用桩删除）|通过（未实现函数和全部运行代码引用均已删除，既有 A 股费用计算及 6 项相邻测试通过）|`fix(NX-09)`|
 |68|`NX-18`|低|Frontend|❌ 未修复|已完成（自选模板变量作用域修正）|通过（真实脚本输出保持正确，临时变量不再进入全局对象，6 项相邻测试及语法门禁通过）|`fix(NX-18)`|
 |69|`NX-17`|低|Web UDF|❌ 未修复|已完成（UDF 市场描述符与交易日历统一）|通过（现金/FX/crypto、七类期货会话、未知品种保守退化、真实路由及 63 项相邻测试通过）|`fix(NX-17)`|
-|70|`LO-02`|低|Maintainability|❌ 未修复|待处理|—|—|
+|70|`LO-02`|低|Maintainability|❌ 未修复|已完成（共享行情适配器与同步工作流）|通过（35 项聚焦、71 项 TDX/日历相邻、99 项 provider 严格组合及 565 项可运行仓库回归通过；环境阻断已单独记录）|`refactor(LO-02)`|
 |71|`LO-06`|低|Readability|❌ 未修复|待处理|—|—|
 |72|`MX-16`|低|Dead Code|❌ 未修复|待处理|—|—|
 |73|`MX-18`|低|Strategy Architecture|❌ 未修复|待处理|—|—|
@@ -1722,16 +1722,27 @@
 ### 70. LO-02 · TDX/US/同步适配器存在大段复制（Duplicated Code）
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Maintainability
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（共享行情适配器与同步工作流）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 五个 TDX ExHq 适配器分别复制节点缓存、节点重选、客户端构造和 market map 初始化；Alpaca 与 Polygon 重复美国历史区间和 OHLCV 规范化，并在显式日期分支对已经转换成 datetime 的 end_date 调 len()；港股、数字货币现货和期货同步脚本仍在 import 时构造 provider、执行循环或依赖过期硬编码 universe。问题真实存在，且重复实现已经产生确定性日期错误、生命周期漂移和脚本副作用。
+- **b. 我是怎么修复的？** 在 tdx_reliability.py 增加依赖注入式 TdxExHqLifecycleMixin，统一缓存校验、节点重选、TTL、client factory、有限重试/总 deadline、market map 过滤和 fail-closed 异常转换，五个 ExHq 适配器只保留各自 category/market 差异。新增 us_history.py，统一纽约市场时间解析、默认窗口、provider 日偏移、OHLCV schema/有限数/顺序/去重和日线收盘锚点，Alpaca/Polygon 共同使用。扩展 sync_batch.py 的显式安全空 universe、include/exclude/max_codes 契约，并把港股、币现货和期货脚本改为无 import 副作用的薄 CLI 与外部 JSON 配置；期货 universe 改为从 provider 发现 KQ.m@ 主力连续合约，不再保存 2022 年具体合约列表。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 故障注入无效缓存、首次连接失败、节点重选、空/非法 market map、有限重试与总 deadline，验证共享 ExHq 生命周期只发布完整状态并 fail-closed。
+  - AST 与动态契约检查五个 ExHq 适配器均继承共享 mixin、没有本地 reset_tdx_ip、没有绕过共享 client factory；同时验证历史 CRLF 文件 bare-LF 为 0。
+  - 参数化验证美国历史窗口的冬/夏令时、独立 start/end 解析、默认窗口与 provider 日偏移；验证时间排序、重复时间 keep-last、日线 16:00 锚点以及空表、NaN/Inf、负成交量和 OHLC 矛盾拒绝。
+  - 验证 sync_batch 的 include_contains、exclude_contains、max_codes、显式 allow_empty；安全空 universe 在导入/构造任何 provider 前完成零项批次，过滤后意外为空则拒绝。
+  - 验证六个通用同步入口均为薄 main guard、import 无网络/数据库副作用；三个新增 JSON 配置可解析，期货配置不含 2022 年日期或具体过期合约。
+  - 运行 LO-02/NX-20/MX-17/HI-17 聚焦组合，35 passed（-W error）；加入 ME-12/ME-14/ME-30 后 71 passed；provider 可靠性严格组合 99 passed（-W error）。
+  - 临时复制受版本控制的 config.py.demo 后执行可收集仓库回归：565 passed、5 skipped；另 8 项仅因当前环境缺少 pinyin，在 Web 包导入、产品断言前失败。test_backtesting_base_generic.py 仍因缺少 empyrical 无法收集。
+  - 执行 python -m compileall -q src script tests、三份 JSON 校验、git diff --check 和 CRLF 门禁。
+- **e. 验证是否通过？** 通过（35 项聚焦、71 项 TDX/日历相邻、99 项 provider 严格组合及 565 项可运行仓库回归通过；环境阻断已单独记录）
+- **提交：** refactor(LO-02): consolidate market adapter workflows
+- **修改文件：** `src/tradingview_zy/exchange/tdx_reliability.py`, `src/tradingview_zy/exchange/exchange_tdx_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_fx.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_ny_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_us.py`, `src/tradingview_zy/exchange/us_history.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/sync_batch.py`, `script/crontab/reboot_sync_currency_spot_klines.py`, `script/crontab/reboot_sync_hk_klines.py`, `script/crontab/reboot_sync_futures_klines.py`, `script/crontab/sync_configs/currency_spot_klines.json`, `script/crontab/sync_configs/hk_klines.json`, `script/crontab/sync_configs/futures_klines.json`, `tests/test_lo02_shared_market_workflows.py`, `tests/test_hi17_sync_batch.py`, `tests/test_nx20_tdx_bounded_retry.py`, `tests/test_mx17_tdx_node_selection.py`, `tests/test_me12_tdx_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前环境没有真实 TDX ExHq、Alpaca、Polygon、TQ 或 Futu 网络、SDK 凭据；第三方字段和生产网络时序仍需对应服务的黄金样本联调。
+  - Python 无法安全终止已经进入任意第三方 SDK 的阻塞线程；同步总 deadline 依赖既有有界 daemon slot，超时任务不会继续无限创建线程。
+  - 8 项 Web 集成测试因当前容器缺少 pinyin 未进入产品断言，另一个回测测试因缺少 empyrical 无法收集；这些环境限制没有被表述为通过。
 - **原报告最新结论：** TDX、US 历史适配器和同步脚本仍包含重复的分页、日期解析、缓存与重试代码；PR #15 只新增注册表/领域边界，没有提取这些重复实现。
 - **原报告建议：** 提取共享分页器、日期解析、Kline normalizer、缓存与 deadline 策略，用 provider contract tests 固定差异点。
 

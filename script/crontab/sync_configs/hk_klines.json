@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "market": "hk",
+  "mode": "incremental",
+  "source": {
+    "module": "tradingview_zy.exchange.exchange_futu",
+    "class": "ExchangeFutu"
+  },
+  "destination": {
+    "module": "tradingview_zy.exchange.exchange_db",
+    "class": "ExchangeDB",
+    "args": [
+      "hk"
+    ]
+  },
+  "universe": {
+    "type": "list",
+    "codes": [],
+    "allow_empty": true
+  },
+  "max_pages": 100,
+  "frequencies": {
+    "w": {
+      "start_date": "2020-01-01 00:00:00",
+      "args": {
+        "is_history": true
+      },
+      "stop_rows": 1
+    },
+    "d": {
+      "start_date": "2020-01-01 00:00:00",
+      "args": {
+        "is_history": true
+      },
+      "stop_rows": 1
+    },
+    "60m": {
+      "start_date": "2020-01-01 00:00:00",
+      "args": {
+        "is_history": true
+      },
+      "stop_rows": 1
+    },
+    "30m": {
+      "start_date": "2020-01-01 00:00:00",
+      "args": {
+        "is_history": true
+      },
+      "stop_rows": 1
+    },
+    "15m": {
+      "start_date": "2020-01-01 00:00:00",
+      "args": {
+        "is_history": true
+      },
+      "stop_rows": 1
+    },
+    "10m": {
+      "start_date": "2020-01-01 00:00:00",
+      "args": {
+        "is_history": true
+      },
+      "stop_rows": 1
+    },
+    "5m": {
+      "start_date": "2020-01-01 00:00:00",
+      "args": {
+        "is_history": true
+      },
+      "stop_rows": 1
+    }
+  }
+}

@@ -698,3 +698,13 @@
 - 验证：现金/FX/crypto、RB/CU/AG/IF/T/AP/GC 和未知品种全部参数化；真实 tv_symbols/tv_search AST 使用描述符；NX-17/ME-30/ME-03/ME-05/RV-07 共 63 passed（-W error）。
 - 编译、Web CRLF、JSON 与 diff 门禁通过。
 - 待提交主题：`fix(NX-17): publish market-aware UDF sessions`。
+
+## 2026-08-04 · 问题 70：LO-02（恢复重建）
+- **状态：** complete
+- 验证结论：五个 TDX ExHq 适配器重复生命周期；Alpaca/Polygon 重复美国历史边界并含 `len(datetime)` 确定性错误；港股、币现货和期货同步脚本仍有 import 副作用与过期 universe，问题存在。
+- 修复：新增 `TdxExHqLifecycleMixin`、`us_history.py`，扩展 `sync_batch.py` 的过滤/安全空 universe；五个 ExHq 和两个美国 provider 迁入共享边界，三份剩余脚本改为薄 CLI + JSON 配置。
+- 故障注入：无效缓存、首次连接失败、空 market map、冬夏令时、逆序/重复/非法 OHLCV、provider-free 空批次、过滤后空集和六个入口 import 均纳入自动测试。
+- 验证：35 项聚焦、71 项 TDX/日历相邻、99 项 provider 严格组合全部通过（`-W error`）；可运行仓库回归 565 passed/5 skipped。8 项 Web 测试缺 pinyin、1 项回测收集缺 empyrical，均在产品断言前阻断。
+- 静态门禁：compileall、JSON、git diff、历史 CRLF 全部通过。
+- 提交主题：`refactor(LO-02): consolidate market adapter workflows`。
+- 第 70 条提交后生成并用系统 `unzip` 复验问题 061–070 的完整 `.git` 归档。

@@ -288,6 +288,7 @@ def test_a_catalog_stops_after_three_connection_failures(
 
     exchange.Exchange = FakeExchange
     exchange.Tick = FakeTick
+    exchange.LiveTradingDisabledError = RuntimeError
     exchange.convert_stock_kline_frequency = lambda *args, **kwargs: None
     monkeypatch.setitem(sys.modules, "tradingview_zy.exchange.exchange", exchange)
 

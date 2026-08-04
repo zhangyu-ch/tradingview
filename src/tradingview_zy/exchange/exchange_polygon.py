@@ -2,7 +2,6 @@
 US Polygon 行情接口
 """
 
-import datetime as dt
 import os
 from typing import Union
 
@@ -13,6 +12,10 @@ from tradingview_zy import config
 from tradingview_zy import fun
 from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.exchange.exchange import *
+from tradingview_zy.exchange.us_history import (
+    build_us_history_frame,
+    parse_us_history_window,
+)
 from tradingview_zy.trading_calendar import is_market_open
 
 
@@ -96,7 +99,6 @@ class ExchangePolygon(Exchange):
             "5m": "minute",
             "1m": "minute",
         }
-
         frequency_mult = {
             "y": 1,
             "q": 1,
@@ -112,74 +114,40 @@ class ExchangePolygon(Exchange):
         }
 
         try:
-            if end_date is None:
-                end_date = datetime.datetime.now(tz=self.tz)
-                end_date = end_date + dt.timedelta(days=1)
-                end_date = fun.str_to_datetime(
-                    fun.datetime_to_str(end_date, "%Y-%m-%d"), "%Y-%m-%d", tz=self.tz
-                )
-            else:
-                if len(end_date) == 10:
-                    end_date = fun.str_to_datetime(end_date, "%Y-%m-%d", tz=self.tz)
-                else:
-                    end_date = fun.str_to_datetime(end_date, tz=self.tz)
-            if start_date is None:
-                if frequency == "1m":
-                    start_date = end_date - dt.timedelta(days=15)
-                elif frequency == "5m":
-                    start_date = end_date - dt.timedelta(days=15)
-                elif frequency == "30m":
-                    start_date = end_date - dt.timedelta(days=75)
-                elif frequency == "60m":
-                    start_date = end_date - dt.timedelta(days=150)
-                elif frequency == "120m":
-                    start_date = end_date - dt.timedelta(days=150)
-                elif frequency == "d":
-                    start_date = end_date - dt.timedelta(days=5000)
-                elif frequency == "w":
-                    start_date = end_date - dt.timedelta(days=7800)
-                elif frequency == "y":
-                    start_date = end_date - dt.timedelta(days=15000)
-            else:
-                if len(end_date) == 10:
-                    start_date = fun.str_to_datetime(start_date, "%Y-%m-%d", tz=self.tz)
-                else:
-                    start_date = fun.str_to_datetime(start_date, tz=self.tz)
-
-            resp = self.client.get_aggs(
+            request_start, request_end = parse_us_history_window(
+                frequency,
+                start_date=start_date,
+                end_date=end_date,
+                end_day_offset=1,
+            )
+            response = self.client.get_aggs(
                 code.upper(),
                 frequency_mult[frequency],
                 frequency_map[frequency],
-                start_date,
-                end_date,
+                request_start,
+                request_end,
                 limit=50000,
             )
-            klines_df = []
-            for r in resp:
-                klines_df.append(
-                    {
-                        "code": code.upper(),
-                        "date": fun.timeint_to_datetime(
-                            r.timestamp / 1000, tz=self.tz
-                        ),
-                        "open": r.open,
-                        "close": r.close,
-                        "high": r.high,
-                        "low": r.low,
-                        "volume": r.volume,
-                    }
-                )
-            klines_df = pd.DataFrame(klines_df)
-            klines_df.sort_values("date", inplace=True)
-            if frequency in ["y", "q", "m", "w", "d"]:
-                klines_df["date"] = klines_df["date"].apply(
-                    lambda _d: _d.replace(hour=9, minute=30)
-                )
-            return klines_df
-        except Exception as e:
-            print("polygon.io 获取行情异常 %s Exception ：%s" % (code, str(e)))
-
-        return None
+            provider_rows = [
+                {
+                    "timestamp": row.timestamp,
+                    "open": row.open,
+                    "close": row.close,
+                    "high": row.high,
+                    "low": row.low,
+                    "volume": row.volume,
+                }
+                for row in response
+            ]
+            return build_us_history_frame(
+                provider_rows,
+                code=code,
+                frequency=frequency,
+                timestamp_unit="ms",
+            )
+        except Exception as exc:
+            print("polygon.io 获取行情异常 %s Exception ：%s" % (code, str(exc)))
+            return None
 
     def stock_info(self, code: str) -> Union[Dict, None]:
         """

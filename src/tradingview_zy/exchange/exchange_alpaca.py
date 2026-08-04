@@ -1,15 +1,17 @@
-import datetime as dt
 import os
 
 from alpaca.data import StockBarsRequest, StockSnapshotRequest, DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
-import datetime as dt
 from tradingview_zy import config
 from tradingview_zy import fun
 from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.exchange.exchange import *
+from tradingview_zy.exchange.us_history import (
+    build_us_history_frame,
+    parse_us_history_window,
+)
 from tradingview_zy.trading_calendar import is_market_open
 
 g_all_stocks = []
@@ -100,71 +102,40 @@ class ExchangeAlpaca(Exchange):
             "5m": TimeFrame(5, TimeFrameUnit.Minute),
             "1m": TimeFrame(1, TimeFrameUnit.Minute),
         }
-        timeframe = frequency_map[frequency]
         try:
-            if end_date is None:
-                end_date = datetime.datetime.now(tz=self.tz)
-                end_date = (
-                    end_date + dt.timedelta(days=1)
-                    if self.is_vip
-                    else end_date - dt.timedelta(days=1)
-                )
-                end_date = fun.str_to_datetime(
-                    fun.datetime_to_str(end_date, "%Y-%m-%d"), "%Y-%m-%d", tz=self.tz
-                )
-            else:
-                if len(end_date) == 10:
-                    end_date = fun.str_to_datetime(end_date, "%Y-%m-%d", tz=self.tz)
-                else:
-                    end_date = fun.str_to_datetime(end_date, tz=self.tz)
-            if start_date is None:
-                if frequency == "1m":
-                    start_date = end_date - dt.timedelta(days=15)
-                elif frequency == "5m":
-                    start_date = end_date - dt.timedelta(days=15)
-                elif frequency == "30m":
-                    start_date = end_date - dt.timedelta(days=75)
-                elif frequency == "60m":
-                    start_date = end_date - dt.timedelta(days=150)
-                elif frequency == "120m":
-                    start_date = end_date - dt.timedelta(days=150)
-                elif frequency == "d":
-                    start_date = end_date - dt.timedelta(days=5000)
-                elif frequency == "w":
-                    start_date = end_date - dt.timedelta(days=7800)
-                elif frequency == "y":
-                    start_date = end_date - dt.timedelta(days=15000)
-            else:
-                if len(end_date) == 10:
-                    start_date = fun.str_to_datetime(start_date, "%Y-%m-%d", tz=self.tz)
-                else:
-                    start_date = fun.str_to_datetime(start_date, tz=self.tz)
-            req = StockBarsRequest(
+            request_start, request_end = parse_us_history_window(
+                frequency,
+                start_date=start_date,
+                end_date=end_date,
+                end_day_offset=1 if self.is_vip else -1,
+            )
+            request = StockBarsRequest(
                 symbol_or_symbols=code.upper(),
-                timeframe=timeframe,
-                start=start_date,
-                end=end_date,
+                timeframe=frequency_map[frequency],
+                start=request_start,
+                end=request_end,
                 limit=5000,
             )
-            bars = self.client.get_stock_bars(req)
-            klines = []
-            for _b in bars.data[code.upper()]:
-                klines.append(
-                    {
-                        "code": code,
-                        "date": _b.timestamp,
-                        "open": _b.open,
-                        "close": _b.close,
-                        "high": _b.high,
-                        "low": _b.low,
-                        "volume": _b.volume,
-                    }
-                )
-            klines = pd.DataFrame(klines)
-            return klines
-        except Exception as e:
-            print(f"alpaca 获取行情异常 {code} Exception ：{str(e)}")
-        return None
+            bars = self.client.get_stock_bars(request)
+            provider_rows = [
+                {
+                    "timestamp": bar.timestamp,
+                    "open": bar.open,
+                    "close": bar.close,
+                    "high": bar.high,
+                    "low": bar.low,
+                    "volume": bar.volume,
+                }
+                for bar in bars.data.get(code.upper(), [])
+            ]
+            return build_us_history_frame(
+                provider_rows,
+                code=code,
+                frequency=frequency,
+            )
+        except Exception as exc:
+            print(f"alpaca 获取行情异常 {code} Exception ：{str(exc)}")
+            return None
 
     def stock_info(self, code: str) -> [Dict, None]:
         """

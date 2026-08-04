@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "market": "futures",
+  "mode": "incremental",
+  "source": {
+    "module": "tradingview_zy.exchange.exchange_tq",
+    "class": "ExchangeTq"
+  },
+  "destination": {
+    "module": "tradingview_zy.exchange.exchange_db",
+    "class": "ExchangeDB",
+    "args": [
+      "futures"
+    ]
+  },
+  "universe": {
+    "type": "provider_all_stocks",
+    "include_contains": [
+      "KQ.m@"
+    ],
+    "max_codes": 200
+  },
+  "max_pages": 100,
+  "frequencies": {
+    "w": {
+      "start_date": "2000-01-01 00:00:00",
+      "stop_rows": 1
+    },
+    "d": {
+      "start_date": "2000-01-01 00:00:00",
+      "stop_rows": 1
+    },
+    "60m": {
+      "start_date": "2000-01-01 00:00:00",
+      "stop_rows": 1
+    },
+    "30m": {
+      "start_date": "2000-01-01 00:00:00",
+      "stop_rows": 1
+    },
+    "15m": {
+      "start_date": "2000-01-01 00:00:00",
+      "stop_rows": 1
+    },
+    "5m": {
+      "start_date": "2015-01-01 00:00:00",
+      "stop_rows": 1
+    },
+    "1m": {
+      "start_date": "2018-01-01 00:00:00",
+      "stop_rows": 1
+    }
+  }
+}

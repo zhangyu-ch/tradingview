@@ -619,43 +619,107 @@ def _instantiate(spec: Mapping[str, Any]) -> Any:
     return provider_class(*args, **kwargs)
 
 
-def _normalize_codes(values: Iterable[Any]) -> list[str]:
+def _normalize_filter_tokens(value: Any, *, field: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise SyncBatchError(f"{field} must be an array")
+    result: list[str] = []
+    for raw_token in value:
+        token = str(raw_token).strip()
+        if not token:
+            raise SyncBatchError(f"{field} contains an empty token")
+        result.append(token)
+    return tuple(result)
+
+
+def _normalize_codes(values: Iterable[Any], *, allow_empty: bool = False) -> list[str]:
+    if not isinstance(allow_empty, bool):
+        raise SyncBatchError("allow_empty must be a boolean")
     result: list[str] = []
     seen: set[str] = set()
-    for value in values:
+    try:
+        iterator = iter(values)
+    except TypeError as exc:
+        raise SyncBatchError("universe codes must be iterable") from exc
+    for value in iterator:
         code = str(value).strip()
         if not code:
             raise SyncBatchError("universe contains an empty code")
         if code not in seen:
             seen.add(code)
             result.append(code)
-    if not result:
+    if not result and not allow_empty:
         raise SyncBatchError("universe is empty")
     return result
+
+
+def _filter_universe_codes(
+    codes: Iterable[Any], universe: Mapping[str, Any]
+) -> list[str]:
+    allow_empty = universe.get("allow_empty", False)
+    if not isinstance(allow_empty, bool):
+        raise SyncBatchError("universe allow_empty must be a boolean")
+    normalized = _normalize_codes(codes, allow_empty=allow_empty)
+    include = _normalize_filter_tokens(
+        universe.get("include_contains"), field="include_contains"
+    )
+    exclude = _normalize_filter_tokens(
+        universe.get("exclude_contains"), field="exclude_contains"
+    )
+    if include:
+        normalized = [
+            code for code in normalized if any(token in code for token in include)
+        ]
+    if exclude:
+        normalized = [
+            code for code in normalized if not any(token in code for token in exclude)
+        ]
+
+    max_codes = universe.get("max_codes")
+    if max_codes is not None:
+        if isinstance(max_codes, bool):
+            raise SyncBatchError("max_codes must be a positive integer")
+        try:
+            max_codes_value = int(max_codes)
+        except (TypeError, ValueError) as exc:
+            raise SyncBatchError("max_codes must be a positive integer") from exc
+        if max_codes_value <= 0:
+            raise SyncBatchError("max_codes must be a positive integer")
+        normalized = normalized[:max_codes_value]
+
+    if not normalized and not allow_empty:
+        raise SyncBatchError("universe is empty after filters")
+    return normalized
 
 
 def _load_universe(
     universe: Mapping[str, Any],
     *,
-    source: Any,
+    source: Any | None,
     caller: DeadlineCaller,
     deadline: BatchDeadline,
     per_call_timeout: float,
 ) -> list[str]:
+    if not isinstance(universe, Mapping):
+        raise SyncBatchError("universe must be an object")
     universe_type = str(universe.get("type", "")).strip()
     if universe_type == "list":
         codes = universe.get("codes")
         if not isinstance(codes, list):
             raise SyncBatchError("list universe requires a codes array")
-        return _normalize_codes(codes)
+        return _filter_universe_codes(codes, universe)
     if universe_type == "provider_all_stocks":
+        if source is None:
+            raise SyncBatchError("provider universe requires an initialized source")
         stocks = _call_with_budget(
             caller, deadline, per_call_timeout, source.all_stocks
         )
         try:
-            return _normalize_codes(item["code"] for item in stocks)
+            codes = [item["code"] for item in stocks]
         except (TypeError, KeyError) as exc:
             raise SyncBatchError("provider stock universe has an invalid shape") from exc
+        return _filter_universe_codes(codes, universe)
     raise SyncBatchError(f"unsupported universe type: {universe_type!r}")
 
 
@@ -708,21 +772,56 @@ def run_configured_sync(
     market = str(config["market"]).strip()
     deadline = BatchDeadline(batch_deadline_seconds)
     caller = DeadlineCaller(max_concurrent=2)
+    source: Any | None = None
+    destination: Any | None = None
 
     try:
-        source = _call_with_budget(
-            caller, deadline, per_call_timeout, _instantiate, config["source"]
+        universe = config["universe"]
+        universe_type = (
+            str(universe.get("type", "")).strip()
+            if isinstance(universe, Mapping)
+            else ""
         )
-        destination = _call_with_budget(
-            caller, deadline, per_call_timeout, _instantiate, config["destination"]
-        )
-        codes = _load_universe(
-            config["universe"],
-            source=source,
-            caller=caller,
-            deadline=deadline,
-            per_call_timeout=per_call_timeout,
-        )
+        if universe_type == "list":
+            # A deliberate empty list can be a safe no-op. Resolve it before
+            # importing optional SDKs or opening provider/database connections.
+            codes = _load_universe(
+                universe,
+                source=None,
+                caller=caller,
+                deadline=deadline,
+                per_call_timeout=per_call_timeout,
+            )
+            if codes:
+                source = _call_with_budget(
+                    caller, deadline, per_call_timeout, _instantiate, config["source"]
+                )
+                destination = _call_with_budget(
+                    caller,
+                    deadline,
+                    per_call_timeout,
+                    _instantiate,
+                    config["destination"],
+                )
+        else:
+            source = _call_with_budget(
+                caller, deadline, per_call_timeout, _instantiate, config["source"]
+            )
+            codes = _load_universe(
+                universe,
+                source=source,
+                caller=caller,
+                deadline=deadline,
+                per_call_timeout=per_call_timeout,
+            )
+            if codes:
+                destination = _call_with_budget(
+                    caller,
+                    deadline,
+                    per_call_timeout,
+                    _instantiate,
+                    config["destination"],
+                )
     except Exception as exc:
         return _write_initialization_failure(
             checkpoint_path, market=market, config_digest=digest, exc=exc
@@ -739,6 +838,8 @@ def run_configured_sync(
         item_deadline: BatchDeadline,
         item_caller: DeadlineCaller,
     ) -> SyncOutcome:
+        if source is None or destination is None:
+            raise SyncBatchError("sync providers are unavailable for a non-empty batch")
         spec = config["frequencies"][frequency]
         if not isinstance(spec, Mapping):
             raise SyncBatchError(f"frequency {frequency!r} config must be an object")
@@ -777,7 +878,6 @@ def run_configured_sync(
         caller=caller,
         resume=resume,
     )
-
 
 def configured_sync_cli(default_config: Path, argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(

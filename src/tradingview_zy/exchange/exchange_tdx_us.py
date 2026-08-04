@@ -16,13 +16,14 @@ from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_us_tdx_kline_frequency
 from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from tradingview_zy.exchange.tdx_us_payloads import normalize_tdx_us_bars
+from tradingview_zy.exchange.tdx_reliability import TdxExHqLifecycleMixin
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.tools import tdx_best_ip as best_ip
 from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
-class ExchangeTDXUS(Exchange):
+class ExchangeTDXUS(TdxExHqLifecycleMixin, Exchange):
     """
     通达信香港行情接口
     """
@@ -30,37 +31,20 @@ class ExchangeTDXUS(Exchange):
     g_all_stocks = []
 
     def __init__(self):
-        # super().__init__()
-
-        try:
-            # 选择最优的服务器，并保存到 cache 中
-            self.connect_info = db.cache_get("tdxex_connect_ip")
-            if self.connect_info is None:
-                self.connect_info = self.reset_tdx_ip()
-                # print(f"最优服务器：{self.connect_info}")
-        except Exception:
-            print(traceback.format_exc())
-            print("通达信 美股行情接口初始化失败，美股行情不可用")
-
         # 设置时区
         self.tz = ZoneInfo("America/New_York")
 
         # 文件缓存
         self.fdb = FileCacheDB()
 
-    def reset_tdx_ip(self):
-        """
-        重新选择tdx最优服务器
-        """
-        connect_info = best_ip.select_best_ip("future")
-        connect_info = {"ip": connect_info["ip"], "port": int(connect_info["port"])}
-        db.cache_set(
-            "tdxex_connect_ip",
-            connect_info,
-            expire=best_ip.cache_expiry_epoch(),
+        self._initialize_tdx_exhq(
+            cache_backend=db,
+            selector=best_ip,
+            client_factory=TdxExHq_API,
+            connection_errors=(TdxConnectionError,),
+            description="exchange_tdx_us",
+            load_markets=False,
         )
-        self.connect_info = connect_info
-        return connect_info
 
     def default_code(self):
         return "AAPL"
@@ -87,7 +71,7 @@ class ExchangeTDXUS(Exchange):
         """
         if len(self.g_all_stocks) > 0:
             return self.g_all_stocks
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        client = self._new_tdx_client()
         __all_stocks = []
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             start_i = 0
@@ -165,7 +149,7 @@ class ExchangeTDXUS(Exchange):
 
         # _time_s = time.time()
         try:
-            client = TdxExHq_API(raise_exception=True, auto_retry=True)
+            client = self._new_tdx_client()
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
                     Market.US.value, code, frequency
@@ -256,7 +240,7 @@ class ExchangeTDXUS(Exchange):
         获取日线的k线，并返回最后一根k线的数据
         """
         ticks = {}
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        client = self._new_tdx_client()
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             for _code in codes:
                 _market, _tdx_code = self.to_tdx_code(_code)

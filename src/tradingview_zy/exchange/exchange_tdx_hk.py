@@ -17,16 +17,13 @@ from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
 from tradingview_zy.file_db import FileCacheDB
-from tradingview_zy.exchange.tdx_reliability import (
-    ProviderUnavailableError,
-    call_with_bounded_retry,
-)
+from tradingview_zy.exchange.tdx_reliability import TdxExHqLifecycleMixin
 from tradingview_zy.tools import tdx_best_ip as best_ip
 from tradingview_zy.trading_calendar import is_market_open
 
 
 @fun.singleton
-class ExchangeTDXHK(Exchange):
+class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
     """
     通达信香港行情接口
     """
@@ -34,65 +31,20 @@ class ExchangeTDXHK(Exchange):
     g_all_stocks = []
 
     def __init__(self):
-        # super().__init__()
-
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
         # 文件缓存
         self.fdb = FileCacheDB()
 
-        try:
-            # 选择最优的服务器，并保存到 cache 中
-            self.connect_info = db.cache_get("tdxex_connect_ip")
-            if self.connect_info is None:
-                self.connect_info = self.reset_tdx_ip()
-
-            def load_markets(remaining_seconds):
-                client = TdxExHq_API(raise_exception=True, auto_retry=True)
-                with client.connect(
-                    self.connect_info["ip"],
-                    self.connect_info["port"],
-                    time_out=max(0.1, min(remaining_seconds, 4.0)),
-                ):
-                    return client.get_markets()
-
-            all_markets = call_with_bounded_retry(
-                load_markets,
-                recover=self.reset_tdx_ip,
-                retry_on=(TdxConnectionError,),
-                max_attempts=3,
-                deadline_seconds=12.0,
-                description="exchange_tdx_hk market-map initialization",
-            )
-            self.market_maps = {}
-            for market in all_markets:
-                if market["category"] == 2:
-                    self.market_maps[market["short_name"]] = {
-                        "market": market["market"],
-                        "category": market["category"],
-                        "name": market["name"],
-                    }
-        except ProviderUnavailableError:
-            raise
-        except Exception as exc:
-            raise ProviderUnavailableError(
-                "exchange_tdx_hk initialization failed"
-            ) from exc
-
-    def reset_tdx_ip(self):
-        """
-        重新选择tdx最优服务器
-        """
-        connect_info = best_ip.select_best_ip("future")
-        connect_info = {"ip": connect_info["ip"], "port": int(connect_info["port"])}
-        db.cache_set(
-            "tdxex_connect_ip",
-            connect_info,
-            expire=best_ip.cache_expiry_epoch(),
+        self._initialize_tdx_exhq(
+            cache_backend=db,
+            selector=best_ip,
+            client_factory=TdxExHq_API,
+            connection_errors=(TdxConnectionError,),
+            description="exchange_tdx_hk",
+            market_category=2,
         )
-        self.connect_info = connect_info
-        return connect_info
 
     def default_code(self):
         return "KH.00700"
@@ -119,7 +71,7 @@ class ExchangeTDXHK(Exchange):
             return self.g_all_stocks
 
         __all_stocks = []
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        client = self._new_tdx_client()
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             start_i = 0
             count = 1000
@@ -196,7 +148,7 @@ class ExchangeTDXHK(Exchange):
 
         # _time_s = time.time()
         try:
-            client = TdxExHq_API(raise_exception=True, auto_retry=True)
+            client = self._new_tdx_client()
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
                     Market.HK.value, code, frequency
@@ -286,7 +238,7 @@ class ExchangeTDXHK(Exchange):
         获取日线的k线，并返回最后一根k线的数据
         """
         ticks = {}
-        client = TdxExHq_API(raise_exception=True, auto_retry=True)
+        client = self._new_tdx_client()
         with client.connect(self.connect_info["ip"], self.connect_info["port"]):
             for _code in codes:
                 _market, _tdx_code = self.to_tdx_code(_code)
