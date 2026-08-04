@@ -62,7 +62,7 @@
 |49|`ME-22`|中|Utilities|❌ 未修复|已完成|通过（13 项专项、51 项直接组合、326 项可运行仓库回归通过；3 skipped）|`fix(ME-22)`|
 |50|`ME-02`|中|Web UDF|❌ 未修复|已完成|通过（8 项专项、48 项直接相邻组合通过）|`fix(ME-02)`|
 |51|`NX-10`|中|Database Schema|❌ 未修复|已完成|通过（6 项专项、53 项可运行相邻组合通过；2 项既有环境阻断被明确排除；迁移、长 JSON 往返、MySQL TEXT DDL、保存后完整性和请求边界均已验证）|`fix(NX-10)`|
-|52|`RV-06`|中|Web Storage / Availability|❌ 未修复|待处理|—|—|
+|52|`RV-06`|中|Web Storage / Availability|❌ 未修复|已完成|通过（14 项专项、45 项聚焦、112 项直接相邻通过；3 项既有跳过；字段边界、配额、旧表迁移、MEDIUMTEXT 和 SQLite 并发竞态均有自动化证明）|`fix(RV-06)`|
 |53|`ME-15`|中|Futu|❌ 未修复|待处理|—|—|
 |54|`NX-01`|中|CTP|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
 |55|`NX-25`|中|Legacy Exchange Security|🛡️ 未完全修复（已阻断或缓解）|待处理|—|—|
@@ -1286,16 +1286,27 @@
 ### 52. RV-06 · 图表布局、模板和绘图存储接口没有请求体/字段大小与配额限制
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 中 / Web Storage / Availability
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** Web 已有全局 1 MiB 请求体上限，因此原报告中的“完全没有请求体限制”已被部分缓解；但 charts/templates/drawings 仍没有各自的 UTF-8 字段边界、每个 client/user 命名空间的记录数配额，也没有跨三类内容的总字节配额。chart/template 同名保存持续插入重复行，SQLite 又会接受超过 MySQL TEXT 安全容量的内容；如果配额读取和写入不在同一事务中，并发请求还能同时按旧占用量通过。
+- **b. 我是怎么修复的？** 新增不可变 TVStoragePolicy，Web 与 DB 共用同一规范化/配额契约：chart 512 KiB、template 256 KiB、drawing 512 KiB；每主体分别最多 100/200/2000 条，三类持久化 blob 合计 16 MiB，全部按 UTF-8 实际字节计算。标识符拒绝控制字符、NUL 与非法 Unicode。MySQL content/state 使用 MEDIUMTEXT；启动迁移保留同名最新行、建立主体索引及 chart/template 唯一索引。同名 chart/template 与 drawing 键均改为事务内 upsert。配额读取、投影和写入处于同一事务：MySQL 使用主体锁行与 FOR UPDATE，SQLite 在任何占用读取前执行 BEGIN IMMEDIATE，关闭双请求同时越过配额的竞态。历史主体若已超过后来收紧的配额，只允许保持或缩小，禁止继续增长。Web 保留全局 request_too_large/413，并为字段和配额超限返回稳定的 storage_field_too_large 或 storage_quota_exceeded/422；NX-14 的 404 和 NX-15 的 drawing_save_failed/request_id 契约保持不变。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 修复前用 SQLite 最小复现确认 90,000 字节文本可直接保存、同名模板可生成多个 ID，且持续创建 chart/drawing 没有任何配额拒绝。
+  - 运行 `PYTHONPATH=src python -m pytest -q -W error tests/test_rv06_tv_storage_limits.py`：14 项专项全部通过，覆盖多字节 UTF-8/非法 Unicode、配置归一化、MySQL MEDIUMTEXT DDL、旧表去重迁移与幂等、同名 upsert、记录/总字节配额、失败回滚、历史超限只减不增、重名更新合并和 SQLite 双线程竞态。
+  - 运行 RV-06 + NX-14 + NX-15 + NX-10 聚焦组合，45 项通过；404、绘图失败/request_id 和策略存储未回退。
+  - 运行 RV-06、NX-10、NX-14、NX-15、RV-07、Web payload、安全认证、CSRF、上传、lazy-startup 与 watchlist 直接相邻组合，112 passed、3 skipped。
+  - 15 个旧 selection_monitoring 集成测试在导入 cl_app package 时被当前容器缺少 Flask/pinyin 阻断；backtesting_base_generic 缺 empyrical，footprint 保留既有私有函数导入漂移，均在产品断言前阻断并单独记录。
+  - 执行 py_compile、`git diff --check`、JSON 解析、MySQL 方言编译、迁移二次执行，以及 db.py/config.py.demo/Web init 的 CRLF bare-LF=0 检查。
+- **e. 验证是否通过？** 通过（14 项专项、45 项聚焦、112 项直接相邻通过；3 项既有跳过；字段边界、配额、旧表迁移、MEDIUMTEXT 和 SQLite 并发竞态均有自动化证明）
+- **提交：** fix(RV-06): bound TradingView storage
+- **修改文件：** `src/tradingview_zy/tv_storage.py`, `src/tradingview_zy/db.py`, `src/tradingview_zy/config.py.demo`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_rv06_tv_storage_limits.py`, `tests/test_nx15_drawing_save_errors.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 未连接真实 MySQL；已验证 MEDIUMTEXT 方言和 SQL 迁移边界，生产 DDL 锁时间、SQL mode、多 worker 首次升级、备份与回滚仍需在目标环境演练。
+  - 启动迁移要求数据库账户具备 ALTER TABLE/CREATE INDEX 权限；迁移失败会阻止应用继续运行，避免在可能截断的旧 schema 上伪成功。
+  - 配额主体仍是 TradingView 兼容协议中的 client/user 命名空间，而不是认证用户；本条解决容量与并发，ME-01 将继续处理授权边界。
+  - 总字节配额只统计持久化 blob 的 UTF-8 字节，不含数据库页、索引和行头开销；数据库容量仍需独立监控。
+  - 当前 Python 3.13 容器未安装 Flask、pinyin 和 empyrical；完整 package 集成中受影响的测试在导入阶段阻断，真实路由函数体、数据库事务和错误响应已由 AST/专项动态覆盖。
 - **原报告最新结论：** 安全改动未增加 charts/templates/drawings 的请求体、字段长度或用户配额限制。
 - **原报告建议：** 设置全局和字段上限、每主体配额、去重/更新；超限返回 413/422。
 

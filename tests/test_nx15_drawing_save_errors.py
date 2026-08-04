@@ -5,6 +5,8 @@ import json
 import uuid
 from types import SimpleNamespace
 
+from tradingview_zy.tv_storage import TVStorageError, TVStoragePolicy, normalize_drawing_payload
+
 
 def _load_route(request, db, logger):
     source = open("web/tradingview_zy_chart/cl_app/__init__.py", encoding="utf-8").read()
@@ -13,9 +15,25 @@ def _load_route(request, db, logger):
     route = next(node for node in create_app.body if isinstance(node, ast.FunctionDef) and node.name == "tv_drawings")
     route.decorator_list = []
     module = ast.fix_missing_locations(ast.Module(body=[route], type_ignores=[]))
-    namespace = {"request": request, "db": db, "json": json, "uuid": uuid, "__log": logger}
+    namespace = {
+        "request": request,
+        "db": db,
+        "json": json,
+        "uuid": uuid,
+        "__log": logger,
+        "TVStorageError": TVStorageError,
+        "normalize_drawing_payload": normalize_drawing_payload,
+    }
     exec(compile(module, "tv_drawings", "exec"), namespace)
     return namespace["tv_drawings"]
+
+
+def _db(save=None, get=None):
+    return SimpleNamespace(
+        tv_storage_policy=TVStoragePolicy(),
+        tv_drawing_save_or_update=save or (lambda **kwargs: True),
+        tv_drawing_get=get or (lambda *args: None),
+    )
 
 
 class FakeLogger:
@@ -41,7 +59,7 @@ def _request(*, method="POST", args=None, form=None, json_data=None):
 
 def test_drawing_save_returns_ok_only_for_strict_true():
     calls = []
-    db = SimpleNamespace(tv_drawing_save_or_update=lambda *args: calls.append(args) or True)
+    db = _db(save=lambda **kwargs: calls.append(kwargs) or True)
     logger = FakeLogger()
     route = _load_route(
         _request(args={"client": "c", "user": "u", "chart": "1", "layout": "2", "symbol": "a:1"}, form={"state": "{}"}),
@@ -49,18 +67,18 @@ def test_drawing_save_returns_ok_only_for_strict_true():
         logger,
     )
     assert route("1.1") == {"status": "ok"}
-    assert calls == [("c", "u", "2", "1", "a:1", "{}")]
+    assert calls == [{"client_id": "c", "user_id": "u", "layout_id": "2", "chart_id": "1", "symbol": "a:1", "state": "{}"}]
     assert logger.errors == logger.exceptions == []
 
 
 def test_drawing_save_exception_returns_500_and_correlated_request_id():
-    def fail(*args):
+    def fail(**kwargs):
         raise RuntimeError("sensitive database detail")
 
     logger = FakeLogger()
     route = _load_route(
         _request(args={"client": "c", "user": "u", "chart": "1", "layout": "2"}, json_data={"state": {"symbol": "a:1"}}),
-        SimpleNamespace(tv_drawing_save_or_update=fail),
+        _db(save=fail),
         logger,
     )
     payload, status = route("1.1")
@@ -77,7 +95,7 @@ def test_drawing_save_false_or_none_is_not_success():
         logger = FakeLogger()
         route = _load_route(
             _request(args={"client": "c", "user": "u", "chart": "1", "layout": "2", "symbol": "a:1"}, form={"state": "{}"}),
-            SimpleNamespace(tv_drawing_save_or_update=lambda *args, _result=result: _result),
+            _db(save=lambda _result=result, **kwargs: _result),
             logger,
         )
         payload, status = route("1.1")
@@ -90,7 +108,7 @@ def test_drawing_save_missing_required_fields_returns_422_without_db_call():
     calls = []
     route = _load_route(
         _request(args={"client": "c", "user": "u", "chart": "1"}, form={"state": "{}"}),
-        SimpleNamespace(tv_drawing_save_or_update=lambda *args: calls.append(args)),
+        _db(save=lambda **kwargs: calls.append(kwargs)),
         FakeLogger(),
     )
     payload, status = route("1.1")
@@ -102,7 +120,7 @@ def test_drawing_save_missing_required_fields_returns_422_without_db_call():
 def test_drawing_get_contract_is_unchanged():
     route = _load_route(
         _request(method="GET", args={"client": "c", "user": "u", "chart": "1", "layout": "2", "symbol": "a:1"}),
-        SimpleNamespace(tv_drawing_get=lambda *args: "saved-state"),
+        _db(get=lambda *args: "saved-state"),
         FakeLogger(),
     )
     assert route("1.1") == {"status": "ok", "data": {"state": "saved-state"}}

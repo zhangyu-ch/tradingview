@@ -1,6 +1,7 @@
 import datetime
 import json
 import time
+from contextlib import contextmanager
 from typing import List, Mapping, Union
 
 import numpy as np
@@ -10,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     Integer,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -18,7 +20,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.dialects.mysql import MEDIUMTEXT, insert
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -31,10 +33,18 @@ from tradingview_zy.alert_strategy_storage import (
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.database_catalog import list_market_kline_codes
+from tradingview_zy.tv_storage import (
+    TVStoragePolicy,
+    enforce_quota,
+    normalize_chart_payload,
+    normalize_drawing_payload,
+    utf8_size,
+)
 
 # https://docs.sqlalchemy.org/en/20/core/types.html
 
 Base = declarative_base()
+TV_BLOB_TEXT = Text().with_variant(MEDIUMTEXT(), "mysql")
 
 
 class TableByCache(Base):
@@ -210,20 +220,44 @@ class TableByOrder(Base):
     __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
 
 
+class TableByTVStorageOwner(Base):
+    """Per TradingView namespace lock row used by transactional quota checks."""
+
+    __tablename__ = "cl_tv_storage_owners"
+    client_id = Column(String(50), primary_key=True)
+    user_id = Column(String(50), primary_key=True)
+    timestamp = Column(Integer, nullable=False, default=0)
+    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+
+
 class TableByTVCharts(Base):
     # TV 图表的布局
     __tablename__ = "cl_tv_charts"
     id = Column(Integer, primary_key=True, autoincrement=True, comment="id")
     client_id = Column(String(50), comment="客户端id")
-    user_id = Column(Integer, comment="用户id")
+    user_id = Column(String(50), comment="用户id")
     chart_type = Column(String(20), comment="布局类型")
     symbol = Column(String(50), comment="标的")
     resolution = Column(String(20), comment="周期")
-    content = Column(Text, comment="布局内容")
+    content = Column(TV_BLOB_TEXT, comment="布局内容")
     timestamp = Column(Integer, comment="时间戳")
     name = Column(String(50), comment="布局名称")
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = (
+        UniqueConstraint(
+            "chart_type",
+            "client_id",
+            "user_id",
+            "name",
+            name="table_tv_charts_owner_name_unique",
+        ),
+        Index(
+            "table_tv_charts_owner_idx",
+            "client_id",
+            "user_id",
+            "chart_type",
+        ),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
 
 
 class TableByTVDrawings(Base):
@@ -235,7 +269,7 @@ class TableByTVDrawings(Base):
     layout_id = Column(String(100), comment="布局id")
     chart_id = Column(String(100), comment="图表id")
     symbol = Column(String(100), comment="标的")
-    state = Column(Text, comment="绘图内容")
+    state = Column(TV_BLOB_TEXT, comment="绘图内容")
     timestamp = Column(Integer, comment="时间戳")
     __table_args__ = (
         UniqueConstraint(
@@ -246,6 +280,7 @@ class TableByTVDrawings(Base):
             "symbol",
             name="table_tv_drawings_unique",
         ),
+        Index("table_tv_drawings_owner_idx", "client_id", "user_id"),
         {"mysql_collate": "utf8mb4_general_ci"},
     )
 
@@ -379,6 +414,84 @@ def migrate_alert_strategy_storage(engine) -> None:
         )
 
 
+def migrate_tv_storage_schema(engine) -> None:
+    """Upgrade legacy TradingView tables before quota-protected writes are allowed."""
+    inspector = inspect(engine)
+    if inspector.has_table(TableByTVCharts.__tablename__):
+        with engine.begin() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT id, chart_type, client_id, user_id, name, timestamp "
+                    "FROM cl_tv_charts ORDER BY timestamp DESC, id DESC"
+                )
+            ).mappings()
+            seen = set()
+            duplicate_ids = []
+            for row in rows:
+                key = (
+                    row["chart_type"],
+                    str(row["client_id"]),
+                    str(row["user_id"]),
+                    row["name"],
+                )
+                if key in seen:
+                    duplicate_ids.append(int(row["id"]))
+                else:
+                    seen.add(key)
+            for duplicate_id in duplicate_ids:
+                connection.execute(
+                    text("DELETE FROM cl_tv_charts WHERE id = :id"),
+                    {"id": duplicate_id},
+                )
+            if engine.dialect.name == "mysql":
+                connection.execute(
+                    text("ALTER TABLE cl_tv_charts MODIFY COLUMN user_id VARCHAR(50)")
+                )
+                connection.execute(
+                    text("ALTER TABLE cl_tv_charts MODIFY COLUMN content MEDIUMTEXT")
+                )
+
+        inspector = inspect(engine)
+        index_names = {item["name"] for item in inspector.get_indexes("cl_tv_charts")}
+        unique_names = {
+            item.get("name")
+            for item in inspector.get_unique_constraints("cl_tv_charts")
+        }
+        with engine.begin() as connection:
+            if "table_tv_charts_owner_name_unique" not in index_names | unique_names:
+                connection.execute(
+                    text(
+                        "CREATE UNIQUE INDEX table_tv_charts_owner_name_unique "
+                        "ON cl_tv_charts (chart_type, client_id, user_id, name)"
+                    )
+                )
+            if "table_tv_charts_owner_idx" not in index_names:
+                connection.execute(
+                    text(
+                        "CREATE INDEX table_tv_charts_owner_idx "
+                        "ON cl_tv_charts (client_id, user_id, chart_type)"
+                    )
+                )
+
+    inspector = inspect(engine)
+    if inspector.has_table(TableByTVDrawings.__tablename__):
+        if engine.dialect.name == "mysql":
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE cl_tv_drawings MODIFY COLUMN state MEDIUMTEXT")
+                )
+        inspector = inspect(engine)
+        index_names = {item["name"] for item in inspector.get_indexes("cl_tv_drawings")}
+        if "table_tv_drawings_owner_idx" not in index_names:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "CREATE INDEX table_tv_drawings_owner_idx "
+                        "ON cl_tv_drawings (client_id, user_id)"
+                    )
+                )
+
+
 @fun.singleton
 class DB(object):
     global Base
@@ -420,6 +533,8 @@ class DB(object):
 
         Base.metadata.create_all(self.engine)
         migrate_alert_strategy_storage(self.engine)
+        migrate_tv_storage_schema(self.engine)
+        self.tv_storage_policy = TVStoragePolicy.from_config(config)
 
         self.__cache_tables = {}
 
@@ -1435,6 +1550,75 @@ class DB(object):
             session.commit()
         return True
 
+    @contextmanager
+    def _tv_storage_write_session(self):
+        session = self.Session()
+        try:
+            if self.engine.dialect.name == "sqlite":
+                # SQLite ignores SELECT FOR UPDATE. Acquire the write lock before
+                # any quota read so concurrent requests cannot both pass stale checks.
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def _tv_storage_lock_owner(self, session, client_id: str, user_id: str) -> None:
+        query = session.query(TableByTVStorageOwner).filter(
+            TableByTVStorageOwner.client_id == client_id,
+            TableByTVStorageOwner.user_id == user_id,
+        )
+        if self.engine.dialect.name != "sqlite":
+            query = query.with_for_update()
+        owner = query.one_or_none()
+        if owner is None:
+            owner = TableByTVStorageOwner(
+                client_id=client_id, user_id=user_id, timestamp=int(time.time())
+            )
+            session.add(owner)
+            session.flush()
+            if self.engine.dialect.name != "sqlite":
+                owner = (
+                    session.query(TableByTVStorageOwner)
+                    .filter(
+                        TableByTVStorageOwner.client_id == client_id,
+                        TableByTVStorageOwner.user_id == user_id,
+                    )
+                    .with_for_update()
+                    .one()
+                )
+        owner.timestamp = int(time.time())
+
+    @staticmethod
+    def _tv_storage_usage(session, client_id: str, user_id: str):
+        charts = (
+            session.query(TableByTVCharts)
+            .filter(
+                TableByTVCharts.client_id == client_id,
+                TableByTVCharts.user_id == user_id,
+            )
+            .all()
+        )
+        drawings = (
+            session.query(TableByTVDrawings)
+            .filter(
+                TableByTVDrawings.client_id == client_id,
+                TableByTVDrawings.user_id == user_id,
+            )
+            .all()
+        )
+        counts = {
+            "chart": sum(1 for row in charts if row.chart_type == "chart"),
+            "template": sum(1 for row in charts if row.chart_type == "template"),
+            "drawing": len(drawings),
+        }
+        total = sum(utf8_size(row.content or "", field="content") for row in charts)
+        total += sum(utf8_size(row.state or "", field="state") for row in drawings)
+        return counts, total
+
     def tv_chart_list(self, chart_type, client_id, user_id):
         with self.Session() as session:
             return (
@@ -1450,42 +1634,112 @@ class DB(object):
     def tv_chart_save(
         self, chart_type, client_id, user_id, name, content, symbol, resolution
     ):
-        # 保存图表布局，并返回 id
-        with self.Session() as session:
-            chart = TableByTVCharts(
-                chart_type=chart_type,
-                client_id=client_id,
-                user_id=user_id,
-                name=name,
-                content=content,
-                symbol=symbol,
-                resolution=resolution,
-                timestamp=int(time.time()),
+        payload = normalize_chart_payload(
+            self.tv_storage_policy,
+            chart_type=chart_type,
+            client_id=client_id,
+            user_id=user_id,
+            name=name,
+            content=content,
+            symbol=symbol,
+            resolution=resolution,
+        )
+        with self._tv_storage_write_session() as session:
+            self._tv_storage_lock_owner(session, payload["client_id"], payload["user_id"])
+            chart = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.chart_type == payload["chart_type"],
+                    TableByTVCharts.client_id == payload["client_id"],
+                    TableByTVCharts.user_id == payload["user_id"],
+                    TableByTVCharts.name == payload["name"],
+                )
+                .one_or_none()
             )
-            session.add(chart)
-            session.commit()
-            return chart.id
+            counts, current_total = self._tv_storage_usage(
+                session, payload["client_id"], payload["user_id"]
+            )
+            old_bytes = utf8_size(chart.content or "", field="content") if chart else 0
+            new_bytes = utf8_size(payload["content"], field="content")
+            enforce_quota(
+                self.tv_storage_policy,
+                kind=chart_type,
+                current_count=counts[chart_type],
+                projected_count=counts[chart_type] + (0 if chart else 1),
+                current_total_bytes=current_total,
+                projected_total_bytes=current_total - old_bytes + new_bytes,
+            )
+            if chart is None:
+                chart = TableByTVCharts(**payload)
+                session.add(chart)
+            else:
+                chart.content = payload["content"]
+                chart.symbol = payload["symbol"]
+                chart.resolution = payload["resolution"]
+            chart.timestamp = int(time.time())
+            session.flush()
+            saved_id = chart.id
+        return saved_id
 
     def tv_chart_update(
         self, chart_type, id, client_id, user_id, name, content, symbol, resolution
     ):
-        # 更新图表布局
-        with self.Session() as session:
-            session.query(TableByTVCharts).filter(
-                TableByTVCharts.id == id,
-                TableByTVCharts.client_id == client_id,
-                TableByTVCharts.user_id == user_id,
-                TableByTVCharts.chart_type == chart_type,
-            ).update(
-                {
-                    TableByTVCharts.name: name,
-                    TableByTVCharts.content: content,
-                    TableByTVCharts.symbol: symbol,
-                    TableByTVCharts.resolution: resolution,
-                    TableByTVCharts.timestamp: int(time.time()),
-                }
+        payload = normalize_chart_payload(
+            self.tv_storage_policy,
+            chart_type=chart_type,
+            client_id=client_id,
+            user_id=user_id,
+            name=name,
+            content=content,
+            symbol=symbol,
+            resolution=resolution,
+        )
+        with self._tv_storage_write_session() as session:
+            self._tv_storage_lock_owner(session, payload["client_id"], payload["user_id"])
+            chart = (
+                session.query(TableByTVCharts)
+                .filter(
+                    TableByTVCharts.id == id,
+                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.client_id == payload["client_id"],
+                    TableByTVCharts.user_id == payload["user_id"],
+                )
+                .one_or_none()
             )
-            session.commit()
+            if chart is None:
+                return False
+            duplicate = (
+                session.query(TableByTVCharts.id)
+                .filter(
+                    TableByTVCharts.id != id,
+                    TableByTVCharts.chart_type == chart_type,
+                    TableByTVCharts.client_id == payload["client_id"],
+                    TableByTVCharts.user_id == payload["user_id"],
+                    TableByTVCharts.name == payload["name"],
+                )
+                .first()
+            )
+            if duplicate is not None:
+                raise ValueError("a chart or template with this name already exists")
+            counts, current_total = self._tv_storage_usage(
+                session, payload["client_id"], payload["user_id"]
+            )
+            old_bytes = utf8_size(chart.content or "", field="content")
+            new_bytes = utf8_size(payload["content"], field="content")
+            enforce_quota(
+                self.tv_storage_policy,
+                kind=chart_type,
+                current_count=counts[chart_type],
+                projected_count=counts[chart_type],
+                current_total_bytes=current_total,
+                projected_total_bytes=current_total - old_bytes + new_bytes,
+            )
+            chart.name = payload["name"]
+            chart.content = payload["content"]
+            chart.symbol = payload["symbol"]
+            chart.resolution = payload["resolution"]
+            chart.timestamp = int(time.time())
+            session.flush()
         return True
 
     def tv_chart_get(self, chart_type, id, client_id, user_id):
@@ -1565,35 +1819,48 @@ class DB(object):
     def tv_drawing_save_or_update(
         self, client_id, user_id, layout_id, chart_id, symbol, state
     ):
-        # 保存或更新图表手工绘图
-        with self.Session() as session:
+        payload = normalize_drawing_payload(
+            self.tv_storage_policy,
+            client_id=client_id,
+            user_id=user_id,
+            layout_id=layout_id,
+            chart_id=chart_id,
+            symbol=symbol,
+            state=state,
+        )
+        with self._tv_storage_write_session() as session:
+            self._tv_storage_lock_owner(session, payload["client_id"], payload["user_id"])
             drawing = (
                 session.query(TableByTVDrawings)
                 .filter(
-                    TableByTVDrawings.client_id == client_id,
-                    TableByTVDrawings.user_id == user_id,
-                    TableByTVDrawings.layout_id == layout_id,
-                    TableByTVDrawings.chart_id == chart_id,
-                    TableByTVDrawings.symbol == symbol,
+                    TableByTVDrawings.client_id == payload["client_id"],
+                    TableByTVDrawings.user_id == payload["user_id"],
+                    TableByTVDrawings.layout_id == payload["layout_id"],
+                    TableByTVDrawings.chart_id == payload["chart_id"],
+                    TableByTVDrawings.symbol == payload["symbol"],
                 )
-                .first()
+                .one_or_none()
             )
-            state_json = state if isinstance(state, str) else json.dumps(state)
+            counts, current_total = self._tv_storage_usage(
+                session, payload["client_id"], payload["user_id"]
+            )
+            old_bytes = utf8_size(drawing.state or "", field="state") if drawing else 0
+            new_bytes = utf8_size(payload["state"], field="state")
+            enforce_quota(
+                self.tv_storage_policy,
+                kind="drawing",
+                current_count=counts["drawing"],
+                projected_count=counts["drawing"] + (0 if drawing else 1),
+                current_total_bytes=current_total,
+                projected_total_bytes=current_total - old_bytes + new_bytes,
+            )
             if drawing is None:
-                drawing = TableByTVDrawings(
-                    client_id=client_id,
-                    user_id=user_id,
-                    layout_id=layout_id,
-                    chart_id=chart_id,
-                    symbol=symbol,
-                    state=state_json,
-                    timestamp=int(time.time()),
-                )
+                drawing = TableByTVDrawings(**payload)
                 session.add(drawing)
             else:
-                drawing.state = state_json
-                drawing.timestamp = int(time.time())
-            session.commit()
+                drawing.state = payload["state"]
+            drawing.timestamp = int(time.time())
+            session.flush()
         return True
 
     def cache_get(self, key: str):

@@ -3081,16 +3081,43 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成",
+      "problem_verified": true,
+      "problem_summary": "Web 已有全局 1 MiB 请求体上限，因此原报告中的“完全没有请求体限制”已被部分缓解；但 charts/templates/drawings 仍没有各自的 UTF-8 字段边界、每个 client/user 命名空间的记录数配额，也没有跨三类内容的总字节配额。chart/template 同名保存持续插入重复行，SQLite 又会接受超过 MySQL TEXT 安全容量的内容；如果配额读取和写入不在同一事务中，并发请求还能同时按旧占用量通过。",
+      "fix_summary": "新增不可变 TVStoragePolicy，Web 与 DB 共用同一规范化/配额契约：chart 512 KiB、template 256 KiB、drawing 512 KiB；每主体分别最多 100/200/2000 条，三类持久化 blob 合计 16 MiB，全部按 UTF-8 实际字节计算。标识符拒绝控制字符、NUL 与非法 Unicode。MySQL content/state 使用 MEDIUMTEXT；启动迁移保留同名最新行、建立主体索引及 chart/template 唯一索引。同名 chart/template 与 drawing 键均改为事务内 upsert。配额读取、投影和写入处于同一事务：MySQL 使用主体锁行与 FOR UPDATE，SQLite 在任何占用读取前执行 BEGIN IMMEDIATE，关闭双请求同时越过配额的竞态。历史主体若已超过后来收紧的配额，只允许保持或缩小，禁止继续增长。Web 保留全局 request_too_large/413，并为字段和配额超限返回稳定的 storage_field_too_large 或 storage_quota_exceeded/422；NX-14 的 404 和 NX-15 的 drawing_save_failed/request_id 契约保持不变。",
+      "verification_performed": true,
+      "verification_method": [
+        "运行 `PYTHONPATH=src PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -W error tests/test_rv06_tv_storage_limits.py`，14 项专项通过。",
+        "运行 RV-06 + NX-14 + NX-15 + NX-10 聚焦组合，45 项通过；404、绘图失败/request_id 和策略存储未回退。",
+        "运行 RV-06、NX-10、NX-14、NX-15、RV-07、Web payload、安全认证、CSRF、上传、lazy-startup 与 watchlist 直接相邻组合，112 passed、3 skipped。",
+        "在真实 SQLite 文件库执行同名 upsert、跨类型总字节配额、历史超限缩小规则、旧表去重与二次迁移。",
+        "使用两个线程同时创建不同布局且 `max_charts=1`，确认只产生一个成功和一个 `storage_quota_exceeded`，最终仅一行。",
+        "编译 MySQL DDL，确认 chart content 与 drawing state 为 MEDIUMTEXT，chart owner/name 唯一约束存在。",
+        "执行 py_compile、git diff --check 与 db.py/Web/config CRLF bare-LF=0 检查。"
+      ],
+      "verification_result": "通过（14 项专项、45 项聚焦、112 项直接相邻通过；3 项既有跳过；字段边界、配额、旧表迁移、MEDIUMTEXT 和 SQLite 并发竞态均有自动化证明）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "commit_subject": "fix(RV-06): bound TradingView storage",
+      "files_changed": [
+        "src/tradingview_zy/tv_storage.py",
+        "src/tradingview_zy/db.py",
+        "src/tradingview_zy/config.py.demo",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_rv06_tv_storage_limits.py",
+        "tests/test_nx15_drawing_save_errors.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "未连接真实 MySQL；已验证 MEDIUMTEXT 方言和 SQL 迁移边界，生产 DDL 锁时间、SQL mode、多 worker 首次升级、备份与回滚仍需在目标环境演练。",
+        "启动迁移要求数据库账户具备 ALTER TABLE/CREATE INDEX 权限；迁移失败会阻止应用继续运行，避免在可能截断的旧 schema 上伪成功。",
+        "配额主体仍是 TradingView 兼容协议中的 client/user 命名空间，而不是认证用户；本条解决容量与并发，ME-01 将继续处理授权边界。",
+        "总字节配额只统计持久化 blob 的 UTF-8 字节，不含数据库页、索引和行头开销；数据库容量仍需独立监控。",
+        "当前 Python 3.13 容器未安装 Flask、pinyin 和 empyrical；完整 package 集成中受影响的测试在导入阶段阻断，真实路由函数体、数据库事务和错误响应已由 AST/专项动态覆盖。"
+      ]
     }
   },
   {

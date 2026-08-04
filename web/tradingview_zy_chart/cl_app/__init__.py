@@ -76,6 +76,12 @@ from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
     merge_feishu_settings,
 )
+from tradingview_zy.tv_storage import (
+    TVStorageError,
+    normalize_chart_payload,
+    normalize_drawing_payload,
+    normalize_owner,
+)
 from tradingview_zy.tick_request import (
     BoundedProviderCaller,
     SlidingWindowLimiter,
@@ -376,6 +382,14 @@ def create_app(test_config=None):
     app.logger.addFilter(
         lambda record: "/static/" not in record.getMessage().lower()
     )  # 过滤静态资源请求日志
+
+    @app.errorhandler(413)
+    def request_too_large(_error):
+        return {
+            "status": "error",
+            "error": "request_too_large",
+            "message": "request body exceeds the configured limit",
+        }, 413
 
     login_manager = LoginManager()
     login_manager.session_protection = "basic"
@@ -817,8 +831,12 @@ def create_app(test_config=None):
     @login_required
     def tv_charts(version):
         """TradingView chart layout storage."""
-        client_id = str(request.args.get("client"))
-        user_id = str(request.args.get("user"))
+        try:
+            client_id, user_id = normalize_owner(
+                request.args.get("client"), request.args.get("user")
+            )
+        except TVStorageError as error:
+            return {"status": "error", "error": error.code, "message": str(error)}, 422
         raw_chart_id = request.args.get("chart")
 
         if request.method == "GET":
@@ -869,26 +887,37 @@ def create_app(test_config=None):
                 chart_id = parse_positive_int(raw_chart_id, field="chart")
             except WebParameterError as exc:
                 return {"status": "error", "error": "invalid_chart_id", "message": str(exc)}, 422
-        name = request.form["name"]
-        content = request.form["content"]
-        symbol = request.form["symbol"]
-        resolution = request.form["resolution"]
-        if chart_id is None:
-            saved_id = db.tv_chart_save(
-                "chart", client_id, user_id, name, content, symbol, resolution
+        try:
+            payload = normalize_chart_payload(
+                db.tv_storage_policy,
+                chart_type="chart",
+                client_id=client_id,
+                user_id=user_id,
+                name=request.form.get("name"),
+                content=request.form.get("content"),
+                symbol=request.form.get("symbol"),
+                resolution=request.form.get("resolution"),
             )
-            return {"status": "ok", "id": saved_id}
-        db.tv_chart_update(
-            "chart", chart_id, client_id, user_id, name, content, symbol, resolution
-        )
-        return {"status": "ok"}
+            if chart_id is None:
+                saved_id = db.tv_chart_save(**payload)
+                return {"status": "ok", "id": saved_id}
+            updated = db.tv_chart_update(id=chart_id, **payload)
+            if updated is not True:
+                return {"status": "error", "error": "chart_not_found"}, 404
+            return {"status": "ok"}
+        except TVStorageError as error:
+            return {"status": "error", "error": error.code, "message": str(error)}, 422
 
     @app.route("/tv/<version>/study_templates", methods=["GET", "POST", "DELETE"])
     @login_required
     def tv_study_templates(version):
         """TradingView indicator template storage."""
-        client_id = str(request.args.get("client"))
-        user_id = str(request.args.get("user"))
+        try:
+            client_id, user_id = normalize_owner(
+                request.args.get("client"), request.args.get("user")
+            )
+        except TVStorageError as error:
+            return {"status": "error", "error": error.code, "message": str(error)}, 422
 
         if request.method == "GET":
             raw_name = request.args.get("template")
@@ -920,10 +949,21 @@ def create_app(test_config=None):
             db.tv_chart_del_by_name("template", name, client_id, user_id)
             return {"status": "ok"}
 
-        name = request.form["name"]
-        content = request.form["content"]
-        db.tv_chart_save("template", client_id, user_id, name, content, "", "")
-        return {"status": "ok"}
+        try:
+            payload = normalize_chart_payload(
+                db.tv_storage_policy,
+                chart_type="template",
+                client_id=client_id,
+                user_id=user_id,
+                name=request.form.get("name"),
+                content=request.form.get("content"),
+                symbol="",
+                resolution="",
+            )
+            saved_id = db.tv_chart_save(**payload)
+        except TVStorageError as error:
+            return {"status": "error", "error": error.code, "message": str(error)}, 422
+        return {"status": "ok", "id": saved_id}
 
     @app.route("/tv/<version>/drawings", methods=["GET", "POST"])
     @login_required
@@ -961,11 +1001,24 @@ def create_app(test_config=None):
                 "message": "client, user, chart, layout and state are required",
             }, 422
 
+        try:
+            payload = normalize_drawing_payload(
+                db.tv_storage_policy,
+                client_id=client_id,
+                user_id=user_id,
+                layout_id=layout_id,
+                chart_id=chart_id,
+                symbol=symbol,
+                state=state,
+            )
+        except TVStorageError as error:
+            return {"status": "error", "error": error.code, "message": str(error)}, 422
+
         request_id = uuid.uuid4().hex
         try:
-            saved = db.tv_drawing_save_or_update(
-                client_id, user_id, layout_id, chart_id, symbol, state
-            )
+            saved = db.tv_drawing_save_or_update(**payload)
+        except TVStorageError as error:
+            return {"status": "error", "error": error.code, "message": str(error)}, 422
         except Exception:
             __log.exception("drawing save failed request_id=%s", request_id)
             return {

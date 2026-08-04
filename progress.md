@@ -528,3 +528,12 @@
 - 验证：6 项专项、53 项可运行相邻组合通过；2 项旧测试被归档缺失 config.py 阻断。
 - 首轮专项有一个源码断言依赖单行格式，改为结构/片段顺序；另有测试未 dispose SQLite engine，在 `-W error` 下触发 ResourceWarning，修正测试资源清理后产品代码不变。
 - 提交：`fix(NX-10): migrate alert strategy storage`。
+
+### 问题 52：RV-06
+- **状态：** complete
+- **完成时间：** 2026-08-04
+- 验证结论：全局 1 MiB 请求体边界已部分缓解原报告，但 chart/template/drawing 仍缺独立 UTF-8 上限、主体记录数/总字节配额、同名去重和并发事务，问题存在。
+- 修复：新增共享 TVStoragePolicy；默认 blob 上限 512/256/512 KiB、记录配额 100/200/2000、总字节 16 MiB；MySQL MEDIUMTEXT、旧表去重/索引迁移、事务内 upsert；MySQL 主体锁+FOR UPDATE，SQLite 占用读取前 BEGIN IMMEDIATE；历史超限只减不增；Web 稳定返回 413/422。
+- 验证：14 项 warnings-as-errors 专项、39 项 NX-14/NX-15 聚焦、106 项直接相邻、371 项可运行仓库回归通过，3 skipped；SQLite 双线程竞态只允许一条写入。
+- 环境限制：15 个 selection_monitoring 测试在导入 cl_app 时缺 Flask/pinyin；另有 empyrical 与既有 footprint 私有导入阻断，均发生在产品断言前。
+- 提交：`fix(RV-06): bound TradingView storage`。

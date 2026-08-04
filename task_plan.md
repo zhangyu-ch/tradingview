@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 7（第 51 条 NX-10 已重建并验证，下一条为第 52 条 RV-06）
+阶段 7（第 52 条 RV-06 已重建并验证，下一条为第 53 条 ME-15）
 
 ## 各阶段
 
@@ -56,7 +56,7 @@
 
 ### 阶段 7：逐条验证、修复、测试与提交（51–60）
 - [x] 51. NX-10
-- [ ] 52. RV-06
+- [x] 52. RV-06
 - [ ] 53. ME-15
 - [ ] 54. NX-01
 - [ ] 55. NX-25
@@ -156,6 +156,10 @@
 | 首次解析 remediation_state 误假定顶层为 dict，实际为 81 项 list | 1 | 读取首项结构后按 list/index 处理，未修改仓库 |
 | 仓库结构探测把第 57 条才新增的 market_registry.py 当成第 50 条既有文件 | 1 | 改为容错存在性检查；确认该文件应在 ME-10 重建时新增 |
 | NX-10 相邻组合两项子进程测试缺少归档外 config.py | 1 | 保留环境限制，显式 deselect 两项；专项真实 SQLite 与 MySQL DDL 证明均通过 |
+
+| RV-06 首次整体补丁按多行函数签名查找 `tv_chart_get`/`cache_get` 未命中 | 1 | 确认文件保持未写回，改用稳定函数前缀边界重新应用 |
+| TVStoragePolicy slots dataclass 在类上读取默认值得到 member_descriptor | 1 | `from_config()` 先实例化 defaults，再读取实例默认值 |
+| NX-15 AST 路由测试未注入新 TVStorage 全局与 policy | 1 | 更新既有测试 namespace 和 fake DB，继续验证严格 True/异常/request_id 契约 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。
