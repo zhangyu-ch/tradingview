@@ -690,3 +690,11 @@
 - 修复：改为 each 回调块内 const 条件表达式，保留 checked/unchecked 模板输出和下拉数据结构。
 - 验证：Node vm 执行真实脚本后 context 无 templet 属性，两种 HTML 均正确；NX-18/MX-05 组合 6 passed（-W error），语法、CRLF 与 diff 门禁通过。
 - 待提交主题：`fix(NX-18): scope watchlist dropdown templates`。
+
+### 问题 69：NX-17（恢复重建）
+- **状态：** complete
+- 验证结论：Web 把全部市场写为 24x7、FX 写为 stock，并对 HK/NY futures 使用错误时区，问题存在。
+- 修复：集中 TradingView type/session/timezone；现金、FX、crypto、国内六类期货与纽约 Globex 使用权威常规时段，未知国内期货只退化到日盘；搜索 type 只作过滤。
+- 验证：现金/FX/crypto、RB/CU/AG/IF/T/AP/GC 和未知品种全部参数化；真实 tv_symbols/tv_search AST 使用描述符；NX-17/ME-30/ME-03/ME-05/RV-07 共 63 passed（-W error）。
+- 编译、Web CRLF、JSON 与 diff 门禁通过。
+- 待提交主题：`fix(NX-17): publish market-aware UDF sessions`。

@@ -4180,16 +4180,39 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（UDF 市场描述符与交易日历统一）",
+      "problem_verified": true,
+      "problem_summary": "Web 在 create_app 内把 A/HK/US/FX/国内期货/纽约期货全部声明为 24x7，并把 FX 标成 stock；HK/NY futures 时区也不准确。TradingView 因而会在闭市区间绘制连续会话、错误分类搜索结果，并忽略期货品种夜盘差异。",
+      "fix_summary": "扩展无 SDK 副作用的 market_metadata，集中维护 TradingView type/session/timezone；现金市场使用真实常规时段，FX 为 forex/24x5，crypto 才是 24x7。国内期货根据 ME-30 版本化 instrument profile 映射日盘、23:00、01:00、02:30、股指和国债时段，纽约期货使用 Globex 18:00–17:00。tv_symbols 与 tv_search 统一消费描述符；搜索 type 仅作为过滤条件，输出永远使用服务端市场类型。未知国内期货保守退化为日盘而不是 24x7。",
+      "verification_performed": true,
+      "verification_method": [
+        "参数化验证 A/HK/US/FX/crypto 的 type、session 和 timezone，确认 FX=forex/24x5，只有数字货币为 24x7。",
+        "验证 RB、CU、AG、IF、T、AP 六类国内期货分别得到 23:00、01:00、02:30、股指日盘、国债 15:15 和普通商品日盘；GC 得到 Globex 18:00–17:00。",
+        "验证未知国内期货只声明日盘，绝不回退 24x7 或猜测夜盘。",
+        "AST 检查 tv_symbols/tv_search 均调用 tradingview_symbol_metadata，旧 market_session/market_timezone/market_types 字典与 get_localzone 依赖已删除。",
+        "运行 NX-17、ME-30、ME-03、ME-05 与 RV-07 相邻组合，结果 63 passed（-W error）；同时修正相邻测试的过时注释边界和未关闭源码文件。",
+        "执行 py_compile、compileall、git diff --check 与 Web CRLF 检查。"
+      ],
+      "verification_result": "通过（现金/FX/crypto、七类期货会话、未知品种保守退化、真实路由及 63 项相邻测试通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/market_metadata.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "tests/test_nx17_udf_market_metadata.py",
+        "tests/test_me05_lazy_web_startup.py",
+        "tests/test_rv07_web_parameter_validation.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "TradingView session 字符串表达常规时段，不能编码每个节假日或临时停市；真实开闭市判断仍由 ME-30 的版本化 calendar 执行。",
+        "CME 节假日存在产品级特殊时段；本条只声明常规 Globex 会话，2026 特殊日继续 fail-closed。",
+        "未启动真实 TradingView Charting Library；UDF 返回契约、时段映射和路由控制流已自动验证。"
+      ],
+      "commit_subject": "fix(NX-17): publish market-aware UDF sessions"
     }
   },
   {

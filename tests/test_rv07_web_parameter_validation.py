@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from tradingview_zy.web_api_validation import (
@@ -82,7 +84,7 @@ def test_search_text_allows_empty_query_but_bounds_controls_and_length():
     ],
 )
 def test_public_routes_use_shared_validation_before_side_effects(route_name, required_token):
-    source = open("web/tradingview_zy_chart/cl_app/__init__.py", encoding="utf-8").read()
+    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
     start = source.index(f"    def {route_name}(")
     candidates = [position for marker in ("\n    @app.route", "\n    # ") if (position := source.find(marker, start + 10)) != -1]
     block = source[start:min(candidates)]
@@ -98,7 +100,7 @@ def test_public_routes_use_shared_validation_before_side_effects(route_name, req
 
 
 def test_routes_expose_stable_udf_and_regular_api_errors():
-    source = open("web/tradingview_zy_chart/cl_app/__init__.py", encoding="utf-8").read()
+    source = Path("web/tradingview_zy_chart/cl_app/__init__.py").read_text(encoding="utf-8")
     assert 'return {"s": "error", "errmsg": str(exc)}' in source
     assert '"invalid_search_request"' in source
     assert '"invalid_marks_request"' in source

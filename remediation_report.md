@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 68
-- **待处理：** 13
+- **已完成：** 69
+- **待处理：** 12
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -79,7 +79,7 @@
 |66|`MX-10`|低|Frontend|❌ 未修复|已完成（图表展示契约统一）|通过（六个调用点、运行时函数元数、布局尺寸、JavaScript 语法及 7 项相邻测试全部通过）|`fix(MX-10)`|
 |67|`NX-09`|低|Backtesting Fees|❌ 未修复|已完成（未实现公开费用桩删除）|通过（未实现函数和全部运行代码引用均已删除，既有 A 股费用计算及 6 项相邻测试通过）|`fix(NX-09)`|
 |68|`NX-18`|低|Frontend|❌ 未修复|已完成（自选模板变量作用域修正）|通过（真实脚本输出保持正确，临时变量不再进入全局对象，6 项相邻测试及语法门禁通过）|`fix(NX-18)`|
-|69|`NX-17`|低|Web UDF|❌ 未修复|待处理|—|—|
+|69|`NX-17`|低|Web UDF|❌ 未修复|已完成（UDF 市场描述符与交易日历统一）|通过（现金/FX/crypto、七类期货会话、未知品种保守退化、真实路由及 63 项相邻测试通过）|`fix(NX-17)`|
 |70|`LO-02`|低|Maintainability|❌ 未修复|待处理|—|—|
 |71|`LO-06`|低|Readability|❌ 未修复|待处理|—|—|
 |72|`MX-16`|低|Dead Code|❌ 未修复|待处理|—|—|
@@ -1697,16 +1697,25 @@
 ### 69. NX-17 · TradingView UDF 把所有市场 session 声明为 24x7，并把 FX 类型标成 stock
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Web UDF
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（UDF 市场描述符与交易日历统一）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** Web 在 create_app 内把 A/HK/US/FX/国内期货/纽约期货全部声明为 24x7，并把 FX 标成 stock；HK/NY futures 时区也不准确。TradingView 因而会在闭市区间绘制连续会话、错误分类搜索结果，并忽略期货品种夜盘差异。
+- **b. 我是怎么修复的？** 扩展无 SDK 副作用的 market_metadata，集中维护 TradingView type/session/timezone；现金市场使用真实常规时段，FX 为 forex/24x5，crypto 才是 24x7。国内期货根据 ME-30 版本化 instrument profile 映射日盘、23:00、01:00、02:30、股指和国债时段，纽约期货使用 Globex 18:00–17:00。tv_symbols 与 tv_search 统一消费描述符；搜索 type 仅作为过滤条件，输出永远使用服务端市场类型。未知国内期货保守退化为日盘而不是 24x7。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 参数化验证 A/HK/US/FX/crypto 的 type、session 和 timezone，确认 FX=forex/24x5，只有数字货币为 24x7。
+  - 验证 RB、CU、AG、IF、T、AP 六类国内期货分别得到 23:00、01:00、02:30、股指日盘、国债 15:15 和普通商品日盘；GC 得到 Globex 18:00–17:00。
+  - 验证未知国内期货只声明日盘，绝不回退 24x7 或猜测夜盘。
+  - AST 检查 tv_symbols/tv_search 均调用 tradingview_symbol_metadata，旧 market_session/market_timezone/market_types 字典与 get_localzone 依赖已删除。
+  - 运行 NX-17、ME-30、ME-03、ME-05 与 RV-07 相邻组合，结果 63 passed（-W error）；同时修正相邻测试的过时注释边界和未关闭源码文件。
+  - 执行 py_compile、compileall、git diff --check 与 Web CRLF 检查。
+- **e. 验证是否通过？** 通过（现金/FX/crypto、七类期货会话、未知品种保守退化、真实路由及 63 项相邻测试通过）
+- **提交：** fix(NX-17): publish market-aware UDF sessions
+- **修改文件：** `src/tradingview_zy/market_metadata.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_nx17_udf_market_metadata.py`, `tests/test_me05_lazy_web_startup.py`, `tests/test_rv07_web_parameter_validation.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - TradingView session 字符串表达常规时段，不能编码每个节假日或临时停市；真实开闭市判断仍由 ME-30 的版本化 calendar 执行。
+  - CME 节假日存在产品级特殊时段；本条只声明常规 Globex 会话，2026 特殊日继续 fail-closed。
+  - 未启动真实 TradingView Charting Library；UDF 返回契约、时段映射和路由控制流已自动验证。
 - **原报告最新结论：** 最新 Web 文件仍把所有市场 session 写为 24x7，FX 类型仍为 stock。
 - **原报告建议：** 由市场描述符/交易日历生成 TradingView session、timezone 和 type；FX 使用符合 UDF 的 forex 类型。
 

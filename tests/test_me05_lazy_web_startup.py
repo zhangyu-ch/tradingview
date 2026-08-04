@@ -23,7 +23,7 @@ def test_create_app_startup_metadata_does_not_call_get_exchange() -> None:
     assert "market_frequencys = market_frequencies()" in create_app
     assert "market_default_codes = market_default_codes()" in create_app
     metadata_block = create_app[
-        create_app.index("# Web 元数据"):create_app.index("# 各个市场的交易时间")
+        create_app.index("# Web 元数据"):create_app.index("__log = fun.get_logger()")
     ]
     assert "get_exchange(" not in metadata_block
 

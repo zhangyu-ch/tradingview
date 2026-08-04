@@ -17,7 +17,6 @@ from flask_login import (
     login_user,
     logout_user,
 )
-from tzlocal import get_localzone
 
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
@@ -30,6 +29,7 @@ from tradingview_zy.market_metadata import (
     all_market_frequencies,
     market_default_codes,
     market_frequencies,
+    tradingview_symbol_metadata,
 )
 from tradingview_zy.web_payloads import (
     KlinePayloadError,
@@ -249,41 +249,6 @@ def create_app(test_config=None):
     # Web 元数据来自无副作用静态注册表；provider 仅在具体请求时惰性构造。
     market_frequencys = market_frequencies()
     market_default_codes = market_default_codes()
-
-    # 各个市场的交易时间
-    market_session = {
-        "a": "24x7",
-        "hk": "24x7",
-        "fx": "24x7",
-        "us": "24x7",
-        "futures": "24x7",
-        "ny_futures": "24x7",
-        "currency": "24x7",
-        "currency_spot": "24x7",
-    }
-
-    # 各个交易所的时区 统一时区
-    market_timezone = {
-        "a": "Asia/Shanghai",
-        "hk": "Asia/Shanghai",
-        "fx": "Asia/Shanghai",
-        "us": "America/New_York",
-        "futures": "Asia/Shanghai",
-        "ny_futures": "Asia/Shanghai",
-        "currency": str(get_localzone()),
-        "currency_spot": str(get_localzone()),
-    }
-
-    market_types = {
-        "a": "stock",
-        "hk": "stock",
-        "fx": "stock",
-        "us": "stock",
-        "futures": "futures",
-        "ny_futures": "futures",
-        "currency": "crypto",
-        "currency_spot": "crypto",
-    }
 
     __log = fun.get_logger()
 
@@ -582,6 +547,7 @@ def create_app(test_config=None):
 
         ex = get_exchange(Market(market))
         stocks = ex.stock_info(code)
+        symbol_metadata = tradingview_symbol_metadata(market, stocks["code"])
         sector = ""
         industry = ""
         if market == "a":
@@ -597,9 +563,7 @@ def create_app(test_config=None):
             "full_name": f"{market}:{stocks['code']}",
             "description": stocks["name"],
             "exchange": market,
-            "type": market_types[market],
-            "session": market_session[market],
-            "timezone": market_timezone[market],
+            **symbol_metadata,
             "pricescale": stocks.get("precision", 1000),
             "visible_plots_set": "ohlcv",
             "supported_resolutions": [
@@ -627,13 +591,17 @@ def create_app(test_config=None):
             )
             type_value = parse_bounded_text(
                 request.args.get("type", ""), field="type", max_chars=32, allow_empty=True
-            )
+            ).lower()
             exchange = parse_market(
                 request.args.get("exchange"), allowed_markets=market_frequencys.keys(), field="exchange"
             )
             limit = parse_int(request.args.get("limit", "30"), field="limit", minimum=1, maximum=100)
         except WebParameterError as exc:
             return {"error": "invalid_search_request", "message": str(exc)}, 422
+
+        authoritative_type = tradingview_symbol_metadata(exchange)["type"]
+        if type_value and type_value != authoritative_type:
+            return []
 
         ex = get_exchange(Market(exchange))
         all_stocks = ex.all_stocks()
@@ -650,6 +618,7 @@ def create_app(test_config=None):
             ]
         infos = []
         for stock in res_stocks[:limit]:
+            symbol_metadata = tradingview_symbol_metadata(exchange, stock["code"])
             infos.append({
                 "symbol": stock["code"],
                 "name": stock["code"],
@@ -657,9 +626,7 @@ def create_app(test_config=None):
                 "description": stock["name"],
                 "exchange": exchange,
                 "ticker": f"{exchange}:{stock['code']}",
-                "type": type_value,
-                "session": market_session[exchange],
-                "timezone": market_timezone[exchange],
+                **symbol_metadata,
                 "supported_resolutions": [
                     value for key, value in frequency_maps.items() if key in market_frequencys[exchange]
                 ],
