@@ -281,7 +281,7 @@ class Strategy(ABC):
 
         @param bt: 回测 BackTest 对象
         """
-        pass
+        return None
 
     def is_filter_opts(self):
         """
@@ -305,7 +305,7 @@ class Strategy(ABC):
         """
         回测专用，回测结束后，清理一些不需要的变量，避免被 pickle 保存
         """
-        pass
+        return None
 
 
 

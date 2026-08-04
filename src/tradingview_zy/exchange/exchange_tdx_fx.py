@@ -270,20 +270,8 @@ class ExchangeTDXFX(TdxExHqLifecycleMixin, Exchange):
         """Return a strict instrument-aware state from the shared calendar."""
         return is_market_open('fx', code=code, at=at)
 
-    def balance(self):
-        raise Exception("交易所不支持")
-
-    def positions(self, code: str = ""):
-        raise Exception("交易所不支持")
-
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)
-
-    def stock_owner_plate(self, code: str):
-        raise Exception("交易所不支持")
-
-    def plate_stocks(self, code: str):
-        raise Exception("交易所不支持")
 
 
 if __name__ == "__main__":

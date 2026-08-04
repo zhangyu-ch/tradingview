@@ -535,17 +535,5 @@ class ExchangeQMT(Exchange):
         """Return a strict instrument-aware state from the shared calendar."""
         return is_market_open('a', code=code, at=at)
 
-    def stock_owner_plate(self, code: str):
-        raise Exception("交易所不支持")
-
-    def plate_stocks(self, code: str):
-        raise Exception("交易所不支持")
-
-    def balance(self):
-        raise Exception("QMT 交易功能在 trader 目录实现")
-
-    def positions(self, code: str = ""):
-        raise Exception("QMT 交易功能在 trader 目录实现")
-
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)

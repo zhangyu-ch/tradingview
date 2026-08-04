@@ -315,18 +315,6 @@ class ExchangeDB(Exchange):
             "name": code,
         }
 
-    def stock_owner_plate(self, code: str):
-        pass
-
-    def plate_stocks(self, code: str):
-        pass
-
-    def balance(self):
-        pass
-
-    def positions(self, code: str = ""):
-        pass
-
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)
 

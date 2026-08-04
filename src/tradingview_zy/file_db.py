@@ -486,21 +486,6 @@ class FileCacheDB:
                 pass
         return True
 
-    def get_web_cl_data(self, *args, **kwargs):
-        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
-
-    def clear_web_cl_data(self, *args, **kwargs):
-        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
-
-    def clear_old_web_cl_data(self, *args, **kwargs):
-        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
-
-    def clear_all_cl_data(self, *args, **kwargs):
-        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
-
-    def get_low_to_high_cl_data(self, *args, **kwargs):
-        raise RuntimeError("缠论缓存已移除，请使用普通 K 线接口")
-
     def _safe_state_path(self, filename: str) -> tuple[pathlib.Path, tuple[pathlib.Path, ...]]:
         name = _safe_basename(filename)
         stem = name[:-4] if name.lower().endswith(".pkl") else name

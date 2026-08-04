@@ -345,9 +345,14 @@ MARKET_REGISTRY: Mapping[Market, MarketSpec] = MappingProxyType(
                     "ib": _provider(
                         "tradingview_zy.exchange.exchange_ib",
                         "ExchangeIB",
-                        CATALOG_TICKS
+                        DATA
                         | frozenset(
-                            {Capability.ACCOUNT_BALANCE, Capability.POSITIONS}
+                            {
+                                Capability.TICKS,
+                                Capability.SESSION_STATUS,
+                                Capability.ACCOUNT_BALANCE,
+                                Capability.POSITIONS,
+                            }
                         ),
                     ),
                     "tdx_us": _provider(

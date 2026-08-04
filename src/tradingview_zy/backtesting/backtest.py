@@ -610,22 +610,6 @@ class BackTest:
                 # 确保资源被释放
                 gc.collect()
 
-    def show_charts(
-        self,
-        code,
-        frequency,
-        merge_kline_freq: str = None,
-        to_minutes: int = None,
-        to_dt_align_type: str = "bob",
-        to_frequency: str = None,
-        change_data_config=None,
-        chart_config=None,
-    ):
-        """
-        已移除运行时图表计算；通用回测仅保留 K 线、账户、订单和撮合能力。
-        """
-        raise NotImplementedError("运行时图表计算已移除")
-
     def result(self, is_print=True):
         """
         输出回测结果

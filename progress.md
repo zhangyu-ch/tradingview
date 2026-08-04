@@ -791,3 +791,23 @@
 - 严格聚焦/相邻组合 82 passed；可运行仓库回归 605 passed、5 skipped、8 deselected；质量、供应链、Secret、Node、JSON、diff 与 CRLF 门禁通过。
 - 提交主题：`fix(LO-05): centralize full-stack market metadata`。
 - 下一条：76. LO-07。
+
+
+### 第 76 条 LO-07 恢复与错误记录
+- AST/引用盘点确认剩余问题集中在 Exchange 可选能力空桩、三个运行树墓碑模块、FileCacheDB 旧 RuntimeError 方法和 BackTest 无调用方 `show_charts`。
+- 首次按整段字节文本替换 `backtesting/base.py` 的可选 hook 失败：方法包含 docstring，预期块未命中；操作在写回前中止。
+- 处理方式改为 AST 行号定位，仅把 `on_bt_loop_start()` 与 `clear()` 的裸 `pass` 替换为显式 `return None`，并保留 CRLF。
+
+- LO-07 首次聚焦 pytest 命令引用不存在的 `tests/test_nx09_us_fee_stub_removed.py`，pytest 在收集前退出、未运行任何测试；实际文件名为 `tests/test_nx09_removed_us_fee_stub.py`，下一次命令改用实际路径。
+- LO-07 聚焦回归首次实际运行得到 42 passed、1 failed：NEW-06 历史门禁要求 DB provider 自己保留空板块方法，与本条“统一由 Exchange 抛 UnsupportedCapabilityError”新契约冲突。已更新旧门禁为断言 DB 不声明板块方法且注册表不声明 PLATES；领域限制不变。
+- LO-07 完整 `pytest -q` 在收集阶段被当前 Python 3.13 环境缺少 `empyrical` 阻断；唯一收集错误为 `tests/test_backtesting_base_generic.py`，未执行产品断言。托管 CI 的 Python 3.11 锁定环境仍要求完整套件。
+- 排除唯一 empyrical 收集阻断后，广泛回归实际执行结果为 619 passed、5 skipped、8 failed；8 个失败全部在 `cl_app` 导入阶段因当前容器缺少 `pinyin`，没有进入产品断言。将以精确节点 deselect 复验其余可运行套件，并保留 CI 完整运行要求。
+
+
+### 问题 76：LO-07 完成
+- 统一 Exchange 可选能力 fallback，未实现能力只返回稳定 `UnsupportedCapabilityError`；facade 会把继承 fallback 识别为未实现，阻断注册表过报。
+- 删除 17 个 provider 中的重复空桩、三个墓碑模块、五个 FileCacheDB 旧兼容壳和 BackTest.show_charts；IB 删除虚假目录能力。
+- 43 项聚焦、105 项严格 provider 矩阵、619 项可运行仓库回归通过；5 skipped、8 个 pinyin 环境节点 deselect，empyrical 收集限制单独记录。
+- 全部编译、质量、供应链、Secret、FIFO、JSON、diff 与 CRLF 门禁通过。
+- 提交主题：`refactor(LO-07): replace speculative stubs with capability errors`。
+- 下一条：77. LO-08。

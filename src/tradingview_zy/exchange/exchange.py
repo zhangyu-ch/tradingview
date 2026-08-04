@@ -6,6 +6,7 @@ from typing import Dict, List, Union
 import pandas as pd
 import pytz
 from tradingview_zy.base import Market
+from tradingview_zy.domain import Capability, UnsupportedCapabilityError
 
 from tradingview_zy.fun import (
     datetime_to_int,
@@ -56,23 +57,21 @@ class Exchange(ABC):
         例如 ：{'d': 'Day'}  # 内部使用的周期是 d，在web端展示  Day
         """
 
-    @abstractmethod
-    def all_stocks(self):
-        """
-        获取支持的所有股票列表
-        :return:
-        """
+    def _unsupported(self, capability: Capability):
+        raise UnsupportedCapabilityError(
+            f"{self.__class__.__name__} 不支持能力 {capability.value}",
+            provider=self.__class__.__name__,
+        )
 
-    @abstractmethod
+    def all_stocks(self):
+        """Return a security catalogue only when the provider implements it."""
+        return self._unsupported(Capability.CATALOG)
+
     def now_trading(
         self, code: str | None = None, at: datetime.datetime | None = None
     ) -> bool:
-        """Return whether ``code`` is in an open, known trading session.
-
-        Futures providers require the instrument because session profiles vary
-        by product. Implementations must return a strict bool and fail closed
-        when the calendar, year, or instrument cannot be identified.
-        """
+        """Return a strict session state when the provider declares the capability."""
+        return self._unsupported(Capability.SESSION_STATUS)
 
     @abstractmethod
     def klines(
@@ -93,57 +92,29 @@ class Exchange(ABC):
         :return:
         """
 
-    @abstractmethod
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        获取股票列表的 Tick 信息
-        :param codes:
-        :return:
-        """
+        """Return ticks only when the provider declares the capability."""
+        return self._unsupported(Capability.TICKS)
 
-    @abstractmethod
     def stock_info(self, code: str) -> Union[Dict, None]:
-        """
-        获取股票的基本信息
-        :param code:
-        :return:
-        """
+        """Return symbol metadata only when the provider implements a catalogue."""
+        return self._unsupported(Capability.CATALOG)
 
-    @abstractmethod
     def stock_owner_plate(self, code: str):
-        """
-        股票所属板块信息
-        :param code:
-        :return:
-        return {
-            'HY': [{'code': '行业代码', 'name': '行业名称'}],
-            'GN': [{'code': '概念代码', 'name': '概念名称'}],
-        }
-        """
+        """Return plate ownership only for providers declaring PLATES."""
+        return self._unsupported(Capability.PLATES)
 
-    @abstractmethod
     def plate_stocks(self, code: str):
-        """
-        获取板块股票列表信息
-        :param code: 板块代码
-        :return:
-        return [{'code': 'SH.000001', 'name': '上证指数'}]
-        """
+        """Return plate constituents only for providers declaring PLATES."""
+        return self._unsupported(Capability.PLATES)
 
-    @abstractmethod
     def balance(self):
-        """
-        账户资产信息
-        :return:
-        """
+        """Return account balance only for providers declaring ACCOUNT_BALANCE."""
+        return self._unsupported(Capability.ACCOUNT_BALANCE)
 
-    @abstractmethod
     def positions(self, code: str = ""):
-        """
-        当前账户持仓信息
-        :param code:
-        :return:
-        """
+        """Return positions only for providers declaring POSITIONS."""
+        return self._unsupported(Capability.POSITIONS)
 
     def _raise_live_trading_disabled(self, action: str = "order"):
         raise LiveTradingDisabledError(

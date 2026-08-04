@@ -366,20 +366,8 @@ class ExchangeTDXFutures(TdxExHqLifecycleMixin, Exchange):
         # 通达信行情是后对其的，统一将 日以上级别的行情日期转换成 23点
         return dt.replace(hour=23, minute=0)
 
-    def balance(self):
-        raise Exception("交易所不支持")
-
-    def positions(self, code: str = ""):
-        raise Exception("交易所不支持")
-
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)
-
-    def stock_owner_plate(self, code: str):
-        raise Exception("交易所不支持")
-
-    def plate_stocks(self, code: str):
-        raise Exception("交易所不支持")
 
 
 if __name__ == "__main__":

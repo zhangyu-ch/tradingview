@@ -511,3 +511,12 @@
 - removed-provider tombstone 需要读取“尚未验证的 provider 名称”后立即执行，再进入普通 registry 验证；否则 CTP/ZB 会被降格为一般未知 provider，丢失删除原因和安全证明。
 - 展示周期与特定离线同步周期可以有不同集合，但两者必须位于同一个 MarketSpec；同步任务不可自行维护第三套允许列表。
 - 单一来源应以 synthetic descriptor 故障注入证明：一个注册条目能同时派生页面 catalog、默认代码、UDF session/type/timezone 和同步校验，而缺项/双默认在启动时失败。
+
+
+## LO-07 显式能力边界与空桩治理
+- 可选 provider 能力不应由每个适配器重复 `pass`、空列表、`RuntimeWarning` 或通用 `Exception`；统一由 `Exchange` 基类抛出带 capability/provider 的 `UnsupportedCapabilityError`，标准工厂再按注册表能力提前拒绝。
+- 注册表过报检查不能只看 `callable(getattr(...))`：继承自 `Exchange` 的统一 fallback 仍然 callable，`ContractedExchange` 必须把该实现识别为“未实现”。
+- 直接删除适配器空桩后，旧测试若仍要求方法存在，会把 speculative generality 固化为契约；应保留“不声明能力”的领域目标，更新为断言 provider 不重声明空桩。
+- IB 的 `all_stocks()` 只是恒定空列表，不能支撑 CATALOG/SECURITY_MASTER；保留真实 ticks/session/account/positions，删除目录能力声明。
+- 运行树墓碑模块和无调用方 RuntimeError 壳会制造虚假能力面；确认没有运行引用后应删除。真正需要的可选生命周期 hook 应明确 `return None`，而不是裸 `pass`。
+- `cl_app.__init__` 中 `_UnavailableTasks.__getattr__` 的 RuntimeError 属于第 81 条 MX-12 旧模块专用降级残留，本条只记录、不提前合并后续问题。

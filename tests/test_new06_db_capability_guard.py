@@ -19,16 +19,6 @@ def _method_node(source: str, name: str) -> ast.FunctionDef:
     return matches[0]
 
 
-def _is_unimplemented(node: ast.FunctionDef) -> bool:
-    body = node.body
-    if len(body) == 1 and isinstance(body[0], ast.Pass):
-        return True
-    if len(body) == 1 and isinstance(body[0], ast.Return):
-        value = body[0].value
-        return isinstance(value, (ast.List, ast.Tuple, ast.Set)) and not value.elts
-    return False
-
-
 def test_registry_exists_but_does_not_overclaim_db_security_metadata() -> None:
     assert REGISTRY.exists()
     source = REGISTRY.read_text(encoding="utf-8")
@@ -41,12 +31,22 @@ def test_db_exposes_only_a_persisted_code_catalog_not_security_metadata() -> Non
     all_stocks_source = ast.get_source_segment(source, all_stocks) or ""
 
     # NX-23 may expose codes already present in K-line storage, but that is not
-    # an authoritative security master: names remain the code itself and the
-    # plate metadata methods must stay explicitly unsupported.
+    # an authoritative security master: names remain the code itself. LO-07
+    # centralizes unsupported capabilities in Exchange instead of redeclaring
+    # provider-specific pass/empty stubs.
     assert "db.klines_codes(self.market)" in all_stocks_source
     assert '{"code": code, "name": code}' in all_stocks_source
-    assert _is_unimplemented(_method_node(source, "stock_owner_plate"))
-    assert _is_unimplemented(_method_node(source, "plate_stocks"))
+    tree = ast.parse(source)
+    class_node = next(
+        node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ExchangeDB"
+    )
+    methods = {
+        node.name
+        for node in class_node.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert "stock_owner_plate" not in methods
+    assert "plate_stocks" not in methods
 
 
 def test_future_registry_cannot_overreport_db_capabilities() -> None:

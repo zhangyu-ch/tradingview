@@ -8,7 +8,7 @@ from typing import Any, Callable, TypeVar
 import pandas as pd
 
 from tradingview_zy.base import Market
-from tradingview_zy.exchange.exchange import LiveTradingDisabledError
+from tradingview_zy.exchange.exchange import Exchange, LiveTradingDisabledError
 from tradingview_zy.domain import (
     CAPABILITY_METHODS,
     Capability,
@@ -49,7 +49,9 @@ class ContractedExchange:
         missing: list[str] = []
         for capability in self.capabilities:
             for method in CAPABILITY_METHODS[capability]:
-                if not callable(getattr(self.raw_provider, method, None)):
+                implementation = getattr(type(self.raw_provider), method, None)
+                inherited_stub = implementation is getattr(Exchange, method, None)
+                if not callable(getattr(self.raw_provider, method, None)) or inherited_stub:
                     missing.append(f"{capability.value}:{method}")
         if missing:
             raise ProviderResponseError(

@@ -278,14 +278,6 @@ class ExchangeBaostock(Exchange):
         kline = kline.sort_values("date", kind="stable").reset_index(drop=True)
         return kline[["code", "date", "open", "close", "high", "low", "volume"]]
 
-    def ticks(self, codes: list[str]) -> dict[str, Tick]:
-        """
-        获取股票列表的 Tick 信息
-        :param codes:
-        :return:
-        """
-        raise UnsupportedCapabilityError(provider="baostock")
-
     def stock_info(self, code: str) -> dict[str, str] | None:
         """
         获取股票的基本信息
@@ -303,37 +295,6 @@ class ExchangeBaostock(Exchange):
         if rows:
             return {"code": rows[0][0], "name": rows[0][1]}
         return None
-
-    def stock_owner_plate(self, code: str):
-        """
-        股票所属板块信息
-        :param code:
-        :return:
-        """
-        raise UnsupportedCapabilityError(provider="baostock")
-
-    def plate_stocks(self, code: str):
-        """
-        获取板块股票列表信息
-        :param code: 板块代码
-        :return:
-        """
-        raise UnsupportedCapabilityError(provider="baostock")
-
-    def balance(self):
-        """
-        账户资产信息
-        :return:
-        """
-        raise UnsupportedCapabilityError(provider="baostock")
-
-    def positions(self, code: str = ""):
-        """
-        当前账户持仓信息
-        :param code:
-        :return:
-        """
-        raise UnsupportedCapabilityError(provider="baostock")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)

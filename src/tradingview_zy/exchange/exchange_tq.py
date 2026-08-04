@@ -483,12 +483,6 @@ class ExchangeTq(Exchange):
     def cancel_order(self, order):
         return self._raise_live_trading_disabled("cancel_order")
 
-    def stock_owner_plate(self, code: str):
-        raise Exception("交易所不支持")
-
-    def plate_stocks(self, code: str):
-        raise Exception("交易所不支持")
-
 
 if __name__ == "__main__":
     ex = ExchangeTq(use_simulate_account=False)

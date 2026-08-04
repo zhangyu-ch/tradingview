@@ -67,12 +67,6 @@ class ExchangeIB(Exchange):
             "1m": "1m",
         }
 
-    def all_stocks(self):
-        """
-        TODO IB 不提供获取全部代码的接口
-        """
-        return []
-
     def search_stocks(self, search: str):
         """
         补充 获取所有 股票的代码，IB 提供按照关键字进行搜索的接口
@@ -196,12 +190,6 @@ class ExchangeIB(Exchange):
         res = self._rpc(CmdEnum.STOCK_INFO, {"code": code})
         self.cache[f"stock_info_{code}"] = res
         return res
-
-    def stock_owner_plate(self, code: str):
-        pass
-
-    def plate_stocks(self, code: str):
-        pass
 
     @retry(
         stop=stop_after_attempt(3),

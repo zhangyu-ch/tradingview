@@ -116,23 +116,8 @@ class ExchangePolygon(Exchange):
             None,
         )
 
-    def ticks(self, codes: list[str]) -> dict[str, Tick]:
-        raise UnsupportedCapabilityError(provider="polygon")
-
     def now_trading(self, code: str | None = None, at=None) -> bool:
         return is_market_open("us", code=code, at=at)
-
-    def stock_owner_plate(self, code: str):
-        raise UnsupportedCapabilityError(provider="polygon")
-
-    def plate_stocks(self, code: str):
-        raise UnsupportedCapabilityError(provider="polygon")
-
-    def balance(self):
-        raise UnsupportedCapabilityError(provider="polygon")
-
-    def positions(self, code: str = ""):
-        raise UnsupportedCapabilityError(provider="polygon")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)

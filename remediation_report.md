@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 75
-- **待处理：** 6
+- **已完成：** 76
+- **待处理：** 5
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -86,7 +86,7 @@
 |73|`MX-18`|低|Strategy Architecture|❌ 未修复|已完成（显式版本化 Signal→Decision→Operation 桥接）|通过（双向可追溯转换、非执行信号拒绝、篡改检测和 82 项严格相邻测试通过）|`feat(MX-18)`|
 |74|`NX-11`|低|Database Schema|❌ 未修复|已完成（独立监控事件类型、动作与数值评分）|通过（14 项专项、105 项严格相邻及 595 项可收集仓库回归通过；MySQL/pinyin/empyrical 环境限制已单独记录）|`fix(NX-11)`|
 |75|`LO-05`|低|Architecture|🟡 部分修复|已完成（MarketRegistry 成为全栈市场单一来源）|通过（82 项严格聚焦/相邻测试及 605 项可运行仓库回归通过；单注册全栈派生与故障注入已固定）|`fix(LO-05)`|
-|76|`LO-07`|低|Dead Code|🟡 部分修复|待处理|—|—|
+|76|`LO-07`|低|Dead Code|🟡 部分修复|已完成（删除 speculative stubs 并统一能力错误边界）|通过（43 项聚焦、105 项严格 provider 矩阵及 619 项可运行仓库回归通过；能力过报和空桩恢复均有自动门禁）|`refactor(LO-07)`|
 |77|`LO-08`|低|Documentation|🟡 部分修复|待处理|—|—|
 |78|`LO-03`|低|Domain Model|🟡 部分修复|待处理|—|—|
 |79|`LO-04`|低|Domain Model|🟡 部分修复|待处理|—|—|
@@ -1874,16 +1874,28 @@
 ### 76. LO-07 · 保留多处 pass/旧桩/历史任务壳，能力边界不清（Speculative Generality）
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 低 / Dead Code
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（删除 speculative stubs 并统一能力错误边界）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 清理过一批旧目录后，运行树仍保留 tradingview_zy.monitor、cache_a_cal_cds.py、ai_analyse.py 三个墓碑模块，FileCacheDB 与 BackTest 仍暴露只会抛 RuntimeError/NotImplementedError 的无调用方壳；多个 Exchange 适配器还分别定义 pass、空列表、RuntimeWarning 或通用 Exception 形式的未支持方法。因为这些方法仍然存在且 callable，调用方和能力注册表会把未实现能力误判为可用；IB 甚至用恒定空 all_stocks() 支撑目录能力声明。问题真实存在。
+- **b. 我是怎么修复的？** 在 Exchange 基类集中实现全部可选能力 fallback，由一个 _unsupported() 统一抛出包含 capability 与 provider 的 UnsupportedCapabilityError；ContractedExchange 构造校验把继承自 Exchange 的 fallback 识别为未实现，防止注册表用 callable 检查过报。删除各 provider 重复的空桩，只保留真实实现，并从 IB 能力声明移除 CATALOG/SECURITY_MASTER。删除三个运行树墓碑模块、FileCacheDB 五个旧缠论兼容壳和无调用方 BackTest.show_charts。两个确有扩展用途的回测生命周期 hook 保留，但改为显式 return None，区分受支持 no-op 与未实现能力。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 新增 LO-07 专项门禁：最小 Exchange 子类逐项调用 all_stocks/now_trading/ticks/stock_info/板块/balance/positions，全部返回同一 unsupported_capability 领域错误并携带准确 capability/provider。
+  - 构造仅继承基类 fallback 却声明 TICKS 或 CATALOG 的 ProviderSpec，验证 ContractedExchange 在发布 facade 前以 provider_response_invalid 拒绝能力过报。
+  - AST 遍历全部运行时 Exchange* 类，拒绝可选能力方法中的 pass、空容器、None、通用 Exception/RuntimeError/RuntimeWarning/NotImplementedError 桩；同时验证三个墓碑路径、五个 FileCacheDB 壳与 BackTest.show_charts 已不存在。
+  - 验证 on_bt_loop_start/clear 只有显式 return None；IB 注册表不再声明 CATALOG/SECURITY_MASTER，但仍保留 ticks、session、balance、positions 真实能力。
+  - 运行 LO-07、ME-10、NEW-06、NX-23、MX-16、NX-09、CR-05、MX-02 聚焦组合：43 passed（-W error）。
+  - 运行 LO-07 与完整 provider 可靠性矩阵：105 passed（-W error），覆盖 Binance/TQ/Baostock/TDX/Futu/IB/QMT/footprint 等真实相邻路径。
+  - 临时准备受控 config 后运行仓库级可运行回归：619 passed、5 skipped、8 deselected；8 个 deselect 均因当前容器缺少 pinyin 在 cl_app 导入阶段阻断。完整套件唯一额外收集阻断为缺少 empyrical 的 test_backtesting_base_generic.py。
+  - 执行 compileall、repository hygiene、quality/readability/dependency、Secret、supply-chain、FIFO、JSON、git diff 与全部变更 CRLF 门禁，全部通过。
+- **e. 验证是否通过？** 通过（43 项聚焦、105 项严格 provider 矩阵及 619 项可运行仓库回归通过；能力过报和空桩恢复均有自动门禁）
+- **提交：** refactor(LO-07): replace speculative stubs with capability errors
+- **修改文件：** `src/tradingview_zy/exchange/exchange.py`, `src/tradingview_zy/exchange/contracted.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_baostock.py`, `src/tradingview_zy/exchange/exchange_binance.py`, `src/tradingview_zy/exchange/exchange_binance_spot.py`, `src/tradingview_zy/exchange/exchange_db.py`, `src/tradingview_zy/exchange/exchange_ib.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/exchange_qmt.py`, `src/tradingview_zy/exchange/exchange_tdx.py`, `src/tradingview_zy/exchange/exchange_tdx_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_fx.py`, `src/tradingview_zy/exchange/exchange_tdx_hk.py`, `src/tradingview_zy/exchange/exchange_tdx_ny_futures.py`, `src/tradingview_zy/exchange/exchange_tdx_us.py`, `src/tradingview_zy/exchange/exchange_tq.py`, `src/tradingview_zy/market_registry.py`, `src/tradingview_zy/backtesting/base.py`, `src/tradingview_zy/backtesting/backtest.py`, `src/tradingview_zy/file_db.py`, `src/tradingview_zy/monitor.py`, `src/tradingview_zy/others/cache_a_cal_cds.py`, `src/tradingview_zy/tools/ai_analyse.py`, `tests/test_lo07_explicit_capability_boundaries.py`, `tests/test_new06_db_capability_guard.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - cl_app app factory 中 _REMOVED_LEGACY_*、_UnavailableTasks 与 _LazyTasks 属于第 81 条 MX-12 的迁移残留，本条不提前合并后续问题。
+  - order() 继续由 CR-03 的 LiveTradingDisabledError 无条件 fail-closed；它不是 speculative no-op，也不会因本条恢复实盘能力。
+  - on_bt_loop_start/clear 是明确受支持的可选生命周期 hook，默认 return None；具体策略仍可覆盖它们。
+  - 当前容器缺少 pinyin 与 empyrical；环境阻断已单独记录，托管 Python 3.11 锁定环境仍执行完整 pytest。
 - **原报告最新结论：** 清理提交删除了 cl_myquant/cl_vnpy/cl_wtpy 和旧 trader 墓碑脚本，减少了一批历史桩。但 tradingview_zy.monitor、other_tasks.py、部分 Exchange 不支持方法和其他 pass/RuntimeError 桩仍在，能力边界仍不清楚。
 - **原报告建议：** 从能力注册表移除未实现能力；真正需要兼容的入口使用单一、可测试的 Unsupported 错误，不再散布空桩。
 
