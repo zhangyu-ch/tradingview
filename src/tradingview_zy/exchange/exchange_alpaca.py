@@ -10,6 +10,7 @@ from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
 from tradingview_zy import config, fun
+from tradingview_zy.data_contracts import ProviderBarPayload
 from tradingview_zy.domain import InvalidRequestError, UnsupportedCapabilityError
 from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.exchange.provider_observability import call_provider
@@ -100,14 +101,14 @@ class ExchangeAlpaca(Exchange):
             request_id=request_args.get("request_id"),
         )
         provider_rows = [
-            {
-                "timestamp": bar.timestamp,
-                "open": bar.open,
-                "close": bar.close,
-                "high": bar.high,
-                "low": bar.low,
-                "volume": bar.volume,
-            }
+            ProviderBarPayload(
+                timestamp=bar.timestamp,
+                open=bar.open,
+                close=bar.close,
+                high=bar.high,
+                low=bar.low,
+                volume=bar.volume,
+            )
             for bar in bars.data.get(code.upper(), [])
         ]
         return build_us_history_frame(provider_rows, code=code, frequency=frequency)

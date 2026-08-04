@@ -850,3 +850,20 @@
 - 全部编译、支持矩阵、质量、供应链、Secret、FIFO、JSON、diff 与 CRLF 门禁通过。
 - 提交主题：`refactor(LO-03): enforce typed market and order codes`。
 - 下一条：79. LO-04。
+
+
+### 2026-08-04 · 问题 79 LO-04 验证开始
+- 原报告的 OrderRequest/Fill/OrderState/KlineFrame 在当前重建运行树中并不存在；`domain.py` 只有第 78 条新增的代码枚举。
+- 已定位两个高风险 Data Clumps：Alpaca/Polygon 把同一 OHLCV 七字段 dict 列表传入共享 frame builder；告警策略配置在 Web、AlertTasks 和 DB 间反复传递/解析任意 dict。
+- 修复方向：新增不可变 KlineBar、OrderRequest、Fill、OrderState 与 StrategyParameters 领域对象；在 provider payload、策略配置和执行桥接边界使用，内部 DataFrame 继续保留。
+- LO-04 首轮专项 8 passed/1 failed；唯一失败为未知市场从共享 parser 透出 `InvalidRequestError`，未收敛到 DataContractError。产品仍 fail-closed；现将异常统一到数据契约边界后复验。
+- LO-04 首次相邻回归命令引用不存在的 `test_lo02_shared_adapters.py`，pytest 在收集前退出；已改用实际测试目录清单，不重复原命令。
+
+
+### 问题 79：LO-04 完成
+- 新增不可变、版本化的 provider bar、canonical Kline、策略参数、订单请求、成交和订单状态领域对象；公共边界不再依赖重复 dict。
+- Alpaca/Polygon、US history、策略存储/Web/AlertTasks 和策略桥接已接入；内部 DataFrame 保留，实盘能力仍 fail-closed。
+- 9 项专项、142 项严格相邻、646 项可运行仓库回归通过；5 skipped、8 个 pinyin 环境节点 deselect，empyrical 收集限制单独记录。
+- 全部编译、质量、供应链、Secret、FIFO、Node、JSON、diff 与 CRLF 门禁通过。
+- 提交主题：`refactor(LO-04): introduce immutable data contracts`。
+- 下一条：80. LO-01。

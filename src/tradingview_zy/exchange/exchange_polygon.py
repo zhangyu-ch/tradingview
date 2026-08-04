@@ -9,6 +9,7 @@ import pandas as pd
 from polygon.rest import RESTClient
 
 from tradingview_zy import config, fun
+from tradingview_zy.data_contracts import ProviderBarPayload
 from tradingview_zy.domain import InvalidRequestError, UnsupportedCapabilityError
 from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.exchange.provider_observability import call_provider
@@ -92,14 +93,14 @@ class ExchangePolygon(Exchange):
             request_id=request_args.get("request_id"),
         )
         provider_rows = [
-            {
-                "timestamp": aggregate.timestamp,
-                "open": aggregate.open,
-                "close": aggregate.close,
-                "high": aggregate.high,
-                "low": aggregate.low,
-                "volume": aggregate.volume,
-            }
+            ProviderBarPayload(
+                timestamp=aggregate.timestamp,
+                open=aggregate.open,
+                close=aggregate.close,
+                high=aggregate.high,
+                low=aggregate.low,
+                volume=aggregate.volume,
+            )
             for aggregate in response
         ]
         return build_us_history_frame(

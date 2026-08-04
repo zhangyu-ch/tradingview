@@ -89,7 +89,7 @@
 |76|`LO-07`|低|Dead Code|🟡 部分修复|已完成（删除 speculative stubs 并统一能力错误边界）|通过（43 项聚焦、105 项严格 provider 矩阵及 619 项可运行仓库回归通过；能力过报和空桩恢复均有自动门禁）|`refactor(LO-07)`|
 |77|`LO-08`|低|Documentation|🟡 部分修复|已完成（运行事实、支持矩阵与历史研究目录已对齐）|通过（7 项文档专项、50 项严格相邻及 626 项可运行仓库回归通过；文档漂移已变成 CI 可执行失败）|`docs(LO-08)`|
 |78|`LO-03`|低|Domain Model|🟡 部分修复|已完成（市场、周期与订单代码统一领域化）|通过（11 项专项、193 项严格相邻、637 项可运行仓库回归及全部静态门禁通过）|`refactor(LO-03)`|
-|79|`LO-04`|低|Domain Model|🟡 部分修复|待处理|—|—|
+|79|`LO-04`|低|Domain Model|🟡 部分修复|已完成（不可变 provider、策略与订单数据契约）|通过（9 项专项、142 项严格相邻与 646 项可运行仓库回归通过；环境阻断已单独记录）|`refactor(LO-04)`|
 |80|`LO-01`|低|Maintainability|🟡 部分修复|待处理|—|—|
 |81|`MX-12`|低|Architecture / Spec|🟡 部分修复|待处理|—|—|
 
@@ -1957,16 +1957,29 @@
 ### 79. LO-04 · OHLCV、订单和策略参数以重复 dict 传递（Data Clumps）
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 低 / Domain Model
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（不可变 provider、策略与订单数据契约）
+- **问题是否存在：** 是。当前运行树实际没有原报告曾引用的 `OrderRequest`、`Fill`、`OrderState` 或 `KlineFrame`；Alpaca/Polygon 重复构造 OHLCV dict，策略配置在 Web、任务、存储和 loader 之间重复解析任意 dict，策略桥接也缺少显式订单/成交/状态数据组。
+- **a. 这个问题是什么？** 相同字段组由多个调用方分别拼装和校验，容易出现字段遗漏、拼写漂移、嵌套对象被修改、NaN/Inf/负数量进入下游，以及策略配置或订单语义被调用方猜测。SQLite/DataFrame 的宽松行为会进一步掩盖错误。
+- **b. 我是怎么修复的？**
+  - 新增 `data_contracts.py`，建立版本化、`frozen=True, slots=True` 的 `ProviderBarPayload`、`KlineBar`、`StrategyParameters`、`OrderRequest`、`Fill` 和 `OrderState`。
+  - 所有对象统一校验文本、控制字符、有限数、OHLC 一致性、非负成交量、正数量/价格、timezone-aware 时间、JSON schema/大小及 Market/OrderSide/OrderOffset/OrderStatus 枚举。
+  - Alpaca 与 Polygon 只构造 `ProviderBarPayload`；`us_history` 规范化时间、排序和去重后物化 `KlineBar`，内部仍输出兼容 DataFrame。
+  - 策略存储、Web 编辑和 `AlertTasks` 共同使用 `StrategyParameters`，新配置带 `schema_version=1`，旧的已登记 `strategy_path` 继续只读兼容。
+  - `strategy_bridge` 新增显式 `TradeDecision → OrderRequest`，数量/价格必须由调用者提供；不会启用实盘提交。`Fill/OrderState` 提供不可变部分成交、加权均价、归属和超量检查。
+- **c. 修复后是否验证？** 是。
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 9 项专项测试覆盖不可变性、OHLC/负成交量、时区、重复时间、canonical JSON/深拷贝、未知字段、订单参数、部分/完整成交和错误 fill 归属。
+  - 静态检查两个 US provider 已无重复六字段 dict；动态确认策略配置只解析一次且旧 `strategy_path` 只能映射服务端注册表。
+  - LO-04/NX-10/ME-18/ME-20/MX-18/LO-02/ME-14/LO-06/ME-17 严格组合：142 passed（`-W error`）。
+  - 可运行仓库回归：646 passed、5 skipped、8 deselected；8 项是当前容器缺少 `pinyin` 的既有 Web 导入节点，完整回测收集仍受缺少 `empyrical` 阻断。
+  - compileall、质量/可读性、供应链、Secret、FIFO、Node、JSON、diff 与 CRLF 门禁全部通过。
+- **e. 验证是否通过？** 通过。三类高风险数据团块均由不可变、版本化、可验证的公共边界接管，且没有打开实盘能力。
+- **提交：** refactor(LO-04): introduce immutable data contracts
+- **修改文件：** `src/tradingview_zy/data_contracts.py`, `src/tradingview_zy/alert_strategy_storage.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/us_history.py`, `src/tradingview_zy/strategy_bridge.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `tests/test_lo04_data_clump_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 内部 DataFrame 与 SDK 对象仍是实现细节；本条不做全仓对象化。
+  - `OrderRequest` 仅表达订单意图，`LIVE_ORDERS` 仍由 CR-03 无条件 fail-closed；没有真实券商联调或交易。
+  - 当前容器缺少 `pinyin` 与 `empyrical`，环境阻断已如实记录，托管 Python 3.11 锁定环境仍需运行完整套件。
 - **原报告最新结论：** 新增不可变 OrderRequest、Fill、OrderState 和严格 KlineFrame 边界，部分核心 dict 已被领域对象替代；旧适配器和策略参数仍广泛传 dict。
 - **原报告建议：** 按模块边界渐进迁移，不要求内部 DataFrame 全部对象化；优先交易/成交和外部 provider payload。
 

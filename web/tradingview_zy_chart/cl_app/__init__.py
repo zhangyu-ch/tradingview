@@ -86,7 +86,9 @@ from tradingview_zy.alert_strategy_storage import (
     build_strategy_config,
     normalize_strategy_memo,
     parse_strategy_kwargs,
+    parse_strategy_parameters,
 )
+from tradingview_zy.data_contracts import StrategyParameters
 from tradingview_zy.secret_store import ManagedSecretStore
 from tradingview_zy.settings_security import (
     feishu_secret_is_configured,
@@ -1299,14 +1301,14 @@ def create_app(test_config=None):
             _alert_config = _alert_tasks.alert_get(id)
             if _alert_config is not None:
                 try:
-                    strategy_config = json.loads(_alert_config.strategy_config or "{}")
-                except json.JSONDecodeError:
-                    strategy_config = {}
-                if not isinstance(strategy_config, dict):
-                    strategy_config = {}
+                    parameters = parse_strategy_parameters(
+                        _alert_config.strategy_config or "{}"
+                    )
+                except StrategyStorageValidationError:
+                    parameters = StrategyParameters()
 
-                strategy_id = strategy_config.get("strategy_id", "")
-                legacy_strategy_path = strategy_config.get("strategy_path", "")
+                strategy_id = parameters.strategy_id
+                legacy_strategy_path = parameters.strategy_path
                 unavailable_strategy_id = ""
                 if strategy_id and strategy_id not in strategy_registry:
                     unavailable_strategy_id = str(strategy_id)
@@ -1327,7 +1329,7 @@ def create_app(test_config=None):
                     "frequency": _alert_config.frequency,
                     "strategy_id": strategy_id,
                     "strategy_kwargs": json.dumps(
-                        strategy_config.get("strategy_kwargs", {}), ensure_ascii=False
+                        parameters.kwargs, ensure_ascii=False
                     ),
                     "strategy_memo": _alert_config.strategy_memo,
                     "legacy_strategy_path": (

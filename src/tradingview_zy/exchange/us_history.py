@@ -4,6 +4,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, time, timedelta
 from typing import Any
+
+from tradingview_zy.data_contracts import KlineBar, ProviderBarPayload
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -112,7 +114,7 @@ def _empty_history_frame() -> pd.DataFrame:
 
 
 def build_us_history_frame(
-    records: pd.DataFrame | Iterable[Mapping[str, Any]] | None,
+    records: pd.DataFrame | Iterable[Mapping[str, Any] | ProviderBarPayload] | None,
     *,
     code: str,
     frequency: str,
@@ -138,7 +140,13 @@ def build_us_history_frame(
         frame = records.copy(deep=True)
     else:
         try:
-            frame = pd.DataFrame(list(records))
+            materialized = [
+                record.to_mapping(timestamp_field=timestamp_field)
+                if isinstance(record, ProviderBarPayload)
+                else dict(record)
+                for record in records
+            ]
+            frame = pd.DataFrame(materialized)
         except (TypeError, ValueError) as exc:
             raise UsHistoryPayloadError("provider history records are invalid") from exc
     if frame.empty:
@@ -192,5 +200,16 @@ def build_us_history_frame(
 
     output.sort_values("date", kind="mergesort", inplace=True)
     output.drop_duplicates(subset=["date"], keep="last", inplace=True)
-    output.reset_index(drop=True, inplace=True)
-    return output[CANONICAL_COLUMNS]
+    bars = [
+        KlineBar(
+            code=row.code,
+            date=row.date.to_pydatetime() if isinstance(row.date, pd.Timestamp) else row.date,
+            open=row.open,
+            close=row.close,
+            high=row.high,
+            low=row.low,
+            volume=row.volume,
+        )
+        for row in output.itertuples(index=False)
+    ]
+    return pd.DataFrame([bar.to_mapping() for bar in bars], columns=CANONICAL_COLUMNS)

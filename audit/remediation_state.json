@@ -4903,16 +4903,42 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（不可变 provider、策略与订单数据契约）",
+      "problem_verified": true,
+      "problem_summary": "当前运行树并没有原报告曾引用的 OrderRequest、Fill、OrderState 或 KlineFrame 领域对象。Alpaca 与 Polygon 仍各自组装相同的 timestamp/open/close/high/low/volume dict；策略配置在 Web 编辑、AlertTasks、存储校验和策略加载之间反复 json.loads 并传递任意 dict；策略交易桥接只能生成旧 Operation，缺少明确的订单意图、成交和状态数据组。字段遗漏、拼写漂移、可变嵌套对象和非法数值只能由每个调用方重复防御，问题仍真实存在。",
+      "fix_summary": "新增 data_contracts.py，定义版本化、frozen/slots 的 ProviderBarPayload、KlineBar、StrategyParameters、OrderRequest、Fill 和 OrderState，并统一文本、有限数、时区、OHLC、数量、价格、JSON 大小及领域枚举校验。Alpaca/Polygon 只构造 ProviderBarPayload，共享 us_history 在规范化后物化 KlineBar 再输出 DataFrame；策略存储、Web 编辑和 AlertTasks 共同解析一次 StrategyParameters，新保存配置带 schema_version 且兼容已登记的旧 strategy_path；strategy_bridge 增加显式 TradeDecision→OrderRequest 转换，必须由调用者提供数量/价格，绝不启用实盘提交。Fill/OrderState 提供不可变的部分成交、加权均价和归属/超量检查。",
+      "verification_performed": true,
+      "verification_method": [
+        "9 项 LO-04 专项测试验证 frozen 语义、OHLC/负成交量拒绝、纽约时区 KlineBar、重复时间 keep-last、canonical JSON、深拷贝、未知字段/双策略身份拒绝、订单参数校验、Fill→OrderState 部分/完整成交及篡改归属拒绝。",
+        "静态契约确认 Alpaca/Polygon 不再复制六字段 dict，AlertTasks 与 Web 编辑不再各自 json.loads strategy_config；动态验证旧 strategy_path 仍只能解析到服务端注册策略。",
+        "运行 LO-04、NX-10、ME-18、ME-20、MX-18、LO-02、ME-14、LO-06、ME-17 严格相邻组合：142 passed（-W error）。",
+        "使用受控临时 config 执行全部可运行仓库回归：646 passed、5 skipped、8 deselected；deselect 为当前容器缺少 pinyin 的既有 Web 导入节点，完整回测收集仍受缺少 empyrical 阻断。",
+        "执行 compileall、repository hygiene、readability、quality gates、Secret、供应链、FIFO、Node JavaScript、JSON、git diff --check 和历史 CRLF 门禁，全部通过。"
+      ],
+      "verification_result": "通过（9 项专项、142 项严格相邻与 646 项可运行仓库回归通过；环境阻断已单独记录）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/data_contracts.py",
+        "src/tradingview_zy/alert_strategy_storage.py",
+        "src/tradingview_zy/exchange/exchange_alpaca.py",
+        "src/tradingview_zy/exchange/exchange_polygon.py",
+        "src/tradingview_zy/exchange/us_history.py",
+        "src/tradingview_zy/strategy_bridge.py",
+        "web/tradingview_zy_chart/cl_app/__init__.py",
+        "web/tradingview_zy_chart/cl_app/alert_tasks.py",
+        "tests/test_lo04_data_clump_contracts.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "内部 pandas DataFrame 与第三方 SDK 对象仍作为实现细节保留；本条只在 provider、JSON、策略和订单公共边界消除高风险数据团块，不做全仓对象化。",
+        "OrderRequest 是不可变订单意图，不是下单权限；所有 LIVE_ORDERS 仍由 CR-03 fail-closed，未连接真实券商或执行任何交易。",
+        "当前容器缺少 pinyin 与 empyrical；相关测试在进入本条产品断言前阻断，托管 Python 3.11 锁定环境仍要求完整 pytest。"
+      ],
+      "commit_subject": "refactor(LO-04): introduce immutable data contracts"
     }
   },
   {

@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from tradingview_zy.data_contracts import OrderRequest
+from tradingview_zy.domain import OrderOffset, OrderSide
 from tradingview_zy.backtesting.base import Operation
 from tradingview_zy.strategies.base import (
     SIGNAL_SCHEMA_VERSION,
@@ -249,6 +251,35 @@ def trade_decision_to_operation(decision: TradeDecision) -> Operation:
         key=decision.key,
         open_uid=decision.open_uid,
         close_uid=decision.close_uid,
+    )
+
+
+def trade_decision_to_order_request(
+    decision: TradeDecision,
+    *,
+    market: str,
+    quantity: float,
+    price: float | None = None,
+    client_order_id: str = "",
+) -> OrderRequest:
+    """Materialize an explicit order intent without enabling live submission."""
+
+    decision = _validate_decision(decision)
+    side = OrderSide.BUY if decision.action is DecisionAction.OPEN else OrderSide.SELL
+    offset = (
+        OrderOffset.OPEN
+        if decision.action is DecisionAction.OPEN
+        else OrderOffset.CLOSE
+    )
+    return OrderRequest.create(
+        market=market,
+        code=decision.code,
+        side=side,
+        offset=offset,
+        quantity=quantity,
+        price=price,
+        client_order_id=client_order_id,
+        metadata={BRIDGE_INFO_KEY: decision.to_payload()},
     )
 
 

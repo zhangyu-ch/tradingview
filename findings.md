@@ -545,3 +545,11 @@
 - 控制字符必须在 `strip()` 前拒绝，否则 `"d\n"` 会被清洗成合法周期并掩盖输入错误。
 - provider metadata 本身也属于不可信配置：重复、未知或未来周期必须在 facade 构造时失败，不能等到某次行情调用。
 - 更早失败属于正确行为：未知市场从后续 K 线 input failure 前移到 target construction failure，确保策略、provider 和数据库均未执行。
+
+
+## LO-04 不可变数据团块边界
+- 数据团块的最佳收敛点是模块边界，而不是把内部所有 DataFrame/SDK 对象强制对象化；provider 输入、策略配置和订单意图是最高风险边界。
+- frozen dataclass 本身不足以保证嵌套 Mapping 不变；用 canonical JSON 保存参数/metadata，并在属性读取时反序列化，可同时获得深拷贝隔离、稳定序列化和大小门禁。
+- ProviderBarPayload 负责源字段成组校验，KlineBar 负责规范化后的 code/time/OHLCV 不变量；二者分层避免在 timestamp 尚未转换时伪装成 canonical bar。
+- OrderRequest 必须明确声明它只是意图而非权限；TradeDecision→OrderRequest 仍要求调用方显式提供数量/价格，不能从 score 或 position_rate 猜出真实委托。
+- Fill/OrderState 的不可变 apply_fill 可固定部分成交和加权均价语义，但不替代持久化券商对账状态机；CR-03 的实盘 fail-closed 不变。

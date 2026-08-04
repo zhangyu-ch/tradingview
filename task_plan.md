@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 9（第 74 条 NX-11 已完成；下一条为第 75 条 LO-05）
+阶段 9（第 79 条 LO-04 已完成；下一条为第 80 条 LO-01）
 
 ## 各阶段
 
@@ -93,7 +93,7 @@
 - [x] 76. LO-07
 - [x] 77. LO-08
 - [x] 78. LO-03
-- [ ] 79. LO-04
+- [x] 79. LO-04
 - [ ] 80. LO-01
 - [ ] 完成 71–80
 - [ ] 生成完整仓库归档 08
@@ -124,6 +124,10 @@
 ## 遇到的错误
 | 错误 | 尝试次数 | 解决方案 |
 |------|---------|---------|
+| LO-04 首轮专项中未知 market 透出 `InvalidRequestError`，未统一为 DataContractError | 1 | 在 OrderRequest 边界捕获领域 InvalidRequestError 并转换为稳定 DataContractError；不放宽市场校验 |
+| LO-04 首次相邻命令引用不存在的 `test_lo02_shared_adapters.py` | 1 | 用 `find tests` 获取实际 LO-02 文件名后重组命令；pytest 在收集前退出，未执行测试 |
+| LO-04 新测试直接导入 exchange.us_history，exchange 包因归档外 config.py 在收集阶段阻断 | 1 | 改用 spec_from_file_location 加载纯 us_history 模块，不伪造产品配置 |
+| LO-04 盘点命令的复合正则包含 shell 引号错误，最后一个 rg 未执行 | 1 | 已取得前序文件内容；改为分开运行简单 rg 命令，不重复原复合命令 |
 | LO-07 首次按完整字节块替换可选回测 hook 未命中，因为方法含 docstring | 1 | 在写回前中止；改用 AST 行号定位裸 pass，保留 CRLF 后定点替换 |
 | LO-07 首次聚焦测试命令引用错误的 NX-09 文件名，pytest 未收集测试 | 1 | 用 `find tests` 定位实际 `test_nx09_removed_us_fee_stub.py`，后续命令改用真实路径 |
 | LO-07 聚焦回归中 NEW-06 旧门禁仍要求 DB provider 保留空板块方法 | 1 | 保留 NEW-06 不过报能力目标，将断言更新为 provider 不再声明空桩、注册表继续不含 PLATES |

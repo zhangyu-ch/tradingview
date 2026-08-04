@@ -6,6 +6,11 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from tradingview_zy.data_contracts import (
+    DataContractError,
+    StrategyParameters,
+)
+
 STRATEGY_CONFIG_MAX_BYTES = 32 * 1024
 STRATEGY_MEMO_MAX_BYTES = 8 * 1024
 
@@ -72,8 +77,10 @@ def parse_strategy_kwargs(raw: str | None) -> dict[str, Any]:
     return value
 
 
-def normalize_strategy_config(value: str | Mapping[str, Any]) -> str:
-    """Return canonical JSON text that is safe for the configured TEXT boundary."""
+def parse_strategy_parameters(
+    value: str | Mapping[str, Any],
+) -> StrategyParameters:
+    """Parse the complete repeated strategy-parameter group once."""
     if isinstance(value, str):
         if _utf8_length(value, field="strategy_config") > STRATEGY_CONFIG_MAX_BYTES:
             raise StrategyStorageValidationError(
@@ -96,15 +103,14 @@ def normalize_strategy_config(value: str | Mapping[str, Any]) -> str:
         raise StrategyStorageValidationError("strategy_config 必须是 JSON 对象")
     _validate_json_value(parsed)
     try:
-        canonical = json.dumps(
-            parsed,
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-    except (TypeError, ValueError) as error:
-        raise StrategyStorageValidationError(f"strategy_config 无法序列化：{error}") from error
+        return StrategyParameters.from_mapping(parsed)
+    except (DataContractError, TypeError, ValueError) as error:
+        raise StrategyStorageValidationError(str(error)) from error
+
+
+def normalize_strategy_config(value: str | Mapping[str, Any]) -> str:
+    """Return canonical JSON emitted by the immutable strategy group contract."""
+    canonical = parse_strategy_parameters(value).to_json()
     if _utf8_length(canonical, field="strategy_config") > STRATEGY_CONFIG_MAX_BYTES:
         raise StrategyStorageValidationError(
             f"strategy_config 超过 {STRATEGY_CONFIG_MAX_BYTES} UTF-8 字节"
@@ -115,9 +121,13 @@ def normalize_strategy_config(value: str | Mapping[str, Any]) -> str:
 def build_strategy_config(strategy_id: str, strategy_kwargs: Mapping[str, Any]) -> str:
     if not isinstance(strategy_id, str) or not strategy_id.strip():
         raise StrategyStorageValidationError("strategy_id 不能为空")
-    return normalize_strategy_config(
-        {"strategy_id": strategy_id.strip(), "strategy_kwargs": dict(strategy_kwargs)}
-    )
+    try:
+        parameters = StrategyParameters.create(
+            strategy_id=strategy_id, kwargs=strategy_kwargs
+        )
+    except (DataContractError, TypeError, ValueError) as error:
+        raise StrategyStorageValidationError(str(error)) from error
+    return normalize_strategy_config(parameters.to_mapping())
 
 
 def normalize_strategy_memo(value: str | None) -> str:

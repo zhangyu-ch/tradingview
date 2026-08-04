@@ -1,7 +1,11 @@
-import json
 from typing import Dict, List
 
 from tradingview_zy import config, fun
+from tradingview_zy.alert_strategy_storage import (
+    StrategyStorageValidationError,
+    parse_strategy_parameters,
+)
+from tradingview_zy.data_contracts import StrategyParameters
 from tradingview_zy.db import TableByAlertTask, db
 from tradingview_zy.exchange import Market, get_exchange
 from tradingview_zy.monitoring import MonitoringRunner
@@ -72,18 +76,16 @@ class AlertTasks(object):
                 self.task_ids.append(_job.id)
         return True
 
-    def _resolve_strategy_id(self, strategy_config: dict) -> str | None:
-        strategy_id = strategy_config.get("strategy_id", "")
-        if isinstance(strategy_id, str) and strategy_id:
-            return strategy_id
+    def _resolve_strategy_id(self, parameters: StrategyParameters) -> str | None:
+        if parameters.strategy_id:
+            return parameters.strategy_id
 
         # Backward compatibility for already-saved tasks: a legacy path is accepted only
         # when it exactly matches a server-side registered strategy. It is never imported
         # directly from the database/request value.
-        legacy_path = strategy_config.get("strategy_path", "")
-        if isinstance(legacy_path, str) and legacy_path:
+        if parameters.strategy_path:
             return find_registered_strategy_id_by_path(
-                self.strategy_registry(), legacy_path
+                self.strategy_registry(), parameters.strategy_path
             )
         return None
 
@@ -132,26 +134,23 @@ class AlertTasks(object):
             return True
 
         try:
-            strategy_config = json.loads(alert_config.strategy_config or "{}")
-        except json.JSONDecodeError as e:
-            self.log.error(f"{alert_config.task_name} strategy_config JSON 解析失败：{e}")
-            return False
-        if not isinstance(strategy_config, dict):
-            self.log.error(f"{alert_config.task_name} strategy_config 必须是 JSON 对象")
+            parameters = parse_strategy_parameters(
+                alert_config.strategy_config or "{}"
+            )
+        except StrategyStorageValidationError as error:
+            self.log.error(
+                f"{alert_config.task_name} strategy_config 无效：{error}"
+            )
             return False
 
-        strategy_id = self._resolve_strategy_id(strategy_config)
-        strategy_kwargs = strategy_config.get("strategy_kwargs", {})
+        strategy_id = self._resolve_strategy_id(parameters)
+        strategy_kwargs = parameters.kwargs
         if strategy_id is None:
             self.log.error(
                 f"{alert_config.task_name} 未配置已注册的 strategy_id；"
                 "请在 ALERT_STRATEGIES 中登记策略后重新保存任务"
             )
             return False
-        if not isinstance(strategy_kwargs, dict):
-            self.log.error(f"{alert_config.task_name} strategy_kwargs 必须是 JSON 对象")
-            return False
-
         try:
             strategy = load_registered_strategy(
                 self.strategy_registry(), strategy_id, strategy_kwargs
