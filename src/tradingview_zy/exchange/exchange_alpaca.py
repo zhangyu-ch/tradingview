@@ -1,96 +1,68 @@
-import os
+from __future__ import annotations
 
-from alpaca.data import StockBarsRequest, StockSnapshotRequest, DataFeed
+import logging
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+from alpaca.data import DataFeed, StockBarsRequest, StockSnapshotRequest
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
-from tradingview_zy import config
-from tradingview_zy import fun
+from tradingview_zy import config, fun
+from tradingview_zy.domain import InvalidRequestError, UnsupportedCapabilityError
+from tradingview_zy.exchange.exchange import Exchange, Tick
+from tradingview_zy.exchange.provider_observability import call_provider
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
+from tradingview_zy.exchange.us_history import build_us_history_frame, parse_us_history_window
 from tradingview_zy.secret_store import resolve_config_secret
-from tradingview_zy.exchange.exchange import *
-from tradingview_zy.exchange.us_history import (
-    build_us_history_frame,
-    parse_us_history_window,
-)
 from tradingview_zy.trading_calendar import is_market_open
 
-g_all_stocks = []
+LOGGER = logging.getLogger(__name__)
 
 
 @fun.singleton
 class ExchangeAlpaca(Exchange):
-    """
-    TODO 年久失修，使用前请自行修改测试
-    """
+    """US equity market-data adapter backed by Alpaca."""
 
-    def __init__(self):
+    _all_stocks_cache: list[dict[str, str]] = []
+
+    def __init__(self) -> None:
         super().__init__()
-
         self.client = StockHistoricalDataClient(
             api_key=resolve_config_secret(config, "ALPACA_APIKEY", required=True),
             secret_key=resolve_config_secret(config, "ALPACA_SECRET", required=True),
         )
-
-        # 设置时区
-        self.tz = pytz.timezone("US/Eastern")
-
-        # is vip 如果是付费的，可以查询最新的数据，否则只能查询历史
         self.is_vip = False
 
-    def default_code(self):
+    def default_code(self) -> str:
         return "AAPL"
 
-    def support_frequencys(self):
+    def support_frequencys(self) -> dict[str, str]:
         return {
-            "m": "Month",
-            "w": "Week",
-            "d": "Day",
-            "60m": "1H",
-            "30m": "30m",
-            "10m": "10m",
-            "15m": "15m",
-            "5m": "5m",
-            "1m": "1m",
+            "m": "Month", "w": "Week", "d": "Day", "60m": "1H",
+            "30m": "30m", "10m": "10m", "15m": "15m", "5m": "5m", "1m": "1m",
         }
 
-    def all_stocks(self):
-        """
-        获取所有股票代码
-        """
-        global g_all_stocks
-        if len(g_all_stocks) > 0:
-            return g_all_stocks
-        stocks = pd.read_csv(
-            os.path.split(os.path.realpath(__file__))[0] + "/us_symbols.csv"
-        )
-        for s in stocks.iterrows():
-            g_all_stocks.append({"code": s[1]["code"], "name": s[1]["name"]})
-        return g_all_stocks
-
-        # 以下是从网络获取
-        # if len(g_all_stocks) > 0:
-        #     return g_all_stocks
-        # g_all_stocks = rd.get_ex('us_stocks_all')
-        # if g_all_stocks is not None:
-        #     return g_all_stocks
-        # g_all_stocks = []
-        #
-        # g_all_stocks = [el.symbol for el in self.api.list_assets(status='active', asset_class='us_equity')]
-        # if len(g_all_stocks) > 0:
-        #     rd.save_ex('us_stocks_all', 24 * 60 * 60, g_all_stocks)
-        #
-        # return g_all_stocks
+    def all_stocks(self) -> list[dict[str, str]]:
+        if self._all_stocks_cache:
+            return [dict(stock) for stock in self._all_stocks_cache]
+        symbols = pd.read_csv(Path(__file__).with_name("us_symbols.csv"))
+        self._all_stocks_cache = [
+            {"code": str(stock_row.code), "name": str(stock_row.name)}
+            for stock_row in symbols.itertuples(index=False)
+        ]
+        return [dict(stock) for stock in self._all_stocks_cache]
 
     def klines(
         self,
         code: str,
         frequency: str,
-        start_date: str = None,
-        end_date: str = None,
-        args=None,
-    ) -> [pd.DataFrame, None]:
-        if args is None:
-            args = {}
+        start_date: str | None = None,
+        end_date: str | None = None,
+        args: dict[str, Any] | None = None,
+    ) -> pd.DataFrame | None:
+        request_args = dict(args or {})
         frequency_map = {
             "m": TimeFrame.Month,
             "w": TimeFrame.Week,
@@ -102,104 +74,97 @@ class ExchangeAlpaca(Exchange):
             "5m": TimeFrame(5, TimeFrameUnit.Minute),
             "1m": TimeFrame(1, TimeFrameUnit.Minute),
         }
-        try:
-            request_start, request_end = parse_us_history_window(
-                frequency,
-                start_date=start_date,
-                end_date=end_date,
-                end_day_offset=1 if self.is_vip else -1,
-            )
-            request = StockBarsRequest(
-                symbol_or_symbols=code.upper(),
-                timeframe=frequency_map[frequency],
-                start=request_start,
-                end=request_end,
-                limit=5000,
-            )
-            bars = self.client.get_stock_bars(request)
-            provider_rows = [
-                {
-                    "timestamp": bar.timestamp,
-                    "open": bar.open,
-                    "close": bar.close,
-                    "high": bar.high,
-                    "low": bar.low,
-                    "volume": bar.volume,
-                }
-                for bar in bars.data.get(code.upper(), [])
-            ]
-            return build_us_history_frame(
-                provider_rows,
-                code=code,
-                frequency=frequency,
-            )
-        except Exception as exc:
-            print(f"alpaca 获取行情异常 {code} Exception ：{str(exc)}")
-            return None
+        if frequency not in frequency_map:
+            raise InvalidRequestError(f"Alpaca 不支持周期 {frequency!r}", provider="alpaca")
 
-    def stock_info(self, code: str) -> [Dict, None]:
-        """
-        获取股票名称，避免网络 api 请求，从 all_stocks 中获取
-        """
-        stocks = self.all_stocks()
-        return next((s for s in stocks if s["code"] == code.upper()), None)
+        request_start, request_end = parse_us_history_window(
+            frequency,
+            start_date=start_date,
+            end_date=end_date,
+            end_day_offset=1 if self.is_vip else -1,
+        )
+        request = StockBarsRequest(
+            symbol_or_symbols=code.upper(),
+            timeframe=frequency_map[frequency],
+            start=request_start,
+            end=request_end,
+            limit=5000,
+        )
+        bars = call_provider(
+            lambda: self.client.get_stock_bars(request),
+            logger=LOGGER,
+            provider="alpaca",
+            market="us",
+            code=code,
+            operation_name="get_stock_bars",
+            request_id=request_args.get("request_id"),
+        )
+        provider_rows = [
+            {
+                "timestamp": bar.timestamp,
+                "open": bar.open,
+                "close": bar.close,
+                "high": bar.high,
+                "low": bar.low,
+                "volume": bar.volume,
+            }
+            for bar in bars.data.get(code.upper(), [])
+        ]
+        return build_us_history_frame(provider_rows, code=code, frequency=frequency)
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        获取行情Tick数据
-        """
-        code_ticks = {}
-        req = StockSnapshotRequest(symbol_or_symbols=codes, feed=DataFeed.IEX)
-        res = self.client.get_stock_snapshot(req)
-        for _c, _t in res.items():
-            code_ticks[_c] = Tick(
-                code=_c,
-                last=_t.latest_trade.price,
-                buy1=_t.latest_quote.bid_price,
-                sell1=_t.latest_quote.ask_price,
-                high=_t.daily_bar.high,
-                low=_t.daily_bar.low,
-                open=_t.daily_bar.open,
-                volume=_t.daily_bar.volume,
-                rate=round(
-                    (_t.daily_bar.close - _t.previous_daily_bar.close)
-                    / _t.previous_daily_bar.close
-                    * 100,
-                    2,
-                ),
-            )
-        return code_ticks
+    def stock_info(self, code: str) -> dict[str, str] | None:
+        normalized_code = code.upper()
+        return next(
+            (stock for stock in self.all_stocks() if stock["code"].upper() == normalized_code),
+            None,
+        )
+
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
+        request = StockSnapshotRequest(symbol_or_symbols=codes, feed=DataFeed.IEX)
+
+        def fetch_and_normalize() -> dict[str, Tick]:
+            snapshots = self.client.get_stock_snapshot(request)
+            normalized: dict[str, Tick] = {}
+            for symbol_code, snapshot in snapshots.items():
+                normalized[symbol_code] = Tick(
+                    code=symbol_code,
+                    last=snapshot.latest_trade.price,
+                    buy1=snapshot.latest_quote.bid_price,
+                    sell1=snapshot.latest_quote.ask_price,
+                    high=snapshot.daily_bar.high,
+                    low=snapshot.daily_bar.low,
+                    open=snapshot.daily_bar.open,
+                    volume=snapshot.daily_bar.volume,
+                    rate=calculate_change_rate(
+                        snapshot.daily_bar.close,
+                        snapshot.previous_daily_bar.close,
+                    ),
+                )
+            return normalized
+
+        return call_provider(
+            fetch_and_normalize,
+            logger=LOGGER,
+            provider="alpaca",
+            market="us",
+            code=",".join(codes[:5]),
+            operation_name="get_stock_snapshot",
+        )
 
     def now_trading(self, code: str | None = None, at=None) -> bool:
-        """Return a strict instrument-aware state from the shared calendar."""
-        return is_market_open('us', code=code, at=at)
-
-    @staticmethod
-    def __convert_date(_dt):
-        _dt = fun.datetime_to_str(_dt, "%Y-%m-%d")
-        return fun.str_to_datetime(_dt, "%Y-%m-%d", tz="America/New_York")
+        return is_market_open("us", code=code, at=at)
 
     def stock_owner_plate(self, code: str):
-        raise Exception("交易所不支持")
+        raise UnsupportedCapabilityError(provider="alpaca")
 
     def plate_stocks(self, code: str):
-        raise Exception("交易所不支持")
+        raise UnsupportedCapabilityError(provider="alpaca")
 
     def balance(self):
-        raise Exception("交易所不支持")
+        raise UnsupportedCapabilityError(provider="alpaca")
 
     def positions(self, code: str = ""):
-        raise Exception("交易所不支持")
+        raise UnsupportedCapabilityError(provider="alpaca")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)
-
-
-if __name__ == "__main__":
-    ex = ExchangeAlpaca()
-
-    # klines = ex.klines(ex.default_code(), '30m')
-    # print(klines.tail())
-
-    ticks = ex.ticks([ex.default_code()])
-    print(ticks)

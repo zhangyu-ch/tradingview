@@ -66,3 +66,6 @@ pytdx = { path = "package/pytdx-1.72r2-py3-none-any.whl" }
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/"
 default = true
+
+[tool.ruff.lint]
+select = ["F403", "F405", "BLE001"]

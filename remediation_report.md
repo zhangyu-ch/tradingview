@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 70
-- **待处理：** 11
+- **已完成：** 71
+- **待处理：** 10
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -81,7 +81,7 @@
 |68|`NX-18`|低|Frontend|❌ 未修复|已完成（自选模板变量作用域修正）|通过（真实脚本输出保持正确，临时变量不再进入全局对象，6 项相邻测试及语法门禁通过）|`fix(NX-18)`|
 |69|`NX-17`|低|Web UDF|❌ 未修复|已完成（UDF 市场描述符与交易日历统一）|通过（现金/FX/crypto、七类期货会话、未知品种保守退化、真实路由及 63 项相邻测试通过）|`fix(NX-17)`|
 |70|`LO-02`|低|Maintainability|❌ 未修复|已完成（共享行情适配器与同步工作流）|通过（35 项聚焦、71 项 TDX/日历相邻、99 项 provider 严格组合及 565 项可运行仓库回归通过；环境阻断已单独记录）|`refactor(LO-02)`|
-|71|`LO-06`|低|Readability|❌ 未修复|待处理|—|—|
+|71|`LO-06`|低|Readability|❌ 未修复|已完成（显式依赖、审计异常边界与可执行门禁）|通过（运行代码 wildcard import 清零；显式异常/命名门禁与 63 项严格相邻测试通过）|`refactor(LO-06)`|
 |72|`MX-16`|低|Dead Code|❌ 未修复|待处理|—|—|
 |73|`MX-18`|低|Strategy Architecture|❌ 未修复|待处理|—|—|
 |74|`NX-11`|低|Database Schema|❌ 未修复|待处理|—|—|
@@ -1749,16 +1749,24 @@
 ### 71. LO-06 · 大量短变量、宽泛异常和 wildcard import 降低可审计性（Mysterious Name）
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Readability
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（显式依赖、审计异常边界与可执行门禁）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** 当前 Alpaca、Polygon 和 Baostock 适配器仍通过 `from ...exchange import *` 隐式取得 pandas、pytz、datetime、Exchange、Tick 和类型名；Alpaca/Polygon 在长方法中使用 `_c/_t/s/ex` 等短名，并以 `except Exception` 打印第三方原始错误后返回 None。仓库没有可执行的 F403/F405/BLE001 防回归门禁，隐藏依赖和异常吞噬仍真实存在。
+- **b. 我是怎么修复的？** 删除运行树全部 wildcard import；Alpaca/Polygon/Baostock 改用显式标准库、第三方、领域类和类型导入，使用 stock_row/symbol_code/snapshot/request_args 等领域命名。新增 provider_observability.call_provider，把第三方 SDK 的异构异常集中到一个带 BLE001 理由的边界，网络错误映射 ProviderUnavailableError、其他 SDK 错误映射 ProviderResponseError，日志只记录 market/code/request_id/operation/provider/error_type 且不复制原始异常文本。适配器不再 print/吞异常，未支持能力统一抛 UnsupportedCapabilityError。新增 AST 可执行 readability checker，禁止运行代码 wildcard import，审计三个 provider 和共享边界中的短名/无理由 broad catch；pyproject 启用 F403/F405/BLE001，repository-hygiene 和质量门禁强制执行。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 扫描 src/script/web 的全部 Python 文件，确认 wildcard import 数量从 3 降为 0；checker 对临时注入 wildcard import 返回失败。
+  - AST 审计 Alpaca/Polygon/Baostock/provider_observability，确认目标短变量名被拒绝，除共享 SDK 边界外不存在 broad Exception；无理由 broad catch 故障注入会使门禁失败。
+  - 动态故障注入 TimeoutError 与未知 RuntimeError，分别验证稳定 ProviderUnavailableError/ProviderResponseError，日志包含 market、code、request_id、operation、provider、error_type，且不包含异常中的 secret/token 文本。
+  - 运行 LO-06、LO-02、ME-11、ME-14、ME-17、ME-29 组合，63 passed（-W error）。
+  - 执行 check_readability_contract.py、check_quality_gates.py、compileall、git diff --check 和三个历史 CRLF adapter 的 bare-LF 门禁。
+- **e. 验证是否通过？** 通过（运行代码 wildcard import 清零；显式异常/命名门禁与 63 项严格相邻测试通过）
+- **提交：** refactor(LO-06): enforce auditable provider code
+- **修改文件：** `src/tradingview_zy/exchange/provider_observability.py`, `src/tradingview_zy/exchange/exchange_alpaca.py`, `src/tradingview_zy/exchange/exchange_polygon.py`, `src/tradingview_zy/exchange/exchange_baostock.py`, `script/remediation/check_readability_contract.py`, `.github/workflows/repository-hygiene.yml`, `script/remediation/check_quality_gates.py`, `pyproject.toml`, `tests/test_lo06_readability_contract.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器没有真实 Alpaca、Polygon 或 Baostock 网络凭据；SDK 请求、字段映射和生产限流仍需对应沙箱联调。
+  - BLE001 的可执行 AST 门禁先覆盖本条直接审计的 provider 边界；其他历史模块中的宽泛异常由既有领域故障隔离测试和后续 LO-07/LO-01 重构继续收敛，新增 wildcard import 已在整个运行树全局禁止。
+  - Ruff 规则已成为项目配置，但为保持 ME-25 的锁文件唯一安装来源，本条没有在离线环境私自增加未锁定 ruff 依赖；仓库自带 checker 在 CI 中执行同一三类关键规则。
 - **原报告最新结论：** 当前 master 的相关实现路径（src/tradingview_zy/exchange/exchange_alpaca.py）仍保留 V6 已确认的错误模式；PR #15 未提供能够消除根因的实现或专项测试。
 - **原报告建议：** 显式 import；领域命名；窄异常；结构化日志包含 market/code/request_id；启用 lint 规则 F403/F405/BLE001。
 

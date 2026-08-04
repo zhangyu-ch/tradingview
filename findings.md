@@ -462,3 +462,9 @@
 - 美国历史数据应先转换到市场时区，再排序、去重和锚定日线收盘；provider 只负责把 SDK 记录映射为共享字段。
 - 通用批处理的显式空 universe 是安全配置，不等于意外过滤为空；前者可以在任何 provider import 前零副作用完成，后者必须 fail-closed。
 - 对有网络副作用的脚本，薄 main guard + 外部 JSON + 共享 checkpoint runner 同时减少重复、恢复风险和维护者误 import 的危险。
+
+## LO-06 可审计 provider 边界
+- wildcard import 既隐藏依赖也让静态类型/升级审查失真；运行树必须零容忍，而不是依赖维护者记住名称来源。
+- 第三方 SDK 异常类型不统一时，唯一合理的 broad catch 应集中在明确 integration boundary，并带静态规则豁免理由；业务 adapter 不再各自 print/return None。
+- 结构化日志的稳定字段应是 market/code/request_id/operation/provider/error_type，绝不能复制第三方异常消息，因为其中可能包含 token、URL 或账号。
+- 锁文件治理下不能临时 pip 安装未锁定 lint 工具；项目配置声明 Ruff 规则，仓库内无依赖 AST checker 负责 CI 执行和故障注入。

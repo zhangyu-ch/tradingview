@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 9（第 70 条 LO-02 已完成；下一条为第 71 条 LO-06）
+阶段 9（第 71 条 LO-06 已完成；下一条为第 72 条 MX-16）
 
 ## 各阶段
 
@@ -85,7 +85,7 @@
 - **状态：** complete
 
 ### 阶段 9：逐条验证、修复、测试与提交（71–80）
-- [ ] 71. LO-06
+- [x] 71. LO-06
 - [ ] 72. MX-16
 - [ ] 73. MX-18
 - [ ] 74. NX-11
@@ -214,6 +214,8 @@
 | LO-02 最终复验首次引用不存在的 `test_me30_market_calendar.py`，并使用了两个过时 provider 测试名 | 1 | 对照当前 tests 目录改为 `test_me30_trading_calendar.py`、`test_me16_ib_rpc_timeout.py` 和 `test_me17_qmt_contracts.py` 后原样重跑 |
 
 | LO-02 最终静态门禁发现 `progress.md` EOF 多余空行 | 1 | 仅规范化文件末尾为单个换行，重新执行 `git diff --check` 与 CRLF 门禁 |
+
+| LO-06 首轮测试按包路径导入纯 provider logging helper，触发 exchange package 并被归档外 config.py 阻断 | 1 | 测试改用 `spec_from_file_location` 直接加载无副作用 helper；不复制产品配置或伪造 SDK |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

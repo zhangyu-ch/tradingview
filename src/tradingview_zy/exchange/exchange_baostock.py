@@ -1,6 +1,9 @@
-from typing import Union
+import datetime
+import logging
 
 import baostock as bs
+import pandas as pd
+import pytz
 from tradingview_zy import fun
 from tradingview_zy.exchange.baostock_reliability import (
     BaostockQueryError,
@@ -11,8 +14,11 @@ from tradingview_zy.exchange.baostock_reliability import (
     require_successful_login,
 )
 
-from tradingview_zy.exchange.exchange import *
+from tradingview_zy.domain import ProviderUnavailableError, UnsupportedCapabilityError
+from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.trading_calendar import is_market_open
+
+LOGGER = logging.getLogger(__name__)
 
 
 def market_date(tz) -> datetime.date:
@@ -164,7 +170,7 @@ class ExchangeBaostock(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame | None:
         """
         获取 Kline 线
         :param code:
@@ -226,9 +232,14 @@ class ExchangeBaostock(Exchange):
                 ),
                 operation=f"query_history_k_data_plus[{code},{frequency}]",
             )
-        except BaostockQueryError as exc:
-            print(str(exc))
-            return None
+        except BaostockQueryError as error:
+            LOGGER.warning(
+                "provider_call_failed market=a code=%s request_id=%s operation=query_history_k_data_plus provider=baostock error_type=%s",
+                code,
+                str(args.get("request_id") or "-")[:128],
+                type(error).__name__,
+            )
+            raise ProviderUnavailableError(provider="baostock") from error
 
         rows = self._result_rows(result)
         if not rows:
@@ -267,15 +278,15 @@ class ExchangeBaostock(Exchange):
         kline = kline.sort_values("date", kind="stable").reset_index(drop=True)
         return kline[["code", "date", "open", "close", "high", "low", "volume"]]
 
-    def ticks(self, codes: List[str]) -> Dict[str, Tick]:
+    def ticks(self, codes: list[str]) -> dict[str, Tick]:
         """
         获取股票列表的 Tick 信息
         :param codes:
         :return:
         """
-        raise Exception("交易所不支持 tick 获取")
+        raise UnsupportedCapabilityError(provider="baostock")
 
-    def stock_info(self, code: str) -> Union[Dict, None]:
+    def stock_info(self, code: str) -> dict[str, str] | None:
         """
         获取股票的基本信息
         :param code:
@@ -299,7 +310,7 @@ class ExchangeBaostock(Exchange):
         :param code:
         :return:
         """
-        raise Exception("当前交易所接口不支持")
+        raise UnsupportedCapabilityError(provider="baostock")
 
     def plate_stocks(self, code: str):
         """
@@ -307,14 +318,14 @@ class ExchangeBaostock(Exchange):
         :param code: 板块代码
         :return:
         """
-        raise Exception("当前交易所接口不支持")
+        raise UnsupportedCapabilityError(provider="baostock")
 
     def balance(self):
         """
         账户资产信息
         :return:
         """
-        raise Exception("账户资产接口不支持")
+        raise UnsupportedCapabilityError(provider="baostock")
 
     def positions(self, code: str = ""):
         """
@@ -322,13 +333,13 @@ class ExchangeBaostock(Exchange):
         :param code:
         :return:
         """
-        raise Exception("账户资产接口不支持")
+        raise UnsupportedCapabilityError(provider="baostock")
 
     def order(self, code: str, o_type: str, amount: float, args=None):
         return super().order(code, o_type, amount, args=args)
 
 
 if __name__ == "__main__":
-    ex = ExchangeBaostock()
-    klines = ex.klines("SZ.000001", "d")
-    print(klines.tail())
+    exchange = ExchangeBaostock()
+    history = exchange.klines("SZ.000001", "d")
+    print(history.tail())

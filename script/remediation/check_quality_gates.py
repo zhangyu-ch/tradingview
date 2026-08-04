@@ -119,6 +119,7 @@ def find_quality_gate_violations(root: Path) -> list[str]:
         hygiene = hygiene_path.read_text(encoding="utf-8", errors="replace")
         hygiene_commands = (
             "python script/remediation/check_quality_gates.py",
+            "python script/remediation/check_readability_contract.py",
             "python script/remediation/check_supply_chain.py",
             "python script/remediation/generate_supply_chain_artifacts.py --check",
         )

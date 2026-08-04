@@ -708,3 +708,11 @@
 - 静态门禁：compileall、JSON、git diff、历史 CRLF 全部通过。
 - 提交主题：`refactor(LO-02): consolidate market adapter workflows`。
 - 第 70 条提交后生成并用系统 `unzip` 复验问题 061–070 的完整 `.git` 归档。
+
+### 问题 71：LO-06
+- **状态：** complete
+- 验证结论：三个 provider 仍有 wildcard import，Alpaca/Polygon 使用短变量、宽泛异常、print 并返回 None；无可执行 lint 门禁，问题存在。
+- 修复：运行树 wildcard import 清零；三个 provider 显式导入和领域命名；新增共享 secret-free provider logging/exception boundary；未支持能力改为领域异常。
+- 门禁：pyproject 启用 F403/F405/BLE001；repository hygiene 执行 AST checker，拒绝 wildcard、目标短名和无理由 broad catch。
+- 验证：故障注入确认 network/unknown SDK 异常映射和日志不泄密；LO-06/LO-02/ME-11/ME-14/ME-17/ME-29 组合 63 passed（-W error）；compileall、质量门禁、CRLF 和 diff 通过。
+- 提交主题：`refactor(LO-06): enforce auditable provider code`。
