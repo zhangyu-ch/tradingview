@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 73
-- **待处理：** 8
+- **已完成：** 74
+- **待处理：** 7
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -84,7 +84,7 @@
 |71|`LO-06`|低|Readability|❌ 未修复|已完成（显式依赖、审计异常边界与可执行门禁）|通过（运行代码 wildcard import 清零；显式异常/命名门禁与 63 项严格相邻测试通过）|`refactor(LO-06)`|
 |72|`MX-16`|低|Dead Code|❌ 未修复|已完成（删除未加载资产与 no-op 任务壳）|通过（死资产和任务壳均删除，运行引用图为空，15 项相邻测试通过）|`refactor(MX-16)`|
 |73|`MX-18`|低|Strategy Architecture|❌ 未修复|已完成（显式版本化 Signal→Decision→Operation 桥接）|通过（双向可追溯转换、非执行信号拒绝、篡改检测和 82 项严格相邻测试通过）|`feat(MX-18)`|
-|74|`NX-11`|低|Database Schema|❌ 未修复|待处理|—|—|
+|74|`NX-11`|低|Database Schema|❌ 未修复|已完成（独立监控事件类型、动作与数值评分）|通过（13 项专项、105 项严格相邻及 595 项可收集仓库回归通过；环境限制已记录）|`fix(NX-11)`|
 |75|`LO-05`|低|Architecture|🟡 部分修复|待处理|—|—|
 |76|`LO-07`|低|Dead Code|🟡 部分修复|待处理|—|—|
 |77|`LO-08`|低|Documentation|🟡 部分修复|待处理|—|—|
@@ -1818,16 +1818,31 @@
 ### 74. NX-11 · 通用监控事件继续复用旧短字符串列，当前值可容纳但扩展空间受限
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Database Schema
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（独立监控事件类型、动作与数值评分）
+- **问题是否存在：** 是。通用策略事件仍把 `event_type` 复用到 `line_type VARCHAR(5)`，把 `action` 复用到 `bi_is_done VARCHAR(10)`，并把浮点 `score` 先格式化、截断到最多 10 个字符后写入 `bi_is_td VARCHAR(10)`。SQLite 不强制声明长度，掩盖了 MySQL 风险；大评分已经会因科学计数法截断而失真。
+- **a. 这个问题是什么？** 事件类型、策略动作和评分是三个不同领域值，却共享为旧缠论提醒设计的短字符串列。结果是 schema 无法表达类型、数值精度没有保证、扩展新事件/动作容易碰到长度上限，且查询方只能依赖字符串约定。
+- **b. 我是怎么修复的？**
+  - 新增 `monitoring_events.py`，以 `MonitoringEventType`、受限 `StrategyAction` 和有限浮点数建立通用监控持久化边界；`select/ignore` 等非持久化动作明确拒绝。
+  - `cl_alert_record` 新增独立物理列 `event_type VARCHAR(32)`、`action VARCHAR(16)`、`score` 双精度数值；旧 `line_type/bi_is_done/bi_is_td` 仅保留迁移兼容。
+  - 新增幂等迁移：只回填可识别的 `sig/signal`、合法动作和有限评分；未知历史值不猜测、不覆盖。
+  - 新事件在单一事务中只写 typed columns，`flush/refresh` 后精确往返验证；非法动作、字符串评分、NaN/Inf 在写入前 fail-closed。
+  - MySQL 旧表迁移使用 `DOUBLE`，避免普通 `FLOAT` 的单精度损失；SQLite 使用 `FLOAT`。
+  - `AlertTasks` 直接保存原始 `float` 与 canonical 事件枚举，不再执行 `f"{score:.4g}"[:10]`；查询兼容新列与已知旧别名。
+  - 前端评分显示改为显式判断 `null/undefined`，合法的 `0` 不再显示为空。
+- **c. 修复后是否验证？** 是。
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - NX-11 专项 14 项以 `-W error` 运行，覆盖枚举、动作集合、评分类型/有限性、旧值映射和未知值拒绝。
+  - 在真实旧 SQLite schema 上连续执行两次迁移，验证幂等新增列、选择性回填、未知旧记录保留和索引建立。
+  - 参数化保存 `watch/buy/sell/open/close`，验证 `123456789.123456` 精确往返，并确认新记录的三个旧列均为 `NULL`。
+  - 编译 MySQL DDL并验证迁移类型选择；真实 MySQL 双精度往返已加入既有 `RUN_MYSQL_TESTS` 门禁。
+  - 隔离动态加载真实 `alert_tasks.py`，确认事件枚举、动作枚举和原始浮点评分进入 DB；Node 语法及前端零分契约通过。
+  - NX-11 与 ME-18、ME-20、NX-10、MX-18、MX-07、MySQL gate 相邻组合：`105 passed, 1 skipped`（`-W error`）。
+  - 可收集仓库回归：`595 passed, 5 skipped`；8 项历史 Web 测试仅因当前容器缺少 `pinyin` 在包导入阶段阻断。完整回测测试另因缺少 `empyrical` 无法收集。
+  - compileall、仓库卫生、可读性、质量门禁、Secret、供应链、JSON、JavaScript、`git diff --check` 和 CRLF 门禁全部通过。
+- **e. 验证是否通过？** 通过。通用监控事件现在拥有独立、可扩展且数值正确的持久化协议；旧数据只在可证明安全时迁移。
+- **提交：** fix(NX-11): type monitoring event persistence
+- **修改文件：** `src/tradingview_zy/monitoring_events.py`, `src/tradingview_zy/db.py`, `web/tradingview_zy_chart/cl_app/alert_tasks.py`, `web/tradingview_zy_chart/cl_app/static/js/alert.js`, `tests/test_nx11_monitoring_event_schema.py`, `tests/test_me18_strategy_runner_contracts.py`, `tests/test_selection_monitoring.py`, `tests/test_me29_mysql_gate.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：** 当前容器没有真实 MySQL、`pinyin` 和 `empyrical`；对应真实 MySQL gate 已扩展，Web 产品路径通过隔离动态执行，环境阻断没有被声称为通过。数据库列不使用 MySQL 原生 ENUM，而是在领域边界穷尽验证有界字符串，以避免未来枚举扩展需要高风险 DDL。
 - **原报告最新结论：** 策略加载改为注册表不改变监控事件数据库列长度；event_type/action/score 仍复用旧短字符串列。
 - **原报告建议：** 迁移为独立 event_type/action Enum 和数值 score，并在策略边界验证。
 

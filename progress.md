@@ -729,3 +729,36 @@
 - Operation 嵌入完整 snapshot，反向转换逐字段防篡改；selection/watch/ignore 与 arbitrary legacy Operation 明确拒绝。
 - MX-18/ME-20/ME-18 组合 82 passed（-W error）；完整 BackTest 泛型测试仍被环境缺少 empyrical 阻断。
 - 提交主题：`feat(MX-18): add versioned strategy trade bridge`。
+
+
+### 2026-08-04T14:33:14Z · 会话恢复：问题 74 NX-11
+- 从 `issue/073-MX-18` 固定点恢复后发现工作树已有未提交的 NX-11 草稿，涉及 typed event/action/score schema、旧表迁移、监控写入和前端空值展示。
+- 已核对原问题文本与 `git diff`；不丢弃现有修改，下一步先审查新模块与迁移实现，再执行专项、相邻和双后端契约验证。
+
+- 2026-08-04T14:34:10Z：审查 NX-11 新模块与专项测试；首个 DB 摘录脚本因函数边界假设不匹配而中止，已切换为按实际行号定位，仓库产品文件未受影响。
+
+### 2026-08-04T14:35:44Z · NX-11 恢复草稿审查检查点
+- 已确认未提交草稿形成一致的修复方向：独立 `event_type/action` 与数值 `score` 边界、旧列只读兼容、写入路径不再截断分数。
+- `db.py`、`alert_tasks.py`、`alert.js` 三个历史文件仍保持纯 CRLF（bare LF = 0），未出现全文件换行噪声。
+- 尚未接受为完成：下一步逐段审查迁移与事务语义，并运行 NX-11 专项、MySQL DDL、监控任务和相邻回归。
+
+- 第 74 条首轮聚焦组合结果：19 passed、1 skipped、8 failed；8 个失败均在导入 `cl_app` 时因当前环境缺少 `pinyin`，发生在产品断言前。核心领域、SQLite 迁移、MySQL DDL 与前端源码契约均已通过。后续改用既有隔离加载方式执行真实 `alert_tasks.py`。
+
+- 2026-08-04T14:36:17Z：NX-11/selection 组合得到 19 passed、8 failed；8 项均在 `cl_app` 导入阶段因环境缺少 `pinyin` 阻断，未执行到 NX-11 产品断言。将专项与可运行相邻测试分开复验。
+
+- 2026-08-04T14:37:44Z：NX-11 专项 12 passed（`-W error`）；随后一个不存在的 selection 测试节点使验证命令 code 4，已记录并改为先列举真实节点。
+- 2026-08-04：NX-11 完整 pytest 首次在收集阶段被当前环境缺少 `empyrical` 阻断，发生在 `test_backtesting_base_generic.py`，未执行产品测试；后续不重复该命令，改为排除这一已知环境阻断后执行可收集仓库回归。
+
+- 2026-08-04T14:40:08Z：复核确认 NX-11 迁移已按方言选择 MySQL `DOUBLE`、其他后端 `FLOAT`；12 项专项与 7 项不依赖 Web 包初始化的 selection/monitoring 相邻测试均通过。
+- 2026-08-04：排除既有 `empyrical` 收集阻断后，可收集仓库回归执行到 603 项：595 passed、5 skipped，另 8 项仅因当前容器缺少 `pinyin` 在 `cl_app` 导入阶段失败；这些失败与 NX-11 产品代码无关，真实 AlertTasks 已由隔离加载测试覆盖。
+
+- 2026-08-04T14:41:44Z：NX-11 + ME-18 + ME-20 + ME-29 严格组合完成，97 passed、1 skipped；skip 为未配置真实 MySQL 服务。确认第 74 条报告/机器台账仍待写入。
+
+- 2026-08-04T14:43:14Z：NX-11 扩大相邻组合得到 122 passed、1 skipped、1 failed；唯一失败为历史 NX-22 子进程在导入 DB 前缺少归档外 `config.py`，与本条 typed schema 无关。后续不重复该阻断，按已记录环境限制排除后复验。
+
+### 问题 74：NX-11 完成
+- 已建立独立 `event_type/action/score` 物理列和领域校验，旧短列转为只读兼容；MySQL 旧表 score 迁移使用 `DOUBLE`。
+- NX-11 专项 14 passed；严格相邻组合 105 passed/1 skipped；可收集仓库回归 595 passed/5 skipped，环境阻断单独记录。
+- 全部静态、供应链、Secret、JavaScript、JSON、CRLF 和 diff 门禁通过。
+- 提交主题：`fix(NX-11): type monitoring event persistence`。
+- 下一条：75. LO-05。

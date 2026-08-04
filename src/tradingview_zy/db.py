@@ -15,9 +15,11 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    and_,
     create_engine,
     func,
     inspect,
+    or_,
     text,
 )
 from sqlalchemy.dialects.mysql import MEDIUMTEXT, insert
@@ -34,6 +36,15 @@ from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.database_catalog import list_market_kline_codes
 from tradingview_zy.secret_store import resolve_config_secret
+from tradingview_zy.monitoring_events import (
+    MonitoringEventType,
+    legacy_action,
+    legacy_aliases_for,
+    legacy_event_type,
+    legacy_score,
+    normalize_monitoring_event,
+    normalize_monitoring_event_type,
+)
 from tradingview_zy.tv_storage import (
     TVStoragePolicy,
     enforce_quota,
@@ -141,28 +152,58 @@ class TableByAlertRecord(Base):
     stock_code = Column(String(20), comment="标的")  # 标的
     stock_name = Column(String(100), comment="标的名称")  # 标的名称
     frequency = Column(String(10), comment="提醒周期")  # 提醒周期
-    line_type = Column(String(5), comment="提醒线段的类型")  # 提醒线段的类型
+    event_type_text = Column(
+        "event_type", String(32), nullable=True, comment="版本化监控事件类型"
+    )
+    action_text = Column(
+        "action", String(16), nullable=True, comment="策略动作"
+    )
+    score_value = Column(
+        "score", Float(precision=53), nullable=True, comment="策略评分"
+    )
+    # Legacy Chanlun compatibility columns. New generic events never write them.
+    line_type = Column(String(5), comment="旧提醒线段类型")
     alert_msg = Column(Text, comment="提醒消息")  # 提醒消息
-    bi_is_done = Column(
-        String(10), comment="笔是否完成,如果是指标，则记录上穿或下穿"
-    )  # 笔是否完成
-    bi_is_td = Column(String(10), comment="笔是否停顿")  # 笔是否停顿
-    line_dt = Column(DateTime, comment="提醒线段的开始时间")  # 提醒线段的开始时间
+    bi_is_done = Column(String(10), comment="旧完成/动作字段")
+    bi_is_td = Column(String(10), comment="旧停顿/评分字段")
+    line_dt = Column(DateTime, comment="提醒事件时间")
     alert_dt = Column(DateTime, comment="提醒时间")  # 提醒时间
     # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+    __table_args__ = (
+        Index(
+            "table_alert_record_event_lookup_idx",
+            "market",
+            "stock_code",
+            "frequency",
+            "event_type",
+            "line_dt",
+        ),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
 
     @property
-    def event_type(self):
-        return self.line_type or ""
+    def event_type(self) -> str:
+        if self.event_type_text:
+            try:
+                return normalize_monitoring_event_type(self.event_type_text).value
+            except (TypeError, ValueError):
+                return ""
+        legacy = legacy_event_type(self.line_type)
+        return legacy.value if legacy is not None else (self.line_type or "")
 
     @property
-    def action(self):
-        return self.bi_is_done or ""
+    def action(self) -> str:
+        if self.action_text:
+            action = legacy_action(self.action_text)
+            return action.value if action is not None else ""
+        action = legacy_action(self.bi_is_done)
+        return action.value if action is not None else ""
 
     @property
-    def score(self):
-        return self.bi_is_td or ""
+    def score(self) -> float | None:
+        if self.score_value is not None:
+            return legacy_score(self.score_value)
+        return legacy_score(self.bi_is_td)
 
     @property
     def event_time(self):
@@ -415,6 +456,67 @@ def migrate_alert_strategy_storage(engine) -> None:
                 "AND check_idx_macd_info IS NOT NULL"
             )
         )
+
+
+def _alert_event_score_sql_type(dialect_name: str) -> str:
+    """Return a double-precision type for typed monitoring scores."""
+    return "DOUBLE" if dialect_name == "mysql" else "FLOAT"
+
+
+def migrate_alert_event_storage(engine) -> None:
+    """Add typed monitoring columns and safely backfill known legacy values."""
+    inspector = inspect(engine)
+    table_name = TableByAlertRecord.__tablename__
+    if not inspector.has_table(table_name):
+        return
+
+    columns = {column["name"] for column in inspector.get_columns(table_name)}
+    statements = []
+    if "event_type" not in columns:
+        statements.append("ALTER TABLE cl_alert_record ADD COLUMN event_type VARCHAR(32)")
+    if "action" not in columns:
+        statements.append("ALTER TABLE cl_alert_record ADD COLUMN action VARCHAR(16)")
+    if "score" not in columns:
+        score_type = _alert_event_score_sql_type(engine.dialect.name)
+        statements.append(
+            f"ALTER TABLE cl_alert_record ADD COLUMN score {score_type}"
+        )
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+
+        rows = connection.execute(
+            text(
+                "SELECT id, event_type, action, score, line_type, bi_is_done, bi_is_td "
+                "FROM cl_alert_record"
+            )
+        ).mappings().all()
+        for row in rows:
+            updates: dict[str, object] = {}
+            if not row["event_type"]:
+                event_type = legacy_event_type(row["line_type"])
+                if event_type is not None:
+                    updates["event_type"] = event_type.value
+            if not row["action"]:
+                action = legacy_action(row["bi_is_done"])
+                if action is not None:
+                    updates["action"] = action.value
+            if row["score"] is None:
+                score = legacy_score(row["bi_is_td"])
+                if score is not None:
+                    updates["score"] = score
+            if updates:
+                assignments = ", ".join(f"{name} = :{name}" for name in updates)
+                connection.execute(
+                    text(f"UPDATE cl_alert_record SET {assignments} WHERE id = :row_id"),
+                    {**updates, "row_id": row["id"]},
+                )
+
+    for index in TableByAlertRecord.__table__.indexes:
+        if index.name == "table_alert_record_event_lookup_idx":
+            index.create(bind=engine, checkfirst=True)
+            break
 
 
 def migrate_tv_storage_schema(engine) -> None:
@@ -679,6 +781,7 @@ class DB(object):
 
         Base.metadata.create_all(self.engine)
         migrate_alert_strategy_storage(self.engine)
+        migrate_alert_event_storage(self.engine)
         migrate_tv_storage_schema(self.engine)
         self.tv_storage_policy = TVStoragePolicy.from_config(config)
 
@@ -1426,36 +1529,28 @@ class DB(object):
         line_type: str,
         line_dt: datetime.datetime,
     ):
-        """
-        保存预警记录
-        :param market:
-        :param stock_code:
-        :param stock_name:
-        :param frequency:
-        :param alert_msg:
-        :param bi_is_down:
-        :param bi_is_td:
-        :param line_dt:
-        :return:
-        """
-        with self.Session() as session:
-            recored = TableByAlertRecord(
-                market=market,
-                task_name=task_name,
-                stock_code=stock_code,
-                stock_name=stock_name,
-                frequency=frequency,
-                alert_msg=alert_msg,
-                bi_is_done=bi_is_done,
-                bi_is_td=bi_is_td,
-                line_type=line_type,
-                line_dt=line_dt.replace(tzinfo=None),
-                alert_dt=datetime.datetime.now(),
-            )
-            session.add(recored)
-            session.commit()
-
-        return True
+        """Compatibility wrapper for the old alert-record call signature."""
+        event_type = legacy_event_type(line_type)
+        if event_type is None:
+            raise ValueError(f"unsupported legacy alert event type: {line_type!r}")
+        action = legacy_action(bi_is_done)
+        if action is None:
+            raise ValueError(f"unsupported legacy alert action: {bi_is_done!r}")
+        score = legacy_score(bi_is_td)
+        if score is None:
+            raise ValueError(f"unsupported legacy alert score: {bi_is_td!r}")
+        return self.alert_event_save(
+            market=market,
+            task_name=task_name,
+            stock_code=stock_code,
+            stock_name=stock_name,
+            frequency=frequency,
+            alert_msg=alert_msg,
+            action=action,
+            score=score,
+            event_type=event_type,
+            event_time=line_dt,
+        )
 
     def alert_event_save(
         self,
@@ -1466,29 +1561,49 @@ class DB(object):
         frequency: str,
         alert_msg: str,
         action: str,
-        score: str,
-        event_type: str,
+        score: float,
+        event_type: MonitoringEventType | str,
         event_time: datetime.datetime,
     ):
-        return self.alert_record_save(
-            market=market,
-            task_name=task_name,
-            stock_code=stock_code,
-            stock_name=stock_name,
-            frequency=frequency,
-            alert_msg=alert_msg,
-            bi_is_done=action,
-            bi_is_td=score,
-            line_type=event_type,
-            line_dt=event_time,
+        values = normalize_monitoring_event(
+            event_type=event_type,
+            action=action,
+            score=score,
         )
+        if not isinstance(event_time, datetime.datetime):
+            raise TypeError("monitoring event_time must be a datetime")
+
+        with self.Session.begin() as session:
+            record = TableByAlertRecord(
+                market=market,
+                task_name=task_name,
+                stock_code=stock_code,
+                stock_name=stock_name,
+                frequency=frequency,
+                event_type_text=values.event_type.value,
+                action_text=values.action.value,
+                score_value=values.score,
+                alert_msg=alert_msg,
+                line_dt=event_time.replace(tzinfo=None),
+                alert_dt=datetime.datetime.now(),
+            )
+            session.add(record)
+            session.flush()
+            session.refresh(record)
+            if (
+                record.event_type != values.event_type.value
+                or record.action != values.action.value
+                or record.score != values.score
+            ):
+                raise RuntimeError("monitoring event round-trip verification failed")
+        return True
 
     def alert_record_query_by_code(
         self,
         market: str,
         stock_code: str,
         frequency: str,
-        line_type: str,
+        line_type: MonitoringEventType | str,
         line_dt: datetime.datetime,
     ) -> TableByAlertRecord:
         """
@@ -1499,6 +1614,13 @@ class DB(object):
         :param dt:
         :return:
         """
+        event_type = legacy_event_type(line_type)
+        canonical_event_type = (
+            event_type
+            if event_type is not None
+            else normalize_monitoring_event_type(line_type)
+        )
+        legacy_aliases = legacy_aliases_for(canonical_event_type)
         with self.Session() as session:
             return (
                 session.query(TableByAlertRecord)
@@ -1506,7 +1628,16 @@ class DB(object):
                     TableByAlertRecord.market == market,
                     TableByAlertRecord.stock_code == stock_code,
                     TableByAlertRecord.frequency == frequency,
-                    TableByAlertRecord.line_type == line_type,
+                    or_(
+                        TableByAlertRecord.event_type_text == canonical_event_type.value,
+                        and_(
+                            or_(
+                                TableByAlertRecord.event_type_text.is_(None),
+                                TableByAlertRecord.event_type_text == "",
+                            ),
+                            TableByAlertRecord.line_type.in_(legacy_aliases),
+                        ),
+                    ),
                     TableByAlertRecord.line_dt == line_dt,
                 )
                 .order_by(TableByAlertRecord.alert_dt.desc())
@@ -1529,7 +1660,9 @@ class DB(object):
             query = query.filter(TableByAlertRecord.market == market)
             if task_name:
                 query = query.filter(TableByAlertRecord.task_name == task_name)
-            return query.order_by(TableByAlertRecord.alert_dt.desc()).limit(100)
+            return (
+                query.order_by(TableByAlertRecord.alert_dt.desc()).limit(100).all()
+            )
 
     def marks_add(
         self,

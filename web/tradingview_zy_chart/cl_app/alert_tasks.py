@@ -5,6 +5,7 @@ from tradingview_zy import config, fun
 from tradingview_zy.db import TableByAlertTask, db
 from tradingview_zy.exchange import Market, get_exchange
 from tradingview_zy.monitoring import MonitoringRunner
+from tradingview_zy.monitoring_events import MonitoringEventType
 from tradingview_zy.strategies.base import BatchRunResult
 from tradingview_zy.strategies.loader import (
     StrategyRegistryError,
@@ -198,8 +199,8 @@ class AlertTasks(object):
                     frequency=event.frequency,
                     alert_msg=event.message,
                     action=event.action,
-                    score=f"{event.score:.4g}"[:10],
-                    event_type="sig",
+                    score=event.score,
+                    event_type=MonitoringEventType.STRATEGY_SIGNAL,
                     event_time=event.event_time,
                 )
             except Exception as error:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import os
 import sys
 import time
@@ -24,8 +25,10 @@ def test_real_mysql_migrations_and_long_text_round_trip() -> None:
 
     from tradingview_zy.db import (
         Base,
+        TableByAlertRecord,
         TableByAlertTask,
         TableByTVCharts,
+        migrate_alert_event_storage,
         migrate_alert_strategy_storage,
         migrate_tv_storage_schema,
     )
@@ -44,6 +47,7 @@ def test_real_mysql_migrations_and_long_text_round_trip() -> None:
         Base.metadata.drop_all(engine)
         Base.metadata.create_all(engine)
         migrate_alert_strategy_storage(engine)
+        migrate_alert_event_storage(engine)
         migrate_tv_storage_schema(engine)
 
         strategy = '{"payload":"' + ("策略参数" * 1500) + '"}'
@@ -70,6 +74,21 @@ def test_real_mysql_migrations_and_long_text_round_trip() -> None:
                     name="mysql-mediumtext",
                 )
             )
+            session.add(
+                TableByAlertRecord(
+                    market="a",
+                    task_name="mysql-typed-monitoring-event",
+                    stock_code="SH.000001",
+                    stock_name="上证指数",
+                    frequency="d",
+                    event_type_text="strategy_signal",
+                    action_text="watch",
+                    score_value=123456789.123456,
+                    alert_msg="typed event",
+                    line_dt=dt.datetime(2026, 8, 4, 13, 45),
+                    alert_dt=dt.datetime(2026, 8, 4, 13, 46),
+                )
+            )
             session.commit()
 
         with Session(engine) as session:
@@ -83,10 +102,22 @@ def test_real_mysql_migrations_and_long_text_round_trip() -> None:
                     TableByTVCharts.name == "mysql-mediumtext"
                 )
             )
+            stored_event = session.scalar(
+                select(TableByAlertRecord).where(
+                    TableByAlertRecord.task_name == "mysql-typed-monitoring-event"
+                )
+            )
             assert stored_strategy is not None
             assert stored_strategy.strategy_config_text == strategy
             assert stored_chart is not None
             assert stored_chart.content == chart
+            assert stored_event is not None
+            assert stored_event.event_type == "strategy_signal"
+            assert stored_event.action == "watch"
+            assert stored_event.score == pytest.approx(123456789.123456)
+            assert stored_event.line_type is None
+            assert stored_event.bi_is_done is None
+            assert stored_event.bi_is_td is None
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()

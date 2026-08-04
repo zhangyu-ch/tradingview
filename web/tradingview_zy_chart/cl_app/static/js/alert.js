@@ -61,7 +61,7 @@ var Alert = (function () {
                   }</span> <span style="color: #fa8c16;">${
                     d.action || ""
                   }</span> <span style="color: #52c41a;">${
-                    d.score || ""
+                    d.score === null || d.score === undefined ? "" : d.score
                   }</span>
                       </div>
                       <div style="font-size: 16px;">${d.msg || ""}</div>

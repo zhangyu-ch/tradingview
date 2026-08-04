@@ -419,6 +419,10 @@ def test_alert_task_persists_good_hits_and_reports_partial_batch_failure(monkeyp
     tasks = module.AlertTasks(None)
     assert tasks.alert_run("1") is False
     assert [item["stock_code"] for item in saved] == ["GOOD"]
+    assert saved[0]["event_type"].value == "strategy_signal"
+    assert saved[0]["action"].value == "watch"
+    assert saved[0]["score"] == 1.0
+    assert isinstance(saved[0]["score"], float)
     assert tasks.last_batch_result is not None
     assert [(failure.code, failure.stage) for failure in tasks.last_batch_result.failures] == [
         ("BAD", "input")

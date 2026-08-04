@@ -149,15 +149,15 @@ def test_db_alert_models_expose_generic_properties():
     )
     assert record.event_type == ""
     assert record.action == ""
-    assert record.score == ""
+    assert record.score is None
     assert record.event_time == event_time
 
     record.line_type = "sig"
     record.bi_is_done = "watch"
     record.bi_is_td = "0.9877"
-    assert record.event_type == "sig"
+    assert record.event_type == "strategy_signal"
     assert record.action == "watch"
-    assert record.score == "0.9877"
+    assert record.score == 0.9877
 
 
 def test_alert_tasks_use_generic_db_methods(monkeypatch):
@@ -208,10 +208,10 @@ def test_alert_tasks_use_generic_db_methods(monkeypatch):
 
     assert alert_tasks.AlertTasks(None).alert_run("1") is True
 
-    assert saved["event_type"] == "sig"
+    assert saved["event_type"] == "strategy_signal"
     assert saved["action"] == "watch"
-    assert saved["score"] == "1.235e+08"
-    assert len(saved["score"]) <= 10
+    assert saved["score"] == 123456789.123456
+    assert isinstance(saved["score"], float)
     assert "line_type" not in saved
     assert "bi_is_done" not in saved
     assert "bi_is_td" not in saved

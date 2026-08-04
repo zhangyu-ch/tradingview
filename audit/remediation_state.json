@@ -4519,16 +4519,45 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（独立监控事件类型、动作与数值评分）",
+      "problem_verified": true,
+      "problem_summary": "通用策略监控命中仍把 event_type 写入旧 line_type VARCHAR(5)，把 action 写入旧 bi_is_done VARCHAR(10)，并把浮点评分先格式化为最多 10 个字符后写入 bi_is_td VARCHAR(10)。SQLite 的宽松类型会掩盖长度问题；大评分会被科学计数法截断，未来事件类型/动作扩展也没有独立领域边界。问题真实存在。",
+      "fix_summary": "新增 monitoring_events.py，定义 MonitoringEventType、可持久化 StrategyAction 集合和有限数 score 规范化；新事件只写独立 event_type VARCHAR(32)、action VARCHAR(16)、score 双精度数值列。增加幂等旧表迁移，只把可识别的 sig/signal、合法动作和有限旧评分回填，未知历史数据保留在旧列而不伪造。AlertTasks 直接持久化原始浮点评分和 canonical event type，不再格式化/截断；查询同时兼容新列和已知旧别名，前端对 0 分使用显式 null 判断。MySQL 旧表新增 score 使用 DOUBLE，避免 FLOAT 单精度再次引入精度损失。",
+      "verification_performed": true,
+      "verification_method": [
+        "执行 NX-11 专项 14 项（-W error），覆盖领域枚举、动作集合、非有限/字符串评分拒绝、已知旧值映射和未知旧值 fail-closed。",
+        "以真实旧 SQLite cl_alert_record schema 执行两次迁移，验证幂等新增 event_type/action/score、仅回填可识别值、未知旧记录保持原样并创建查询索引。",
+        "参数化保存 watch/buy/sell/open/close，验证 123456789.123456 精确往返，新事件不写 line_type/bi_is_done/bi_is_td；非法 action、NaN/Inf 和字符串 score 在任何提交前拒绝。",
+        "编译 MySQL Table DDL，确认模型使用双精度 score；迁移类型 helper 明确为 MySQL DOUBLE、SQLite FLOAT，并把真实 MySQL 往返加入已有 RUN_MYSQL_TESTS 门禁。",
+        "隔离加载真实 alert_tasks.py，验证 MonitoringEventType.STRATEGY_SIGNAL、StrategyAction.WATCH 和 float score 原样到达 DB 边界；前端 JavaScript 对 0 分不再因 truthiness 显示为空。",
+        "运行 NX-11/ME-18/ME-20/NX-10/MX-18/MX-07/MySQL 相邻组合，105 passed、1 skipped（-W error）。",
+        "临时准备受控 config 后运行可收集仓库回归：595 passed、5 skipped；另 8 项只因当前容器缺少 pinyin 在 cl_app 导入阶段失败。完整套件另有 test_backtesting_base_generic.py 因缺少 empyrical 在收集阶段阻断。",
+        "执行 compileall、repository hygiene、readability、quality、Secret、supply-chain、Node 语法、JSON、git diff 和三个历史 CRLF 文件门禁，全部通过。"
+      ],
+      "verification_result": "通过（14 项专项、105 项严格相邻及 595 项可收集仓库回归通过；MySQL/pinyin/empyrical 环境限制已单独记录）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/monitoring_events.py",
+        "src/tradingview_zy/db.py",
+        "web/tradingview_zy_chart/cl_app/alert_tasks.py",
+        "web/tradingview_zy_chart/cl_app/static/js/alert.js",
+        "tests/test_nx11_monitoring_event_schema.py",
+        "tests/test_me18_strategy_runner_contracts.py",
+        "tests/test_selection_monitoring.py",
+        "tests/test_me29_mysql_gate.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "当前容器没有真实 MySQL 服务；本地完成 MySQL 方言 DDL/迁移类型验证，并把双精度往返加入已有真实 MySQL CI 门禁。",
+        "8 个历史 Web 集成测试因当前环境缺少 pinyin 在包导入阶段阻断；真实 AlertTasks 产品文件已通过最小协议桩隔离动态执行。",
+        "未知历史 line_type/action/score 不会被猜测迁移，只继续从旧列读取；需要人工数据治理后才能转为新协议。",
+        "event_type/action 的数据库列采用有界字符串，领域层以 StrEnum/StrategyAction 强制枚举。避免 MySQL 原生 ENUM 的在线扩展锁定，同时保持应用写边界穷尽校验。"
+      ],
+      "commit_subject": "fix(NX-11): type monitoring event persistence"
     }
   },
   {

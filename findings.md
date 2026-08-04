@@ -478,3 +478,21 @@
 - score 不是 position_rate，message 不是 signal key；任何转换参数都必须由版本化 metadata.trade 明确给出。
 - 双向转换只有在 Operation 保存原始 bridge snapshot 时才无损；缺少上下文的历史 Operation 必须拒绝，不能伪造时间和频率。
 - snapshot 需要在反向转换前逐字段核对，防止调用方在生成后修改仓位或动作却仍沿用旧 trace。
+
+
+## NX-11 typed monitoring event schema（恢复审查）
+- 最终实现已把通用监控事件从旧 `line_type/bi_is_done/bi_is_td` 兼容列迁到物理列 `event_type/action/score`，同时保留旧 Chanlun 记录读取能力。
+- 关闭本条的关键不是简单扩大字符串长度，而是：事件类型与动作在写入边界 canonicalize，score 持久化为有限浮点值，旧表迁移只回填可识别值，未知旧数据保持可读且不被伪造为新协议。
+- 迁移与 ORM 同时映射同名物理列时必须重点检查 SQLite/MySQL DDL、幂等迁移、旧 schema 回填、查询兼容及 `Float` 精度往返；SQLite 的宽松类型不能替代 MySQL 方言验证。
+
+- NX-11 迁移不能使用无精度的 MySQL `FLOAT`；当前实现通过 `_alert_event_score_sql_type()` 对 MySQL 使用 `DOUBLE`，并由模型 DDL 与迁移类型测试双重固定。
+- 前端数值展示必须区分 `0` 与空值；`d.score || ""` 会丢失零分，显式 null/undefined 判断是必要的契约修复。
+
+- NX-11 的旧字段只应在新 typed 列为空时作为兼容读取来源；typed 列存在但非法时不能回退到旧值掩盖损坏，应明确返回不可用。
+
+## NX-11 最终结论
+- 旧短字符串列的真正风险不仅是容量，而是类型和精度混在一起；独立物理列必须与领域 enum/动作集合和有限数校验同时落地。
+- SQLite 的动态类型不会暴露 MySQL `VARCHAR` 截断或 `FLOAT` 单精度风险，因此迁移 SQL 需要显式方言契约，MySQL score 使用 `DOUBLE`。
+- 兼容迁移只应回填可证明的旧别名；未知历史值保留在旧列比猜测成新事件更安全。
+- DB 原生 ENUM 会把每次动作扩展变成高风险 DDL；有界字符串列配合单一领域枚举、写边界验证和穷尽测试更适合当前跨 SQLite/MySQL 架构。
+- 数值前端渲染不能使用 truthiness；`0` 是合法评分，只有 `null/undefined` 才代表缺失。
