@@ -4,7 +4,7 @@
 以用户上传的本地仓库为主线，逐条验证并修复 `audit/tradingview_current_open_issues_v1.md` 中的 81 条问题；每条问题形成独立本地 Git 提交，更新验证记录；每完成 10 条生成完整仓库 ZIP 归档，最终交付全部归档、最终仓库与提交日志。
 
 ## 当前阶段
-阶段 9（第 72 条 MX-16 已完成；下一条为第 73 条 MX-18）
+阶段 9（第 73 条 MX-18 已完成；下一条为第 74 条 NX-11）
 
 ## 各阶段
 
@@ -87,7 +87,7 @@
 ### 阶段 9：逐条验证、修复、测试与提交（71–80）
 - [x] 71. LO-06
 - [x] 72. MX-16
-- [ ] 73. MX-18
+- [x] 73. MX-18
 - [ ] 74. NX-11
 - [ ] 75. LO-05
 - [ ] 76. LO-07
@@ -216,6 +216,10 @@
 | LO-02 最终静态门禁发现 `progress.md` EOF 多余空行 | 1 | 仅规范化文件末尾为单个换行，重新执行 `git diff --check` 与 CRLF 门禁 |
 
 | LO-06 首轮测试按包路径导入纯 provider logging helper，触发 exchange package 并被归档外 config.py 阻断 | 1 | 测试改用 `spec_from_file_location` 直接加载无副作用 helper；不复制产品配置或伪造 SDK |
+
+| MX-18 首轮 select 信号在 bridge 映射前由既有 monitoring 协议抛 StrategyOutputError，未统一为 bridge 公共错误 | 1 | 在转换边界把既有 TypeError/ValueError 规范为 StrategyBridgeError；不放宽 action 校验，原样复验 |
+
+| MX-18 扩展回测组合收集 `test_backtesting_base_generic.py` 时缺少 empyrical | 1 | 保留环境限制；桥接专项、ME-20 信号协议和 ME-18 runner 共 82 项严格测试已执行，不伪造回测依赖 |
 
 ## 备注
 - 规划文件和修复报告属于仓库交付物。

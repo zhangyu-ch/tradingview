@@ -472,3 +472,9 @@
 ## MX-16 死能力删除边界
 - 未加载的前端桩和只剩 pass 的后台任务不是“未来功能”，而是错误能力声明；没有真实职责、入口和测试时应从运行树删除。
 - app factory 中的懒代理仍会保留导入和初始化认知面；删除实现时必须同时删除注册点并用引用图固定。
+
+## MX-18 策略与执行桥接边界
+- Signal 与 Operation 不应直接合并：前者描述观察事件，后者包含执行仓位、止损和幂等键；正确抽象是显式 Decision 中间层。
+- score 不是 position_rate，message 不是 signal key；任何转换参数都必须由版本化 metadata.trade 明确给出。
+- 双向转换只有在 Operation 保存原始 bridge snapshot 时才无损；缺少上下文的历史 Operation 必须拒绝，不能伪造时间和频率。
+- snapshot 需要在反向转换前逐字段核对，防止调用方在生成后修改仓位或动作却仍沿用旧 trace。

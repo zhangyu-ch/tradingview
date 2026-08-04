@@ -722,3 +722,10 @@
 - 删除未加载的 `ai.js`、完全 no-op 的 `OtherTasks` 及 app factory 懒代理；不把不可用能力伪装成实现。
 - 运行时引用图、app factory AST、MX-16/ME-26/ME-05 共 15 项严格测试通过；compileall、CRLF 与 diff 门禁通过。
 - 提交主题：`refactor(MX-16): remove dead AI and task stubs`。
+
+### 问题 73：MX-18
+- **状态：** complete
+- 新增版本化 Signal→TradeDecision→Operation 桥接；执行参数必须由 metadata.trade 明确提供，禁止从 score/message 猜测。
+- Operation 嵌入完整 snapshot，反向转换逐字段防篡改；selection/watch/ignore 与 arbitrary legacy Operation 明确拒绝。
+- MX-18/ME-20/ME-18 组合 82 passed（-W error）；完整 BackTest 泛型测试仍被环境缺少 empyrical 阻断。
+- 提交主题：`feat(MX-18): add versioned strategy trade bridge`。

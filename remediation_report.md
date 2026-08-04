@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 72
-- **待处理：** 9
+- **已完成：** 73
+- **待处理：** 8
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -83,7 +83,7 @@
 |70|`LO-02`|低|Maintainability|❌ 未修复|已完成（共享行情适配器与同步工作流）|通过（35 项聚焦、71 项 TDX/日历相邻、99 项 provider 严格组合及 565 项可运行仓库回归通过；环境阻断已单独记录）|`refactor(LO-02)`|
 |71|`LO-06`|低|Readability|❌ 未修复|已完成（显式依赖、审计异常边界与可执行门禁）|通过（运行代码 wildcard import 清零；显式异常/命名门禁与 63 项严格相邻测试通过）|`refactor(LO-06)`|
 |72|`MX-16`|低|Dead Code|❌ 未修复|已完成（删除未加载资产与 no-op 任务壳）|通过（死资产和任务壳均删除，运行引用图为空，15 项相邻测试通过）|`refactor(MX-16)`|
-|73|`MX-18`|低|Strategy Architecture|❌ 未修复|待处理|—|—|
+|73|`MX-18`|低|Strategy Architecture|❌ 未修复|已完成（显式版本化 Signal→Decision→Operation 桥接）|通过（双向可追溯转换、非执行信号拒绝、篡改检测和 82 项严格相邻测试通过）|`feat(MX-18)`|
 |74|`NX-11`|低|Database Schema|❌ 未修复|待处理|—|—|
 |75|`LO-05`|低|Architecture|🟡 部分修复|待处理|—|—|
 |76|`LO-07`|低|Dead Code|🟡 部分修复|待处理|—|—|
@@ -1795,16 +1795,23 @@
 ### 73. MX-18 · StrategySignal 与 Operation 是两套独立协议，跨选股/监控/回测复用需要手工转换（架构债务）
 
 - **原始状态 / 严重度 / 领域：** ❌ 未修复 / 低 / Strategy Architecture
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（显式版本化 Signal→Decision→Operation 桥接）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** Selection/Monitoring 使用带时间、频率、分数和元数据的 StrategySignal，回测交易器使用包含开平、仓位、止损和幂等键的 Operation；仓库没有正式转换层。跨场景复用只能由调用方手工猜测 score、方向、仓位、signal/key 和时间语义，行为漂移风险真实存在。
+- **b. 我是怎么修复的？** 新增 `strategy_bridge.py`，保持两个领域模型独立，但提供显式、版本化的 StrategySignal→TradeDecision→Operation 管线。可执行信号仅允许 buy/sell/open/close，并强制 metadata.trade 明确 position_rate、signal、key，绝不从 score/message 推断执行参数。Operation.info 嵌入完整 bridge snapshot；反向转换只接受该快照，并逐字段核对 code、opt、signal、仓位、止损、消息、key/open_uid/close_uid，篡改或任意 legacy Operation 均 fail-closed。新增边界文档，明确 selection/watch/ignore 与单场景策略不需要、也不能被强行转换；桥接不启用实盘。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 验证 open/buy 映射 buy、close/sell 映射 sell，仓位、止损、signal、幂等键、event_time、frequency、score 和 trace metadata 可完整往返。
+  - 参数化验证 select/watch/ignore 不可执行；缺少 metadata.trade、position_rate=0/超界、无效 schema 均被稳定 StrategyBridgeError 拒绝。
+  - 故障注入修改已生成 Operation 的 position_rate，反向转换检测快照不一致；任意 legacy Operation 因缺少版本化 snapshot 被拒绝。
+  - 运行 MX-18、ME-20、ME-18 组合，82 passed（-W error）；执行 compileall 与 git diff --check。
+- **e. 验证是否通过？** 通过（双向可追溯转换、非执行信号拒绝、篡改检测和 82 项严格相邻测试通过）
+- **提交：** feat(MX-18): add versioned strategy trade bridge
+- **修改文件：** `src/tradingview_zy/strategy_bridge.py`, `docs/strategy-protocol-boundary.md`, `tests/test_mx18_strategy_bridge.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 桥接只生成回测/纸交易 Operation 意图，不启用 LIVE_ORDERS，也不替代 CR-03 要求的持久化 Order/Fill 状态机和券商对账。
+  - 任意历史 Operation 缺少 name/frequency/event_time/score，无法无损反向转换，因此明确拒绝而不是猜测。
+  - 完整 BackTest 泛型测试在当前容器因缺少 empyrical 无法收集；桥接模块、Operation 基类、信号协议和 runner 的 82 项可运行测试已通过。
 - **原报告最新结论：** 删除架构文档没有合并协议；StrategySignal 与 Operation 两套模型仍独立存在。
 - **原报告建议：** 在确有跨场景复用需求时修复：定义 Signal→Decision→Order 管线和版本化转换协议；没有该需求时，应在文档中明确边界而不是强行统一。
 

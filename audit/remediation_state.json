@@ -4455,16 +4455,35 @@
       }
     ],
     "remediation": {
-      "status": "待处理",
-      "problem_verified": null,
-      "problem_summary": "",
-      "fix_summary": "",
-      "verification_performed": null,
-      "verification_method": [],
-      "verification_result": "",
+      "status": "已完成（显式版本化 Signal→Decision→Operation 桥接）",
+      "problem_verified": true,
+      "problem_summary": "Selection/Monitoring 使用带时间、频率、分数和元数据的 StrategySignal，回测交易器使用包含开平、仓位、止损和幂等键的 Operation；仓库没有正式转换层。跨场景复用只能由调用方手工猜测 score、方向、仓位、signal/key 和时间语义，行为漂移风险真实存在。",
+      "fix_summary": "新增 `strategy_bridge.py`，保持两个领域模型独立，但提供显式、版本化的 StrategySignal→TradeDecision→Operation 管线。可执行信号仅允许 buy/sell/open/close，并强制 metadata.trade 明确 position_rate、signal、key，绝不从 score/message 推断执行参数。Operation.info 嵌入完整 bridge snapshot；反向转换只接受该快照，并逐字段核对 code、opt、signal、仓位、止损、消息、key/open_uid/close_uid，篡改或任意 legacy Operation 均 fail-closed。新增边界文档，明确 selection/watch/ignore 与单场景策略不需要、也不能被强行转换；桥接不启用实盘。",
+      "verification_performed": true,
+      "verification_method": [
+        "验证 open/buy 映射 buy、close/sell 映射 sell，仓位、止损、signal、幂等键、event_time、frequency、score 和 trace metadata 可完整往返。",
+        "参数化验证 select/watch/ignore 不可执行；缺少 metadata.trade、position_rate=0/超界、无效 schema 均被稳定 StrategyBridgeError 拒绝。",
+        "故障注入修改已生成 Operation 的 position_rate，反向转换检测快照不一致；任意 legacy Operation 因缺少版本化 snapshot 被拒绝。",
+        "运行 MX-18、ME-20、ME-18 组合，82 passed（-W error）；执行 compileall 与 git diff --check。"
+      ],
+      "verification_result": "通过（双向可追溯转换、非执行信号拒绝、篡改检测和 82 项严格相邻测试通过）",
       "commit": "",
-      "files_changed": [],
-      "limitations": []
+      "files_changed": [
+        "src/tradingview_zy/strategy_bridge.py",
+        "docs/strategy-protocol-boundary.md",
+        "tests/test_mx18_strategy_bridge.py",
+        "audit/remediation_state.json",
+        "remediation_report.md",
+        "findings.md",
+        "progress.md",
+        "task_plan.md"
+      ],
+      "limitations": [
+        "桥接只生成回测/纸交易 Operation 意图，不启用 LIVE_ORDERS，也不替代 CR-03 要求的持久化 Order/Fill 状态机和券商对账。",
+        "任意历史 Operation 缺少 name/frequency/event_time/score，无法无损反向转换，因此明确拒绝而不是猜测。",
+        "完整 BackTest 泛型测试在当前容器因缺少 empyrical 无法收集；桥接模块、Operation 基类、信号协议和 runner 的 82 项可运行测试已通过。"
+      ],
+      "commit_subject": "feat(MX-18): add versioned strategy trade bridge"
     }
   },
   {
