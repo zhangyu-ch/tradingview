@@ -2,8 +2,8 @@
 
 - **原始问题清单：** `audit/tradingview_current_open_issues_v1.md`（只读保留）
 - **问题总数：** 81
-- **已完成：** 60
-- **待处理：** 21
+- **已完成：** 61
+- **待处理：** 20
 - **提交规则：** 每个问题一个本地 Git 提交，直接落在 `main`，不推送远程。
 - **判定规则：** 仅在根因修复且自动化验证通过后标记“已完成”；真实外部系统未联调的限制会单独列出。
 
@@ -71,7 +71,7 @@
 |58|`ME-20`|中|Strategy Protocol|🟡 部分修复|已完成（版本化信号协议与 runner 输出边界）|通过（60 项 ME-20 专项、91 项核心聚焦和 108 项任务相邻测试通过；无版本输出、用途错配、时间/metadata/数量边界和裸 list 绕过根因已关闭）|`fix(ME-20)`|
 |59|`ME-25`|中|Supply Chain|🟡 部分修复|已完成（锁定安装、制品来源、SBOM/许可证/OSV 门禁）|通过（28 项专项/相邻测试通过；确定性制品、篡改/未登记/缺 provenance、过期策略、OSV advisory 与响应失配故障注入均按预期阻断）|`fix(ME-25)`|
 |60|`ME-27`|中|Secrets|🟡 部分修复|已完成|通过（105 项聚焦、82 项 provider 严格矩阵、495 项可运行仓库回归通过，5 项条件跳过；Secret 引用、权限、轮换、迁移、脱敏及 fail-closed 故障注入均符合预期）|`fix(ME-27)`|
-|61|`ME-04`|中|Web Payload|🟡 部分修复|待处理|—|—|
+|61|`ME-04`|中|Web Payload|🟡 部分修复|已完成（统一 K 线 payload 边界）|通过（29 项严格 payload 测试、92 项直接相邻及 525 项可运行仓库回归通过；schema、时区、排序、重复、身份和稳定错误边界均已关闭）|`fix(ME-04)`|
 |62|`ME-01`|中|Web Storage|🟡 部分修复|待处理|—|—|
 |63|`ME-03`|低|Web UDF|❌ 未修复|待处理|—|—|
 |64|`MX-11`|低|Configuration|❌ 未修复|待处理|—|—|
@@ -1522,16 +1522,24 @@
 ### 61. ME-04 · K 线 payload 对时区、schema、排序和重复值缺少边界校验
 
 - **原始状态 / 严重度 / 领域：** 🟡 部分修复 / 中 / Web Payload
-- **本轮状态：** 待处理
-- **问题是否存在：** 待验证
-- **a. 这个问题是什么？** 待验证
-- **b. 我是怎么修复的？** 待处理
-- **c. 修复后是否验证？** 待验证
+- **本轮状态：** 已完成（统一 K 线 payload 边界）
+- **问题是否存在：** 是
+- **a. 这个问题是什么？** NEW-04 已把市场时区本地化移到范围过滤之前，但当前 web_payloads 只校验 date/timezone；/tv/history 仍会接受缺列、非数值/NaN/Inf、负成交量、OHLC 自相矛盾、重复或降序时间，以及与请求不一致的 code/frequency。原报告声称的 kline_schema.py 和行为级 schema 门禁在当前本地仓库并不存在，因此 ME-04 的大部分数据质量根因仍真实存在。
+- **b. 我是怎么修复的？** 新增 KlinePayloadError 与 prepare_klines_for_market 作为唯一 canonical history 边界：深拷贝输入，先把 naive 墙钟按市场 ZoneInfo 本地化并拒绝 DST 缺口/重叠，再校验必需 OHLCV 列、有限数值、非负 volume、OHLC 一致性、严格递增且唯一的时间戳，并从已校验请求绑定缺失 code/frequency 或拒绝不一致值。/tv/history 在任何 epoch 比较和范围过滤前调用该边界，异常只返回稳定 UDF error 且不记录原始 payload；最终序列化再次执行同一契约。
+- **c. 修复后是否验证？** 是
 - **d. 怎么验证的？**
-  - 待处理
-- **e. 验证是否通过？** 待处理
-- **提交：** 待提交
-- **修改文件：** 待处理
+  - 运行 tests/test_me04_web_payload_contracts.py 与 tests/test_web_payloads.py，结果 29 passed（-W error）。
+  - 覆盖缺失六个必需列、NaN/±Inf/非数值、负成交量、high/low 矛盾、重复/降序时间、code/frequency 不匹配、纽约 DST nonexistent/ambiguous 墙钟、调用方 DataFrame 不变及上海市场 epoch。
+  - 运行 ME-04、RV-07、ME-02、ME-10、ME-18 直接相邻组合，结果 92 passed。
+  - 运行排除当前容器既有依赖阻断后的可运行仓库回归，结果 525 passed、5 skipped、8 deselected；被排除项分别缺 empyrical 或完整 Flask/pinyin，均在本条产品断言前阻断。
+  - 执行 py_compile、compileall、git diff --check、audit JSON 解析，并确认 web_payloads.py 与 cl_app/__init__.py 保持纯 CRLF（bare-LF=0）。
+- **e. 验证是否通过？** 通过（29 项严格 payload 测试、92 项直接相邻及 525 项可运行仓库回归通过；schema、时区、排序、重复、身份和稳定错误边界均已关闭）
+- **提交：** fix(ME-04): validate canonical history payloads
+- **修改文件：** `src/tradingview_zy/web_payloads.py`, `web/tradingview_zy_chart/cl_app/__init__.py`, `tests/test_me04_web_payload_contracts.py`, `audit/remediation_state.json`, `remediation_report.md`, `findings.md`, `progress.md`, `task_plan.md`
+- **验证限制：**
+  - 当前容器缺少完整 Flask/pinyin，未用真实 Flask test client 启动 /tv/history；真实路由控制流由 AST 契约验证，payload 规范化和序列化均动态执行。
+  - 未连接真实行情供应商；本条验证 provider 返回后的统一边界，不证明每个供应商自身永远输出合法 schema。
+  - 严格递增策略会拒绝而不是自动排序供应商乱序数据，以避免静默掩盖分页或数据源错误；调用方必须修复源顺序。
 - **原报告最新结论：** K 线进入 TradingView 前已有 required columns、有限数、OHLC、volume、code/frequency、严格排序、重复时间和市场时区校验；但 /tv/history 在时区本地化之前先执行时间范围过滤，naive 市场本地时间会按服务器时区解释。
 - **原报告建议：** 先补全 code/市场时区并规范化，再按 Unix 秒过滤；增加服务器 UTC、A 股 naive 时间的路由级测试。
 

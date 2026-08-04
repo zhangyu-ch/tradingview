@@ -624,3 +624,7 @@
 - 已生成包含完整源码与 `.git` 的 `tradingview_remediation_issues_051-060.zip` 及 SHA-256 sidecar。
 - 使用系统 `unzip` 重新解压验证：工作树 clean，HEAD 与 `issue/060-ME-27` 一致，`issue/051-*` 至 `issue/060-*` 全部可解引用，`git fsck --full` 成功。
 - 归档前清除 ignored 测试配置、运行缓存和 `__pycache__`；保留全部可达本地提交、标签及源码。
+
+
+### 问题 61：ME-04（恢复重建）
+- 状态：complete；严格 K 线 payload 边界与路由错误契约已复验。

@@ -401,3 +401,7 @@
 - 日志脱敏必须在 Secret 解析时注册实际值，并额外覆盖 Authorization、URL userinfo 和常见 password/token/api_key 键值形态；它不能替代禁止记录原始 SDK 对象。
 - 配置门禁应从运行时 Secret policy inventory 派生字段清单，避免新凭据只加入模板却绕过分类与扫描。
 - 能力 facade 的“未声明 LIVE_ORDERS”不是足够的长期防线；公开 `order()` 本身也必须保持 CR-03 无条件 fail-closed，防止未来 registry 误报重新接通未对账下单。
+
+
+## ME-04 恢复重建
+- 时间规范化必须先于范围过滤；完整 OHLCV、身份、顺序和有限数在 Web 边界 fail-closed。

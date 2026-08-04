@@ -21,10 +21,11 @@ from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.footprint import SUB_FREQUENCY_MAP, TTLCache, aggregate_footprint
 from tradingview_zy.market_metadata import market_default_codes, market_frequencies
 from tradingview_zy.web_payloads import (
+    KlinePayloadError,
     datetime_to_timestamp_seconds,
     filter_klines_by_timestamp_range,
     klines_to_tv_history,
-    normalize_klines_for_market,
+    prepare_klines_for_market,
     market_timezone as resolve_market_timezone,
 )
 from tradingview_zy.zixuan import ZiXuan
@@ -688,18 +689,26 @@ def create_app(test_config=None):
         klines = ex.klines(code, frequency)
         if klines is None or len(klines) == 0:
             return {"s": "no_data"}
-        klines = normalize_klines_for_market(klines, market)
-        if to_timestamp < datetime_to_timestamp_seconds(klines.iloc[0]["date"]):
-            return {"s": "no_data"}
-        if not first_data_request:
-            klines = filter_klines_by_timestamp_range(
-                klines, from_timestamp, to_timestamp, market=market
+        try:
+            klines = prepare_klines_for_market(
+                klines,
+                market,
+                expected_code=code,
+                expected_frequency=frequency,
             )
-            if klines is None or len(klines) == 0:
+            if to_timestamp < datetime_to_timestamp_seconds(klines.iloc[0]["date"]):
                 return {"s": "no_data"}
-        return klines_to_tv_history(
-            klines, update=not first_data_request, status=status, market=market
-        )
+            if not first_data_request:
+                klines = filter_klines_by_timestamp_range(
+                    klines, from_timestamp, to_timestamp, market=market
+                )
+                if klines is None or len(klines) == 0:
+                    return {"s": "no_data"}
+            return klines_to_tv_history(
+                klines, update=not first_data_request, status=status, market=market
+            )
+        except KlinePayloadError:
+            return {"s": "error", "errmsg": "invalid_kline_payload"}
 
     # (symbol, frequency) -> 全量足迹聚合结果，TTL 内直接复用，按请求窗口切片返回
     __footprint_cache = TTLCache(ttl_seconds=10.0)
