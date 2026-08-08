@@ -12,7 +12,7 @@ from tradingview_zy.market_metadata import (
     market_default_codes,
     market_frequencies,
 )
-from tradingview_zy.scheduler_runtime import SchedulerStatusStore
+from tradingview_zy.scheduler_status import SchedulerStatusStore
 from tradingview_zy.secret_store import ManagedSecretStore
 from tradingview_zy.tick_request import BoundedProviderCaller, SlidingWindowLimiter
 from tradingview_zy.tv_storage import (
