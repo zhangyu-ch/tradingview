@@ -56,7 +56,8 @@ def test_degraded_optional_service_is_distinct_from_failed_required_service(monk
     assert "环境检查结果：DEGRADED" in output
 
 
-def test_real_script_rejects_the_current_unsupported_python() -> None:
+def test_real_script_reports_current_python_against_project_contract() -> None:
+    module = _load_check_env()
     completed = subprocess.run(
         [sys.executable, str(ROOT / "check_env.py")],
         cwd=ROOT,
@@ -64,10 +65,15 @@ def test_real_script_rejects_the_current_unsupported_python() -> None:
         capture_output=True,
         check=False,
     )
-    # The verification container runs Python 3.13 while the project is cp311-only.
-    assert completed.returncode == 1
-    assert "does not satisfy project requires-python >=3.11,<3.12" in completed.stdout
-    assert "环境OK" not in completed.stdout
+    supported = module._python_version_supported(tuple(sys.version_info[:3]))
+    expected_message = "does not satisfy project requires-python >=3.11,<3.12"
+
+    assert completed.returncode == (0 if supported else 1)
+    if supported:
+        assert expected_message not in completed.stdout
+    else:
+        assert expected_message in completed.stdout
+        assert "环境OK" not in completed.stdout
 
 
 def test_check_env_does_not_import_removed_telnetlib() -> None:
