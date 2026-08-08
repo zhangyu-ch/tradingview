@@ -131,6 +131,11 @@ def render_markdown(ledger: list[dict[str, Any]], source_path: str) -> str:
     lines.extend(["", "## 逐条记录", ""])
     for item in ledger:
         remediation = item["remediation"]
+        commit_detail = (
+            f"`{remediation['commit']}`"
+            if remediation.get("commit")
+            else (remediation.get("commit_subject") or "待提交")
+        )
         lines.extend(
             [
                 f"### {item['index']:02d}. {item['issue_id']} · {item['title']}",
@@ -149,7 +154,7 @@ def render_markdown(ledger: list[dict[str, Any]], source_path: str) -> str:
         lines.extend(
             [
                 f"- **e. 验证是否通过？** {remediation['verification_result'] or '待处理'}",
-                f"- **提交：** {f'`{remediation["commit"]}`' if remediation.get('commit') else (remediation.get('commit_subject') or '待提交')}",
+                f"- **提交：** {commit_detail}",
                 f"- **修改文件：** {', '.join(f'`{p}`' for p in remediation['files_changed']) if remediation['files_changed'] else '待处理'}",
             ]
         )
