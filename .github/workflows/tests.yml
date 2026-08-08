@@ -162,10 +162,14 @@ jobs:
 
   lock-refresh:
     if: github.event_name == 'pull_request' && github.head_ref == 'agent/fix-ci-run-31272866468'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -185,3 +189,14 @@ jobs:
             audit/supply-chain/license-report.json
             audit/supply-chain/vulnerability-report.json
           if-no-files-found: error
+      - name: Commit refreshed lock and evidence to the PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock audit/supply-chain/sbom.cdx.json audit/supply-chain/license-report.json audit/supply-chain/vulnerability-report.json
+          if git diff --cached --quiet; then
+            echo "Lock and evidence are already current."
+            exit 0
+          fi
+          git commit -m "chore(deps): refresh lock and supply-chain evidence"
+          git push origin HEAD:${{ github.head_ref }}
