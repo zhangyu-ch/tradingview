@@ -2,6 +2,7 @@ import ast
 import datetime
 import importlib
 import inspect
+import subprocess
 import sys
 from pathlib import Path
 
@@ -12,18 +13,27 @@ from tradingview_zy.backtesting.backtest import BackTest
 from tradingview_zy.backtesting.backtest_trader import BackTestTrader
 
 
-
-
 def test_backtesting_base_import_does_not_load_hidden_config_or_fun():
-    sys.modules.pop("tradingview_zy.backtesting.base", None)
-    sys.modules.pop("tradingview_zy.fun", None)
-    sys.modules.pop("tradingview_zy.config", None)
+    repo_root = Path(__file__).resolve().parents[1]
+    script = "\n".join(
+        [
+            "import sys",
+            "from pathlib import Path",
+            "sys.path.insert(0, str(Path.cwd() / 'src'))",
+            "import tradingview_zy.backtesting.base",
+            "assert 'tradingview_zy.fun' not in sys.modules",
+            "assert 'tradingview_zy.config' not in sys.modules",
+        ]
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
 
-    module = importlib.import_module("tradingview_zy.backtesting.base")
-
-    assert module is not None
-    assert "tradingview_zy.fun" not in sys.modules
-    assert "tradingview_zy.config" not in sys.modules
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_backtesting_base_source_does_not_import_fun():
