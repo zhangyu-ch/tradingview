@@ -255,6 +255,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config core.whitespace cr-at-eol
           git add web/tradingview_zy_chart/cl_app/alert_tasks.py tests/test_selection_monitoring.py
           git diff --cached --check
           git commit -m "fix(web): validate alert configuration before target lookup"
