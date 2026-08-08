@@ -22,6 +22,7 @@ def test_rendered_settings_dom_never_contains_existing_secret() -> None:
     template_root = ROOT / "web/tradingview_zy_chart/cl_app/templates"
     environment = Environment(loader=FileSystemLoader(str(template_root)), autoescape=True)
     environment.globals["url_for"] = lambda endpoint, **values: f"/{values.get('filename', '')}"
+    environment.globals["csrf_token"] = lambda: "browser-contract-test-csrf-token"
     environment.loader = FileSystemLoader([str(template_root)])
     template = environment.get_template("setting.html")
     html = template.render(
