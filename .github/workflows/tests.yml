@@ -175,6 +175,19 @@ jobs:
           python-version: "3.11"
       - name: Install exact uv
         run: python -m pip install "uv==0.10.0"
+      - name: Correct scheduler status import without changing line endings
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("web/tradingview_zy_chart/cl_app/__init__.py")
+          old = b"from tradingview_zy.scheduler_runtime import SchedulerStatusStore"
+          new = b"from tradingview_zy.scheduler_status import SchedulerStatusStore"
+          content = path.read_bytes()
+          if content.count(old) != 1:
+              raise SystemExit("expected exactly one scheduler status import")
+          path.write_bytes(content.replace(old, new))
+          PY
       - name: Refresh lock and committed supply-chain evidence
         run: |
           uv lock --upgrade
@@ -189,14 +202,14 @@ jobs:
             audit/supply-chain/license-report.json
             audit/supply-chain/vulnerability-report.json
           if-no-files-found: error
-      - name: Commit refreshed lock and evidence to the PR branch
+      - name: Commit generated and targeted repairs to the PR branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add uv.lock audit/supply-chain/sbom.cdx.json audit/supply-chain/license-report.json audit/supply-chain/vulnerability-report.json
+          git add uv.lock audit/supply-chain/sbom.cdx.json audit/supply-chain/license-report.json audit/supply-chain/vulnerability-report.json web/tradingview_zy_chart/cl_app/__init__.py
           if git diff --cached --quiet; then
-            echo "Lock and evidence are already current."
+            echo "Generated state and targeted import are already current."
             exit 0
           fi
-          git commit -m "chore(deps): refresh lock and supply-chain evidence"
+          git commit -m "fix(web): use the scheduler status module"
           git push origin HEAD:${{ github.head_ref }}
