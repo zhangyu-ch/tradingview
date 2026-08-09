@@ -401,14 +401,15 @@ def test_xuangu_task_add_without_target_group_passes_empty_target(monkeypatch):
             )
             return True
 
-    monkeypatch.setattr(cl_app.config, "LOGIN_PWD", "")
     fake_exchange = SimpleNamespace(
         support_frequencys=lambda: {"d": "日线"},
         default_code=lambda: "SH.000001",
     )
     monkeypatch.setattr(cl_app, "get_exchange", lambda market: fake_exchange)
 
-    app = cl_app.create_app()
+    app = cl_app.create_app(
+        {"WEB_HOST": "127.0.0.1", "LOGIN_PWD": "", "LOGIN_PWD_HASH": ""}
+    )
     route_view = app.view_functions["tasks.xuangu_task_add"]
     wrapped_view = route_view.__wrapped__
     services = app.extensions["tradingview_zy.web_services"]
@@ -468,8 +469,12 @@ def test_tv_history_backfill_returns_ohlcv_when_market_is_closed(monkeypatch):
 
     app = cl_app.create_app()
     view = app.view_functions["udf.tv_history"].__wrapped__
-    start_ts = int(pd.Timestamp("2026-05-03 09:00:00").timestamp())
-    end_ts = int(pd.Timestamp("2026-05-03 10:00:00").timestamp())
+    start_ts = int(
+        pd.Timestamp("2026-05-03 09:00:00", tz="Asia/Shanghai").timestamp()
+    )
+    end_ts = int(
+        pd.Timestamp("2026-05-03 10:00:00", tz="Asia/Shanghai").timestamp()
+    )
     with app.test_request_context(
         f"/tv/history?symbol=a:SH.000001&resolution=1D&from={start_ts}&to={end_ts}&firstDataRequest=false"
     ):

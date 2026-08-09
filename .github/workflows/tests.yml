@@ -33,7 +33,7 @@ jobs:
         run: python script/remediation/prepare_test_config.py
       - name: Run complete test suite
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
         run: uv run pytest -q
 
   provider-contracts:
@@ -52,7 +52,7 @@ jobs:
         run: python script/remediation/prepare_test_config.py
       - name: Run provider reliability matrix with strict warnings
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
         run: >-
           uv run pytest -q -W error
           tests/test_hi13_binance_pagination.py
@@ -96,7 +96,7 @@ jobs:
         run: python script/remediation/prepare_test_config.py
       - name: Run real MySQL migration and long-content contract
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           RUN_MYSQL_TESTS: "1"
           MYSQL_HOST: 127.0.0.1
           MYSQL_PORT: "3306"
@@ -121,7 +121,7 @@ jobs:
         run: uv run playwright install --with-deps chromium
       - name: Verify rendered settings DOM does not expose stored secrets
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           RUN_BROWSER_TESTS: "1"
         run: uv run pytest -q -W error tests/test_me29_browser_dom.py
 

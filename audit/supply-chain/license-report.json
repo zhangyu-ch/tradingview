@@ -12,7 +12,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "4.0.0"
+      "version": "4.0.4"
     },
     {
       "license": null,
@@ -25,7 +25,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.6.1"
+      "version": "2.7.1"
     },
     {
       "license": null,
@@ -38,7 +38,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.13.3"
+      "version": "3.14.3"
     },
     {
       "license": null,
@@ -77,7 +77,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.18.39"
+      "version": "1.18.83"
     },
     {
       "license": null,
@@ -90,7 +90,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.43.2"
+      "version": "0.43.5"
     },
     {
       "license": null,
@@ -103,7 +103,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.7.0"
+      "version": "0.8.0"
     },
     {
       "license": null,
@@ -116,7 +116,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "4.12.1"
+      "version": "4.14.2"
     },
     {
       "license": null,
@@ -129,7 +129,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.11.2"
+      "version": "3.11.3"
     },
     {
       "license": null,
@@ -142,7 +142,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.0.1"
+      "version": "3.0.2"
     },
     {
       "license": null,
@@ -168,7 +168,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "25.4.0"
+      "version": "26.1.0"
     },
     {
       "license": null,
@@ -181,7 +181,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.8.9"
+      "version": "0.9.3"
     },
     {
       "license": null,
@@ -194,7 +194,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "4.14.3"
+      "version": "4.15.0"
     },
     {
       "license": null,
@@ -233,7 +233,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.4.0"
+      "version": "1.5.0"
     },
     {
       "license": null,
@@ -272,7 +272,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.0.0"
+      "version": "2.1.1"
     },
     {
       "license": null,
@@ -285,7 +285,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.4.5"
+      "version": "3.4.9"
     },
     {
       "license": null,
@@ -298,7 +298,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "8.3.1"
+      "version": "8.4.2"
     },
     {
       "license": null,
@@ -350,7 +350,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "46.0.5"
+      "version": "50.0.0"
     },
     {
       "license": null,
@@ -363,7 +363,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.14.0"
+      "version": "0.16.0"
     },
     {
       "license": null,
@@ -402,7 +402,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "5.2.1"
+      "version": "5.3.1"
     },
     {
       "license": null,
@@ -441,7 +441,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.5.10"
+      "version": "0.5.12"
     },
     {
       "license": null,
@@ -493,7 +493,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.25.2"
+      "version": "3.32.2"
     },
     {
       "license": null,
@@ -532,7 +532,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "4.62.0"
+      "version": "4.63.0"
     },
     {
       "license": null,
@@ -558,7 +558,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "10.0.6008"
+      "version": "10.9.6908"
     },
     {
       "license": null,
@@ -571,7 +571,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "25.9.1"
+      "version": "26.7.0"
     },
     {
       "license": null,
@@ -584,7 +584,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.2.8"
+      "version": "3.2.11"
     },
     {
       "license": null,
@@ -597,7 +597,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.3.2"
+      "version": "3.5.4"
     },
     {
       "license": null,
@@ -675,7 +675,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.11"
+      "version": "3.18"
     },
     {
       "license": null,
@@ -701,20 +701,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "9.10.0"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "ipython",
-      "normalized_name": "ipython",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "9.11.0"
+      "version": "9.16.1"
     },
     {
       "license": null,
@@ -766,7 +753,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.19.2"
+      "version": "0.20.0"
     },
     {
       "license": null,
@@ -792,7 +779,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.13.0"
+      "version": "0.16.0"
     },
     {
       "license": null,
@@ -857,7 +844,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.5.3"
+      "version": "1.7.2"
     },
     {
       "license": null,
@@ -870,7 +857,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "6.0.2"
+      "version": "6.1.1"
     },
     {
       "license": null,
@@ -896,7 +883,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.10.8"
+      "version": "3.11.1"
     },
     {
       "license": null,
@@ -909,7 +896,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.2.1"
+      "version": "0.2.2"
     },
     {
       "license": null,
@@ -935,7 +922,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.1.2"
+      "version": "1.2.1"
     },
     {
       "license": null,
@@ -962,6 +949,19 @@
         "registry"
       ],
       "version": "2.9.3"
+    },
+    {
+      "license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "license_files": [],
+      "name": "narwhals",
+      "normalized_name": "narwhals",
+      "review": "metadata-unavailable-offline",
+      "source_kinds": [
+        "registry"
+      ],
+      "version": "2.24.0"
     },
     {
       "license": null,
@@ -1000,7 +1000,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.26.0"
+      "version": "2.53.0"
     },
     {
       "license": null,
@@ -1026,7 +1026,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "26.0"
+      "version": "26.3"
     },
     {
       "license": null,
@@ -1052,7 +1052,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.8.6"
+      "version": "0.8.7"
     },
     {
       "license": null,
@@ -1091,7 +1091,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "12.1.1"
+      "version": "12.3.0"
     },
     {
       "license": null,
@@ -1117,7 +1117,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.58.0"
+      "version": "1.62.0"
     },
     {
       "license": null,
@@ -1143,7 +1143,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.16.3"
+      "version": "1.15.4"
     },
     {
       "license": null,
@@ -1156,7 +1156,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.17.0"
+      "version": "3.18.0"
     },
     {
       "license": null,
@@ -1169,7 +1169,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.0.52"
+      "version": "3.0.53"
     },
     {
       "license": null,
@@ -1182,7 +1182,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.4.1"
+      "version": "0.5.2"
     },
     {
       "license": null,
@@ -1195,7 +1195,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.20.3"
+      "version": "7.35.1"
     },
     {
       "license": null,
@@ -1260,7 +1260,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "23.0.1"
+      "version": "25.0.0"
     },
     {
       "license": null,
@@ -1312,7 +1312,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.12.5"
+      "version": "2.13.4"
     },
     {
       "license": null,
@@ -1325,7 +1325,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.41.5"
+      "version": "2.46.4"
     },
     {
       "license": null,
@@ -1377,7 +1377,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.19.2"
+      "version": "2.20.0"
     },
     {
       "license": null,
@@ -1390,7 +1390,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.12.0"
+      "version": "2.13.0"
     },
     {
       "license": null,
@@ -1403,7 +1403,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.1.2"
+      "version": "1.2.0"
     },
     {
       "license": null,
@@ -1455,7 +1455,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "9.0.2"
+      "version": "9.1.1"
     },
     {
       "license": null,
@@ -1481,7 +1481,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2026.1.post1"
+      "version": "2026.3.post1"
     },
     {
       "license": null,
@@ -1494,7 +1494,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "7.3.0"
+      "version": "8.1.0"
     },
     {
       "license": null,
@@ -1507,7 +1507,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.32.5"
+      "version": "2.34.2"
     },
     {
       "license": null,
@@ -1533,7 +1533,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.8.0"
+      "version": "1.9.0"
     },
     {
       "license": null,
@@ -1572,7 +1572,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "82.0.1"
+      "version": "84.0.0"
     },
     {
       "license": null,
@@ -1611,7 +1611,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.20.2"
+      "version": "4.1.1"
     },
     {
       "license": null,
@@ -1650,7 +1650,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.8.3"
+      "version": "2.9.2"
     },
     {
       "license": null,
@@ -1663,7 +1663,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.0.48"
+      "version": "2.0.51"
     },
     {
       "license": null,
@@ -1760,7 +1760,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "6.5.5"
+      "version": "6.5.8"
     },
     {
       "license": null,
@@ -1773,7 +1773,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "4.67.3"
+      "version": "4.70.0"
     },
     {
       "license": null,
@@ -1786,7 +1786,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.9.0"
+      "version": "3.10.1"
     },
     {
       "license": null,
@@ -1799,7 +1799,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.0.2"
+      "version": "1.1.0"
     },
     {
       "license": null,
@@ -1838,7 +1838,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "5.14.3"
+      "version": "5.16.1"
     },
     {
       "license": null,
@@ -1851,7 +1851,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "4.15.0"
+      "version": "4.16.0"
     },
     {
       "license": null,
@@ -1877,7 +1877,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2025.3"
+      "version": "2026.3"
     },
     {
       "license": null,
@@ -1890,7 +1890,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "5.3.1"
+      "version": "5.4.4"
     },
     {
       "license": null,
@@ -1903,7 +1903,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "2.6.3"
+      "version": "2.7.0"
     },
     {
       "license": null,
@@ -1916,7 +1916,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "0.6.0"
+      "version": "0.8.2"
     },
     {
       "license": null,
@@ -1955,7 +1955,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "3.1.6"
+      "version": "3.1.8"
     },
     {
       "license": null,
@@ -1994,7 +1994,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "1.23.0"
+      "version": "1.24.5"
     },
     {
       "license": null,
@@ -2007,7 +2007,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "6.1"
+      "version": "6.2"
     },
     {
       "license": null,
@@ -2020,7 +2020,7 @@
       "source_kinds": [
         "registry"
       ],
-      "version": "8.2"
+      "version": "8.5"
     }
   ],
   "limitations": [
@@ -2029,5 +2029,5 @@
   ],
   "schema_version": 1,
   "source": "uv.lock + local wheel evidence",
-  "uv_lock_sha256": "e262513147de4bf778215277c06cadd607008d104c3689afd43512026894b479"
+  "uv_lock_sha256": "e132ef5d3b9165500aa608fb45cd21a3689c3f1c99d611943ecf73116a2f1f5d"
 }

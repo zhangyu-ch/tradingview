@@ -121,6 +121,16 @@ class AlertTasks(object):
             self.log.error(f"未找到监控任务 {alert_id}")
             return False
 
+        try:
+            parameters = parse_strategy_parameters(
+                alert_config.strategy_config or "{}"
+            )
+        except StrategyStorageValidationError as error:
+            self.log.error(
+                f"{alert_config.task_name} strategy_config 无效：{error}"
+            )
+            return False
+
         ex = get_exchange(Market(alert_config.market))
         zx = ZiXuan(alert_config.market)
         all_stocks = zx.zx_stocks(alert_config.zx_group)
@@ -132,16 +142,6 @@ class AlertTasks(object):
         if not stocks:
             self.last_batch_result = BatchRunResult()
             return True
-
-        try:
-            parameters = parse_strategy_parameters(
-                alert_config.strategy_config or "{}"
-            )
-        except StrategyStorageValidationError as error:
-            self.log.error(
-                f"{alert_config.task_name} strategy_config 无效：{error}"
-            )
-            return False
 
         strategy_id = self._resolve_strategy_id(parameters)
         strategy_kwargs = parameters.kwargs
