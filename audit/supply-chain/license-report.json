@@ -2029,5 +2029,5 @@
   ],
   "schema_version": 1,
   "source": "uv.lock + local wheel evidence",
-  "uv_lock_sha256": "e132ef5d3b9165500aa608fb45cd21a3689c3f1c99d611943ecf73116a2f1f5d"
+  "uv_lock_sha256": "8740beffc2c884d480aae1ee345b77dec9b70cf6ee8a8c503a9136a79a3de1ef"
 }

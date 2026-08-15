@@ -4,6 +4,7 @@ from tradingview_zy import config, fun
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange import get_exchange
+from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.footprint import TTLCache
 from tradingview_zy.history_request_tracker import HistoryRequestTracker
 from tradingview_zy.market_metadata import (
@@ -29,7 +30,6 @@ from tradingview_zy.web_security import (
 from tradingview_zy.zixuan import ZiXuan
 
 from .blueprints import register_blueprints
-from .stocks_bkgn import StocksBKGN
 from .task_services import LazyTaskService
 from .web_services import WebAppServices, install_web_services
 

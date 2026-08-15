@@ -1,15 +1,15 @@
 {
   "artifacts": [
     {
-      "acquisition_evidence": "The file hash is locked in uv.lock. Original acquisition URL is unknown and is not inferred.",
+      "acquisition_evidence": "Original acquisition URL is unknown and is not inferred. Repacked from the repository baseline artifact with SHA-256 71898dd32cb83112d196b38899ba460a48ed98a06b7f73c84c9f55b3843f48fb by normalizing its mismatched pytdx-1.72r1.dist-info directory and Version metadata to 1.72.post2, then regenerating RECORD.",
       "license_review": "manual-review-required",
       "marker": null,
-      "origin": "Present in the user-provided TradingView.zip baseline; the repository does not record the original download URL.",
-      "origin_type": "user-provided-baseline-artifact",
+      "origin": "Repacked locally from the user-provided TradingView.zip baseline wheel; package payload files were preserved while malformed wheel version metadata was normalized.",
+      "origin_type": "repository-repacked-baseline-artifact",
       "package": "pytdx",
-      "path": "package/pytdx-1.72r2-py3-none-any.whl",
-      "sha256": "71898dd32cb83112d196b38899ba460a48ed98a06b7f73c84c9f55b3843f48fb",
-      "size": 107490,
+      "path": "package/pytdx-1.72.post2-py3-none-any.whl",
+      "sha256": "d5d994460a389d9c7905dd9d18947e107ffe97a2e827059e7be49c4f9a287f3a",
+      "size": 105636,
       "upstream_download_url": null,
       "upstream_project": "https://github.com/wenxingxing/pytdx",
       "version": "1.72.post2",
@@ -19,11 +19,11 @@
         "license_classifiers": [],
         "license_expression": null,
         "license_files": [],
-        "metadata_path": "pytdx-1.72r1.dist-info/METADATA",
+        "metadata_path": "pytdx-1.72.post2.dist-info/METADATA",
         "name": "pytdx",
         "project_urls": [],
         "summary": "A Python Interface to TDX protocol",
-        "version": "1.72r2"
+        "version": "1.72.post2"
       }
     },
     {
@@ -231,7 +231,7 @@
       }
     }
   ],
-  "lock_sha256": "e262513147de4bf778215277c06cadd607008d104c3689afd43512026894b479",
+  "lock_sha256": "8740beffc2c884d480aae1ee345b77dec9b70cf6ee8a8c503a9136a79a3de1ef",
   "policy": "Every file in package/ must be referenced by [tool.uv.sources], locked by SHA-256, and listed here. Unknown provenance remains explicit.",
   "schema_version": 1
 }

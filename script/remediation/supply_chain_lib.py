@@ -185,11 +185,15 @@ def read_wheel_metadata(path: Path) -> dict[str, Any]:
     }
 
 
-def local_artifact_manifest(root: Path) -> list[dict[str, Any]]:
+def _load_local_artifact_manifest(root: Path) -> Mapping[str, Any]:
     payload = load_json(root / LOCAL_ARTIFACTS_FILE)
     if not isinstance(payload, Mapping) or not isinstance(payload.get("artifacts"), list):
         raise ValueError("local-artifacts.json must contain an artifacts list")
-    return payload["artifacts"]
+    return payload
+
+
+def local_artifact_manifest(root: Path) -> list[dict[str, Any]]:
+    return _load_local_artifact_manifest(root)["artifacts"]
 
 
 def _pyproject_local_sources(root: Path) -> dict[str, dict[str, Any]]:
@@ -239,9 +243,12 @@ def validate_local_artifacts(root: Path) -> list[str]:
     if not manifest_path.is_file():
         return [f"missing {LOCAL_ARTIFACTS_FILE.as_posix()}"]
     try:
-        entries = local_artifact_manifest(root)
+        manifest = _load_local_artifact_manifest(root)
+        entries = manifest["artifacts"]
     except Exception as error:
         return [f"invalid local artifact manifest: {error}"]
+    if manifest.get("lock_sha256") != sha256_file(root / "uv.lock"):
+        errors.append("local artifact manifest lock_sha256 differs from uv.lock")
 
     paths = [entry.get("path") for entry in entries if isinstance(entry, Mapping)]
     if len(paths) != len(set(paths)):

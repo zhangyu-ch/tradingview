@@ -125,6 +125,30 @@ jobs:
           RUN_BROWSER_TESTS: "1"
         run: uv run pytest -q -W error tests/test_me29_browser_dom.py
 
+  windows-contracts:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install exact uv
+        run: python -m pip install "uv==0.10.0"
+      - name: Install locked environment
+        run: uv sync --locked
+      - name: Prepare isolated test configuration
+        run: python script/remediation/prepare_test_config.py
+      - name: Run Windows filesystem and supply-chain contracts
+        env:
+          PYTHONPATH: '${{ github.workspace }};${{ github.workspace }}\src'
+        run: >-
+          uv run pytest -q
+          tests/test_me25_supply_chain.py
+          tests/test_me26_scheduler_lifecycle.py
+          tests/test_me27_secret_management.py
+          tests/test_me29_quality_gates.py
+
   supply-chain-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 20

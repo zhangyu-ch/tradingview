@@ -114,8 +114,11 @@ def test_prepare_test_config_is_atomic_private_and_uses_repo_runtime(tmp_path: P
     destination = prepare_test_config(tmp_path)
     text = destination.read_text(encoding="utf-8")
 
-    assert str((tmp_path / ".ci-test-runtime").resolve()) in text
+    assert "DATA_PATH = " in text
     assert "DB_DATABASE = 'ci_test'" in text
+    namespace: dict[str, object] = {}
+    exec(compile(text, str(destination), "exec"), namespace)
+    assert namespace["DATA_PATH"] == str((tmp_path / ".ci-test-runtime").resolve())
     if sys.platform != "win32":
         assert stat.S_IMODE(destination.stat().st_mode) == 0o600
 
@@ -154,3 +157,20 @@ def test_supply_chain_gate_and_uv_download_policy_are_documented_and_stable(tmp_
     )
     violations = find_quality_gate_violations(tmp_path)
     assert any("UV_PYTHON_DOWNLOADS" in value for value in violations)
+
+
+def test_windows_contract_gate_requires_native_runner_and_targeted_tests(tmp_path: Path) -> None:
+    _copy_gate_files(tmp_path)
+    workflow = tmp_path / ".github/workflows/tests.yml"
+    text = workflow.read_text(encoding="utf-8")
+    text = text.replace(
+        "  windows-contracts:\n    runs-on: windows-latest\n",
+        "  windows-contracts:\n    runs-on: ubuntu-latest\n",
+        1,
+    )
+    text = text.replace("          tests/test_me27_secret_management.py\n", "", 1)
+    workflow.write_text(text, encoding="utf-8")
+
+    violations = find_quality_gate_violations(tmp_path)
+    assert "windows-contracts must run on windows-latest" in violations
+    assert "windows-contracts missing tests/test_me27_secret_management.py" in violations

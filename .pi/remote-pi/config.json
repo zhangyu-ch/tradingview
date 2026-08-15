@@ -1,0 +1,5 @@
+{
+  "agent_name": "tradingview",
+  "auto_start_relay": true,
+  "enable_agent_network_model": false
+}

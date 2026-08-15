@@ -216,7 +216,6 @@ def test_leader_lock_is_exclusive_releasable_and_private(tmp_path: pathlib.Path)
     first = SchedulerLeaderLock(lock_path)
     first.acquire()
     try:
-        assert lock_path.read_text(encoding="ascii").strip() == str(os.getpid())
         with pytest.raises(SchedulerAlreadyRunningError):
             SchedulerLeaderLock(lock_path).acquire()
         if os.name == "posix":
@@ -225,6 +224,7 @@ def test_leader_lock_is_exclusive_releasable_and_private(tmp_path: pathlib.Path)
     finally:
         first.release()
 
+    assert lock_path.read_text(encoding="ascii").strip() == str(os.getpid())
     second = SchedulerLeaderLock(lock_path)
     second.acquire()
     second.release()

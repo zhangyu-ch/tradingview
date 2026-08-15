@@ -26,6 +26,7 @@ from tradingview_zy.secret_store import (  # noqa: E402
     SecretPermissionError,
     SecretReferenceError,
     redact_secrets,
+    reference_is_configured,
     resolve_config_secret,
     resolve_secret,
 )
@@ -64,7 +65,7 @@ def test_managed_store_rotation_is_atomic_private_versioned_and_retires_old(tmp_
     assert store.read(second) == "second-secret"
 
 
-def test_file_reference_requires_absolute_private_file(tmp_path) -> None:
+def test_file_reference_requires_absolute_private_file(tmp_path, monkeypatch) -> None:
     secret_file = tmp_path / "credential"
     secret_file.write_text("file-secret\n", encoding="utf-8")
     if os.name != "nt":
@@ -73,8 +74,20 @@ def test_file_reference_requires_absolute_private_file(tmp_path) -> None:
             resolve_secret(secret_file.as_uri(), required=True)
         secret_file.chmod(0o600)
     assert resolve_secret(secret_file.as_uri(), required=True) == "file-secret"
+    assert reference_is_configured(secret_file.as_uri()) is True
     with pytest.raises(SecretReferenceError, match="absolute|remote host"):
         resolve_secret("file://relative/path")
+    with pytest.raises(SecretReferenceError, match="remote host"):
+        resolve_secret("file:////host/share")
+    with pytest.raises(SecretReferenceError, match="remote host"):
+        resolve_secret("file:///%5C%5Cserver/share/secret")
+
+    relative_file = tmp_path / "relative-secret"
+    relative_file.write_text("file-secret\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SecretReferenceError, match="absolute"):
+        resolve_secret("file:relative-secret", required=True)
+    assert reference_is_configured("file:relative-secret") is False
 
 
 def test_keyring_reference_uses_explicit_getter_without_importing_backend() -> None:

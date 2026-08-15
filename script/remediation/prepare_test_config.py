@@ -17,7 +17,7 @@ def prepare_test_config(root: Path, target: Path | None = None) -> Path:
     text = source.read_text(encoding="utf-8")
     text, count = re.subn(
         r'^DATA_PATH\s*=\s*["\'][^"\']*["\']\s*$',
-        f'DATA_PATH = {str(runtime)!r}',
+        lambda _: f'DATA_PATH = {str(runtime)!r}',
         text,
         count=1,
         flags=re.MULTILINE,

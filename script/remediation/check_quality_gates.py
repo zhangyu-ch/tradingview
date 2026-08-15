@@ -12,6 +12,7 @@ REQUIRED_JOBS = (
     "provider-contracts",
     "mysql-contracts",
     "browser-contracts",
+    "windows-contracts",
     "supply-chain-contracts",
 )
 REQUIRED_PROVIDER_TESTS = (
@@ -102,6 +103,18 @@ def find_quality_gate_violations(root: Path) -> list[str]:
     if "tests/test_me29_browser_dom.py" not in browser:
         violations.append("browser-contracts must execute the DOM gate test")
 
+    windows = _job_segment(workflow, "windows-contracts")
+    if "runs-on: windows-latest" not in windows:
+        violations.append("windows-contracts must run on windows-latest")
+    for filename in (
+        "tests/test_me25_supply_chain.py",
+        "tests/test_me26_scheduler_lifecycle.py",
+        "tests/test_me27_secret_management.py",
+        "tests/test_me29_quality_gates.py",
+    ):
+        if filename not in windows:
+            violations.append(f"windows-contracts missing {filename}")
+
     supply = _job_segment(workflow, "supply-chain-contracts")
     for command in (
         "uv lock --check",
@@ -158,7 +171,7 @@ def main() -> int:
         for violation in violations:
             print(f"- {violation}")
         return 1
-    print("Quality-gate contract passed: five stable executable jobs are present.")
+    print("Quality-gate contract passed: six stable executable jobs are present.")
     return 0
 
 

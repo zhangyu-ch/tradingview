@@ -134,6 +134,10 @@ class SecretReference:
             locator = "/".join(part for part in (parsed.netloc, parsed.path.lstrip("/")) if part)
         else:
             locator = urllib.parse.unquote(parsed.path)
+            if locator.replace("\\", "/").startswith("//"):
+                raise SecretReferenceError("file secret reference must not contain a remote host")
+            if os.name == "nt" and re.match(r"^/[A-Za-z]:/", locator):
+                locator = locator[1:]
             if parsed.netloc and parsed.netloc not in {"", "localhost"}:
                 raise SecretReferenceError("file secret reference must not contain a remote host")
         if not locator:
@@ -197,6 +201,13 @@ def _assert_private_file(path: Path) -> None:
         mode = stat.S_IMODE(path.stat().st_mode)
         if mode & 0o077:
             raise SecretPermissionError("secret file must not be readable by group or other users")
+
+
+def _file_reference_path(locator: str) -> Path:
+    path = Path(locator).expanduser()
+    if not path.is_absolute():
+        raise SecretReferenceError("file secret reference must use an absolute path")
+    return path.resolve()
 
 
 def _read_private_file(path: Path) -> str:
@@ -367,10 +378,7 @@ def resolve_secret(
             raise SecretReferenceError("managed secret requires a data path")
         value = ManagedSecretStore(data_path).read(parsed)
     elif parsed.scheme == "file":
-        path = Path(parsed.locator).expanduser()
-        if not path.is_absolute():
-            raise SecretReferenceError("file secret reference must use an absolute path")
-        value = _read_private_file(path.resolve())
+        value = _read_private_file(_file_reference_path(parsed.locator))
     else:
         value = _resolve_keyring(parsed.locator, keyring_getter)
 
@@ -428,7 +436,7 @@ def reference_is_configured(
         return data_path is not None and ManagedSecretStore(data_path).exists(parsed)
     if parsed.scheme == "file":
         try:
-            _assert_private_file(Path(parsed.locator).expanduser().resolve())
+            _assert_private_file(_file_reference_path(parsed.locator))
         except SecretError:
             return False
         return True

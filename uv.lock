@@ -1628,7 +1628,7 @@ wheels = [
 [[package]]
 name = "pytdx"
 version = "1.72.post2"
-source = { path = "package/pytdx-1.72r2-py3-none-any.whl" }
+source = { path = "package/pytdx-1.72.post2-py3-none-any.whl" }
 dependencies = [
     { name = "click" },
     { name = "cryptography" },
@@ -1636,7 +1636,7 @@ dependencies = [
     { name = "six" },
 ]
 wheels = [
-    { filename = "pytdx-1.72.post2-py3-none-any.whl", hash = "sha256:71898dd32cb83112d196b38899ba460a48ed98a06b7f73c84c9f55b3843f48fb" },
+    { filename = "pytdx-1.72.post2-py3-none-any.whl", hash = "sha256:d5d994460a389d9c7905dd9d18947e107ffe97a2e827059e7be49c4f9a287f3a" },
 ]
 
 [package.metadata]
@@ -2236,7 +2236,7 @@ requires-dist = [
     { name = "pyecharts", specifier = "==2.0.8" },
     { name = "pyfolio-reloaded", specifier = ">=0.9.9" },
     { name = "pymysql", specifier = ">=1.1.1" },
-    { name = "pytdx", path = "package/pytdx-1.72r2-py3-none-any.whl" },
+    { name = "pytdx", path = "package/pytdx-1.72.post2-py3-none-any.whl" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "redis", specifier = ">=6.2.0" },
     { name = "requests", specifier = ">=2.32.3" },

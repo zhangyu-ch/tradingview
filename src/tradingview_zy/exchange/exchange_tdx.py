@@ -597,16 +597,20 @@ class ExchangeTDX(Exchange):
         need_update = False  # 判断是否需要更新
         if (
             xdxr_file.is_file() is False
+            or xdxr_file.stat().st_size == 0
             or fun.timeint_to_str(
                 int(xdxr_file.stat().st_mtime), "%Y-%m-%d", tz="Asia/Shanghai"
-            ) != now_day
+            )
+            != now_day
         ):
             need_update = True
         if need_update:
             client = TdxHq_API(raise_exception=True, auto_retry=True)
             with client.connect(self.connect_info["ip"], self.connect_info["port"]):
                 data = client.to_df(client.get_xdxr_info(market, code))
-            if len(data) > 0:
+            if len(data) == 0:
+                data = pd.DataFrame(columns=["date"])
+            else:
                 data.loc[:, "date"] = (
                     data["year"].map(str)
                     + "-"

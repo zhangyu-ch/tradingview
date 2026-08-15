@@ -237,3 +237,14 @@ def test_tdx_xdxr_cache_uses_atomic_csv_not_pickle(tmp_path: Path) -> None:
         path, parse_dates=["date"]
     )
     pd.testing.assert_frame_equal(restored, frame)
+
+    empty_path = tmp_path / "empty-xdxr.csv"
+    empty_frame = pd.DataFrame(columns=["date"])
+    cache_module.FileCacheDB.atomic_write_dataframe_csv(empty_path, empty_frame)
+    restored_empty = cache_module.FileCacheDB.read_dataframe_csv(
+        empty_path, parse_dates=["date"]
+    )
+    assert list(restored_empty.columns) == ["date"]
+    assert restored_empty.empty
+    assert "xdxr_file.stat().st_size == 0" in method
+    assert 'data = pd.DataFrame(columns=["date"])' in method

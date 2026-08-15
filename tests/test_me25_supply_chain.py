@@ -44,7 +44,9 @@ def test_current_repository_supply_chain_contract_and_generation_are_determinist
     assert len(load_json(ROOT / "audit/supply-chain/sbom.cdx.json")["components"]) == 155
 
 
-@pytest.mark.parametrize("mutation", ["tamper", "untracked", "missing-provenance"])
+@pytest.mark.parametrize(
+    "mutation", ["tamper", "untracked", "missing-provenance", "lock-digest"]
+)
 def test_local_artifact_gate_rejects_tamper_untracked_and_missing_provenance(
     tmp_path: Path, mutation: str
 ) -> None:
@@ -58,8 +60,14 @@ def test_local_artifact_gate_rejects_tamper_untracked_and_missing_provenance(
             handle.write(b"tamper")
     elif mutation == "untracked":
         (root / "package/untracked-1.0-py3-none-any.whl").write_bytes(b"not-a-wheel")
-    else:
+    elif mutation == "missing-provenance":
         manifest["artifacts"][0].pop("origin")
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    else:
+        manifest["lock_sha256"] = "0" * 64
         manifest_path.write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
@@ -71,8 +79,10 @@ def test_local_artifact_gate_rejects_tamper_untracked_and_missing_provenance(
         assert "sha256 mismatch" in joined
     elif mutation == "untracked":
         assert "untracked local artifact" in joined
-    else:
+    elif mutation == "missing-provenance":
         assert "missing provenance field origin" in joined
+    else:
+        assert "lock_sha256 differs from uv.lock" in joined
 
 
 def test_generated_artifact_gate_rejects_stale_evidence(tmp_path: Path) -> None:
@@ -82,6 +92,13 @@ def test_generated_artifact_gate_rejects_stale_evidence(tmp_path: Path) -> None:
     assert validate_generated_artifacts(root) == [
         "stale generated artifact: audit/supply-chain/sbom.cdx.json"
     ]
+
+
+def test_supply_chain_artifacts_are_pinned_to_lf_worktrees() -> None:
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+
+    assert "uv.lock text eol=lf" in attributes
+    assert "audit/supply-chain/*.json text eol=lf" in attributes
 
 
 def test_vulnerability_policy_rejects_expired_duplicate_and_incomplete_waivers() -> None:

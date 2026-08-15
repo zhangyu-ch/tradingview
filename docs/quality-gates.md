@@ -1,6 +1,6 @@
 # Quality gates
 
-The `Tests` workflow exposes five stable checks that should be configured as required
+The `Tests` workflow exposes six stable checks that should be configured as required
 checks in GitHub branch protection for the default branch. Every job uses Python 3.11,
 installs the exact reviewed uv `0.10.0`, disables implicit Python downloads, and installs
 with `uv sync --locked`.
@@ -13,6 +13,8 @@ with `uv sync --locked`.
   strategy/chart content round trips that SQLite cannot prove.
 - `browser-contracts` installs real Chromium and verifies the rendered settings DOM never
   contains a previously stored secret and keeps the replacement field empty and password-only.
+- `windows-contracts` verifies the locked environment, generated test configuration, local
+  file references, scheduler ownership, and supply-chain evidence on Windows.
 - `supply-chain-contracts` proves `uv.lock` is current, verifies every local wheel against its
   SHA-256/provenance manifest, checks deterministic CycloneDX 1.6 and license evidence, and
   runs a live fail-closed OSV batch scan. Its evidence is retained as a workflow artifact.
@@ -23,7 +25,7 @@ source contract, the deterministic supply-chain checkers, and
 provider matrix must exactly match `MarketRegistry`, so code capability changes cannot leave
 README/support documentation stale.
 Removal or weakening of a stable job therefore fails independently. The job identifiers above
-are intentionally stable; maintainers must add all five to repository branch protection after
+are intentionally stable; maintainers must add all six to repository branch protection after
 the workflow is pushed.
 
 Offline provider tests use protocol fakes and fault injection. They do not replace live broker,

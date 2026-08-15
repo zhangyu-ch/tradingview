@@ -228,6 +228,9 @@ def test_local_loopback_without_password_keeps_auto_login(monkeypatch):
     assert login_response.status_code == 302
     assert login_response.headers["Location"].endswith("/")
 
+    home_response = client.get("/")
+    assert home_response.status_code == 200
+
 
 def test_existing_secret_file_permissions_are_repaired(tmp_path):
     secret_file = tmp_path / "web_secret_key"

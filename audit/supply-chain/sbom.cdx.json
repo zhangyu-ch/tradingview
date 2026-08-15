@@ -4872,7 +4872,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "71898dd32cb83112d196b38899ba460a48ed98a06b7f73c84c9f55b3843f48fb"
+          "content": "d5d994460a389d9c7905dd9d18947e107ffe97a2e827059e7be49c4f9a287f3a"
         }
       ],
       "name": "pytdx",
@@ -4887,7 +4887,7 @@
         },
         {
           "name": "tradingview:local-paths",
-          "value": "[\"package/pytdx-1.72r2-py3-none-any.whl\"]"
+          "value": "[\"package/pytdx-1.72.post2-py3-none-any.whl\"]"
         }
       ],
       "purl": "pkg:pypi/pytdx@1.72.post2",
@@ -7559,7 +7559,7 @@
     "properties": [
       {
         "name": "tradingview:uv-lock-sha256",
-        "value": "e132ef5d3b9165500aa608fb45cd21a3689c3f1c99d611943ecf73116a2f1f5d"
+        "value": "8740beffc2c884d480aae1ee345b77dec9b70cf6ee8a8c503a9136a79a3de1ef"
       },
       {
         "name": "tradingview:uv-version",
@@ -7567,7 +7567,7 @@
       }
     ]
   },
-  "serialNumber": "urn:uuid:0f893802-4c9a-5e6c-96f7-c13d95e6d566",
+  "serialNumber": "urn:uuid:a0bd2971-f9f2-52e1-a81d-6a790f9c83fa",
   "specVersion": "1.6",
   "version": 1
 }
