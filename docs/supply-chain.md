@@ -2,13 +2,13 @@
 
 ## 唯一安装契约
 
-`pyproject.toml` 是直接依赖的声明，`uv.lock` 是唯一受支持的解析结果。项目固定使用 uv `0.10.0`，所有正常、Windows 和 CI 安装都必须执行：
+`pyproject.toml` 是直接依赖的声明，`uv.lock` 是唯一受支持的解析结果。依赖解析、安装脚本和 CI 的审计基线固定为 uv `0.10.0`，所有手工安装、Windows 安装和 CI 安装都必须执行：
 
 ```bash
 uv sync --locked
 ```
 
-仓库不再提供 `requirements.txt`、`setup.py`、Pipfile 或其他可绕过锁文件的安装入口。CI 先运行 `uv lock --check`，再安装锁定环境。`UV_PYTHON_DOWNLOADS=never` 防止 setup-python 已提供 3.11 后又静默下载其他解释器。
+仓库不再提供 `requirements.txt`、`setup.py`、Pipfile 或其他可绕过锁文件的安装入口。Tests workflow 的六个 job 都通过 `uv sync --locked` 安装；其中 `supply-chain-contracts` 还会先执行 `uv lock --check`。只读的 repository-hygiene workflow 不安装依赖，直接运行标准库治理脚本。`UV_PYTHON_DOWNLOADS=never` 防止 setup-python 已提供 3.11 后又静默下载其他解释器。
 
 ## 本地 wheel
 
@@ -22,7 +22,7 @@ uv sync --locked
 
 `package/` 不允许存在清单外文件。TA-Lib wheel 的字节哈希与 `uv.lock` 中的 registry URL 匹配；pytdx 的原始下载 URL没有留在用户提供的基线中，因此清单明确记录为未知，并保留人工许可证复核标记，不猜测来源。
 
-过去提交的 `script/bin/uv*.exe` 已删除。Windows 脚本只接受 PATH 中精确的 uv `0.10.0`，避免未经说明的二进制先于锁文件进入信任链。
+过去提交的 `script/bin/uv*.exe` 已删除。`windows_install.bat` 只接受 PATH 中精确的 uv `0.10.0`，与 CI 的依赖审查基线一致。`windows_run.bat` 是已有环境的启动入口，当前接受 uv 0.10 或 0.11，但它调用默认 `uv run`，可能按 uv 行为同步环境。需要锁文件不变且安装可审计时，应先运行 `windows_install.bat` 或显式执行 `uv sync --locked`。
 
 ## 生成证据
 
@@ -35,9 +35,9 @@ uv sync --locked
 复核或重生成：
 
 ```bash
-python script/remediation/check_supply_chain.py
-python script/remediation/generate_supply_chain_artifacts.py --check
-python script/remediation/generate_supply_chain_artifacts.py
+uv run --locked python script/remediation/check_supply_chain.py
+uv run --locked python script/remediation/generate_supply_chain_artifacts.py --check
+uv run --locked python script/remediation/generate_supply_chain_artifacts.py
 ```
 
 CI 在完整 `uv sync --locked` 后，会向 `.artifacts/supply-chain` 生成一份安装环境支持的许可证报告，再调用 OSV `querybatch` 生成实时漏洞报告。该目录作为 `supply-chain-evidence` workflow artifact 保存，不回写仓库快照。

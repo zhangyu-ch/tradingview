@@ -28,40 +28,70 @@
 `archive/joinquant-legacy.zip` 留存。它依赖专有 `jqdata` 环境和已移除的 `cl` 包，
 不是当前安装或运行入口。
 
-## 环境
+## 文档导航
 
-项目只支持 Python 3.11，并固定使用 `uv 0.10.0`。`uv.lock` 是唯一受支持的依赖解析结果：
+- Provider 支持范围：[`docs/provider-support-matrix.md`](docs/provider-support-matrix.md)（由 Registry 生成）和 [`docs/provider-capabilities.md`](docs/provider-capabilities.md)。
+- 策略协议：[`docs/strategy-protocol.md`](docs/strategy-protocol.md) 和 [`docs/strategy-protocol-boundary.md`](docs/strategy-protocol-boundary.md)。
+- 安全边界：[`docs/live-trading-disabled.md`](docs/live-trading-disabled.md)、[`docs/secrets.md`](docs/secrets.md) 和 [`docs/unsupported-providers.md`](docs/unsupported-providers.md)。
+- 运维与治理：[`docs/quality-gates.md`](docs/quality-gates.md)、[`docs/supply-chain.md`](docs/supply-chain.md) 和 [`docs/messaging-channels.md`](docs/messaging-channels.md)。
+- 图表库维护：[`charting_library_patches/README.md`](charting_library_patches/README.md) 和 [`FOOTPRINT_RENDERING_PLAN.md`](FOOTPRINT_RENDERING_PLAN.md)。
+
+`archive/` 和 `audit/` 保存迁移、研究和审计证据，不是当前安装、API 或能力说明。
+
+## 安装与启动
+
+项目只支持 Python 3.11。依赖解析、安装脚本和 CI 的审计基线固定为
+`uv 0.10.0`，`uv.lock` 是唯一受支持的依赖解析结果。以下命令都应在仓库根目录执行。
+
+### Windows
+
+先安装受信任的 Python 3.11 和 PATH 中的 `uv 0.10.0`，然后运行：
+
+```bat
+windows_install.bat
+windows_run.bat
+```
+
+`windows_install.bat` 创建或复用 `.venv`、执行 `uv sync --locked`、首次复制配置并运行
+`check_env.py`。`windows_run.bat` 只负责调用 Web 启动命令并自动打开浏览器；它接受已有环境中的
+uv 0.10 或 0.11，但内部使用默认的 `uv run`，因此可能按 uv 行为同步环境。要遵守锁文件审查
+边界，应先运行 `windows_install.bat` 或显式执行 `uv sync --locked`，不要把 `windows_run.bat`
+当成锁定安装入口。
+
+监控调度器必须在另一个终端单独运行：
+
+```bat
+uv run --locked python web\tradingview_zy_chart\scheduler.py
+```
+
+### macOS/Linux（Bash）
 
 ```bash
 uv --version  # 必须是 uv 0.10.0
 uv venv --python=3.11 .venv
 uv sync --locked
-export PYTHONPATH="$PWD/src"
-```
-
-运行前复制配置：
-
-```bash
 cp src/tradingview_zy/config.py.demo src/tradingview_zy/config.py
+uv run --locked python check_env.py
 ```
 
-检查环境：
+启动 Web；`nobrowser` 表示不自动打开浏览器：
 
 ```bash
-PYTHONPATH="$PWD/src" uv run python check_env.py
+uv run --locked python web/tradingview_zy_chart/app.py nobrowser
 ```
 
-启动 Web 服务：
+监控调度器必须在另一个终端单独运行：
 
 ```bash
-PYTHONPATH="$PWD/src" uv run python web/tradingview_zy_chart/app.py nobrowser
+uv run --locked python web/tradingview_zy_chart/scheduler.py
 ```
 
-启动独立监控调度进程（只运行一个实例）：
+### 兼容配置说明
 
-```bash
-PYTHONPATH="$PWD/src" uv run python web/tradingview_zy_chart/scheduler.py
-```
+`config.py.demo` 的默认 `DATA_PATH = ".chanlun_pro"` 和
+`DB_DATABASE = "chanlun_klines"` 为兼容已有数据目录和数据库而保留；这些名称不代表
+当前运行路径仍包含 Chanlun。模板中的 AI 配置字段同样只作为旧私有配置和 Secret
+inventory 的兼容残留，当前 Web 和工具链不提供 AI 分析入口。
 
 Web worker 不再启动 APScheduler。多个 Web worker 可以共享同一数据库；监控任务只由
 上述独立进程执行。调度进程使用 `DATA_PATH/scheduler/leader.lock` 防止本机重复启动，
@@ -73,28 +103,31 @@ Web worker 不再启动 APScheduler。多个 Web worker 可以共享同一数据
 
 依赖、仓库内 wheel、SBOM、许可证和漏洞扫描的治理方式见
 [`docs/supply-chain.md`](docs/supply-chain.md)。仓库不提供可绕过锁文件的
-`requirements.txt`；正常安装、Windows 脚本和 CI 都只执行 `uv sync --locked`。
+`requirements.txt`；手工安装、`windows_install.bat` 和 Tests workflow 的六个安装 job 都执行
+`uv sync --locked`。`windows_run.bat` 是已有环境的启动入口，但它调用默认 `uv run`，可能同步
+环境；需要可审计的锁文件状态时，应先用 `uv sync --locked` 完成安装。
 
 本地复核：
 
 ```bash
-python script/remediation/check_dependency_contract.py
-python script/remediation/check_supply_chain.py
-python script/remediation/generate_supply_chain_artifacts.py --check
+uv run --locked python script/remediation/check_dependency_contract.py
+uv run --locked python script/remediation/check_supply_chain.py
+uv run --locked python script/remediation/generate_supply_chain_artifacts.py --check
 ```
 
 ## 业务凭据与轮换
 
-数据库、交易所、券商、AI 和消息平台的业务凭据不得直接写入 Python 配置。
+数据库、行情、券商和消息平台的业务凭据不得直接写入 Python 配置。
 配置项只保存 `env://`、`managed://`、`file://` 或 `keyring://` 引用；
-引用格式、私有文件权限、飞书轮换和旧配置迁移见
-[`docs/secrets.md`](docs/secrets.md)。
+引用格式、平台权限边界、飞书轮换和旧配置迁移见
+[`docs/secrets.md`](docs/secrets.md)。Secret inventory 暂时保留旧 AI 字段以约束私有配置迁移，
+这不表示当前提供 AI 分析功能。
 
 本地复核：
 
 ```bash
-python script/remediation/check_secret_references.py
-python script/remediation/check_secret_exposure.py
+uv run --locked python script/remediation/check_secret_references.py
+uv run --locked python script/remediation/check_secret_exposure.py
 ```
 
 ## Web 安全配置
@@ -123,8 +156,7 @@ DATA_PATH/web_secret_key
 推荐保存密码哈希而不是明文。先生成哈希：
 
 ```bash
-PYTHONPATH="$PWD/src" uv run python -c \
-  "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass('Web 登录密码: ')))"
+uv run --locked python -c "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass('Web 登录密码: ')))"
 ```
 
 将输出复制到私有的 `src/tradingview_zy/config.py`：
@@ -145,8 +177,14 @@ WEB_COOKIE_SECURE = True
 通过环境变量注入：
 
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
+uv run --locked python -c "import secrets; print(secrets.token_urlsafe(48))"
 export TRADINGVIEW_ZY_WEB_SECRET_KEY="上一步输出"
+```
+
+PowerShell 中使用：
+
+```powershell
+$env:TRADINGVIEW_ZY_WEB_SECRET_KEY = "上一步输出"
 ```
 
 也可使用 `TRADINGVIEW_ZY_LOGIN_PASSWORD_HASH` 或
@@ -156,7 +194,9 @@ export TRADINGVIEW_ZY_WEB_SECRET_KEY="上一步输出"
 ## 自定义策略
 
 选股、监控、回测和交易信号统一面向普通 K 线数据。策略基类和信号对象见
-`src/tradingview_zy/strategies/base.py`。
+`src/tradingview_zy/strategies/base.py`；信号格式和可选的 paper/backtest 桥接边界分别见
+[`docs/strategy-protocol.md`](docs/strategy-protocol.md) 和
+[`docs/strategy-protocol-boundary.md`](docs/strategy-protocol-boundary.md)。
 
 ### 监控策略注册
 

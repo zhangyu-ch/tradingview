@@ -1,8 +1,9 @@
 # 真实足迹渲染（Volume Footprint）实施规划
 
 > 制定日期：2026-07-30
+> 最近核对：2026-08-17
 > 关联提交：`d16d52d` 为 TradingView 图表库新增 Volume Footprint 图表类型
-> 状态：M0 已完成（`charting_library_patches/`），M1 待开工
+> 状态：M0 补丁工程与 M1 数据端点已完成；M2 注入 spike 已落地，正式渲染待实现；M3 待开始
 >
 > **M0 期间的重要修正**：侦察发现原版 CL v31.0.0 中本就存在样式 17 的渲染骨架
 > （`case 17:case 19:case 1:` 复用蜡烛 PaneView、0.2 宽度系数、18 处
@@ -14,19 +15,14 @@
 
 ### 现状
 
-- 样式 `VolFootprint = 17` 已通过手改压缩 bundle 注册进 vendored charting_library（CL v31.0.0），但**只是"宽度系数 0.2 的窄蜡烛"**，复用 `SeriesCandlesPaneView`，没有任何分价成交量渲染。
-- 注入点（唯一实例化处，位于 `bundles/library.257d05210b16f5ddbfc2.js`）：
-
-  ```js
-  case 17: case 19: case 1:
-    this._paneView = new Ft.SeriesCandlesPaneView(this, this._model,
-        1===e || 19===e ? 1 : .2);   // 样式17宽度系数 0.2，普通蜡烛为 1
-  ```
-
-- 已知遗留问题：
-  1. 0.2 系数导致缩小时 K 线过早退化成细线（实体宽度只有普通蜡烛的 1/5）；
-  2. 图表状态栏标题生成对样式 17 抛 `TypeError: Cannot read properties of undefined (reading 'value')`（补丁不完整）；
-  3. 补丁是手改压缩产物，不可 review、不可重放，库升级即丢失。
+- 样式 `VolFootprint = 17` 已通过 `charting_library_patches/` 的 18 处锚点补丁注册进 vendored charting_library（CL v31.0.0）；6 个受管产物可由 `pristine + patches.json` 重放和逐字节校验。
+- M1 数据层已经实现：`src/tradingview_zy/footprint.py` 聚合子周期 K 线，登录保护的 `GET /tv/footprint` 路由提供结果；当前测试覆盖聚合/缓存和静态 route guard，尚无 HTTP 行为测试。
+- M2 已有两个 bundle 锚点和 `static/js/footprint/loader.js`：iframe 会加载外部 PaneView 包装器，但当前包装器只追加紫色矩形 dummy renderer，用于验证接入通道。
+- **真实分价成交量单元格、数字、LOD 和增量前端数据缓存尚未实现。**
+- 当前已知问题：
+  1. fallback 仍使用 0.2 宽度系数，缩小时 K 线会比普通蜡烛更早退化成细线；
+  2. 图表状态栏标题生成对样式 17 偶发 `TypeError: Cannot read properties of undefined (reading 'value')`；
+  3. 选择样式 17 会显示 spike 的紫色调试矩形，不能视为可交付的足迹渲染。
 
 ### 目标
 
@@ -39,46 +35,54 @@
 - **接缝存在**：`SeriesCandlesPaneView.renderer()` 返回 `CompositeRenderer`，支持 `append()` 追加自定义 renderer —— 不必重写渲染管线，只需"蜡烛骨架 + 追加足迹层"。
 - **样式 17 的实例化点只有一处**（上文 switch），是理想的劫持锚点。
 
-因此 bundle 内只保留 2~3 个一行级锚点补丁：
+当前已经落地两个一行级锚点补丁：
 
-1. iframe 文档加载时注入 `<script src="static/js/footprint/loader.js">`（外部代码进入 iframe 上下文的通道，同源无障碍）；
-2. `case 17` 分支改为：
-   `window.__FootprintPaneView ? new window.__FootprintPaneView(this, this._model, 内部类引用) : 现状窄蜡烛`
-   （外部模块未加载成功时优雅回退）；
-3. （视需要）把 `PaneRendererCandles`、`optimalBarWidth` 等内部工具挂到 iframe 全局，供外部模块复用。
+1. iframe 文档加载时注入 `<script src="/static/js/footprint/loader.js">`；
+2. `case 17` 分支优先使用 `window.__FootprintPaneView`，loader 不可用时回退内置窄蜡烛。
 
-**全部真实逻辑放在 `static/js/footprint/` 下的普通可读 JS**，改渲染只需刷新页面，不再碰压缩代码。
+正式渲染逻辑继续放在 `static/js/footprint/` 的可读模块中。只有在现有 spike 证明
+外部模块无法复用必要能力时，才增加第三个补丁来暴露 `PaneRendererCandles`、
+`optimalBarWidth` 等内部工具，避免无依据扩大 bundle 修改面。
 
-## 2. M0：补丁工程化（前置地基，约 0.5 天）
+## 2. M0：补丁工程化（已完成）
 
-- 仓库新增 `charting_library_patches/`：
-  - `pristine/` —— 原版未改 bundle 副本（从 git 历史 `d16d52d^` 提取）；
-  - `apply_patches.py` —— 锚点字符串精确替换脚本，替换失败即报错退出（防库升级后静默失效）；
-  - `patches.md` —— 每个锚点的位置、目的、原文/替换文。
-- 把现有 `d16d52d` 的全部手改（d.ts 枚举、standalone 加载器、library / studies / 2827 / series-icons-map 各 bundle、图标映射）迁移进脚本，跑一遍验证产物与当前文件逐字节一致。
+当前产物：
 
-**验收**：删掉现有 bundle → 跑脚本重新生成 → 页面功能与现在完全相同。
+- `charting_library_patches/pristine/`：6 个原版受管文件；
+- `charting_library_patches/patches.json`：18 处唯一锚点、替换内容和说明；
+- `apply_patches.py`：重放补丁或用 `--check` 与 Web 生效文件逐字节比较；
+- `extract_patches.py`：把受管产物与 pristine 的差异重新固化到 `patches.json`。
 
-## 3. M1：数据层 `/tv/footprint` 端点（约 1 天）
+**当前验收命令**：
 
-足迹的本质是"每根显示 K 线内部的分价成交量"，后端已有的 `ex.klines(code, frequency)` 可支撑聚合方案。
+```bash
+uv run --locked python charting_library_patches/apply_patches.py --check
+```
 
-- **聚合策略**：取低一级频率的子 K 线（映射表：日线←5m、60m/30m←1m、5m←1m…），把每根子 K 线的成交量记入显示 K 线窗口内的价格箱。价格箱大小自适应：`(high − low) / 目标行数（约15~25行）`，对齐 mintick。
-- **delta 近似（一期）**：子 K 线收阳/上涨 → 计买量，收阴 → 计卖量。真实逐笔 bid/ask（tdx 分笔仅近几日、币安 aggTrades 可做精确 delta）留二期。
-- **接口**：`GET /tv/footprint?symbol&resolution&from&to`
-  返回 `{"s": "ok", "bars": {"<ts>": [{"p": 价格, "vb": 买量, "vs": 卖量}, ...]}}`。
-  带 `@login_required`，复用现有 `__history_req_counter` 限流模式，内存 LRU 缓存。
-- **范围假设**：先支持 A 股（分钟数据最全），其他市场按 exchange 能力逐个开。
+## 3. M1：数据层 `/tv/footprint` 端点（已完成）
 
-**验收**：pytest 单测（聚合正确性、分箱边界、限流）+ curl 抽查，分价量合计与该 K 线总成交量对账。
+当前实现：
 
-## 4. M2：渲染层 MVP（约 2~3 天，核心难点）
+- `src/tradingview_zy/footprint.py` 用 `SUB_FREQUENCY_MAP` 选择子周期，把子 K 线成交量按价格区间分摊到约 18 个 1/2/5 归整后的价格箱；
+- 子 K 线收盘价不低于开盘价时计入买量，否则计入卖量；这是 delta 近似，不是逐笔 bid/ask；
+- `web/tradingview_zy_chart/cl_app/blueprints/udf.py` 暴露登录保护的
+  `GET /tv/footprint?symbol&resolution&from&to`；不支持子周期时返回 `no_data`；
+- Web services 使用 10 秒 TTL cache，key 为 symbol 和显示周期；
+- `tests/test_footprint.py` 验证纯聚合函数的时间归属、成交量守恒、买卖拆分、分箱和 TTL cache，并进入 provider-contracts CI job；其他 Web 契约只静态检查路由注册、参数校验顺序和错误形状。
 
-`static/js/footprint/` 模块结构：
+当前限制：尚无 Flask HTTP 行为测试覆盖登录、provider 调用、`no_data`、缓存命中和时间过滤。端点依赖 provider 已支持并缓存显示周期和子周期 K 线；不同频率成交量单位可能不一致，因此前端只能使用单根 bar 内的相对比例。当前没有独立的 footprint 请求限流器，也没有逐笔精确 delta。
+
+## 4. M2：渲染层 MVP（spike 已落地，正式实现待完成）
+
+现有 `loader.js` 已注册 `window.__FootprintPaneView`，用 Proxy 包装内置蜡烛
+PaneView，并尝试向 CompositeRenderer 追加 dummy renderer。它用于记录真实
+`draw()` 参数和验证 iframe/PaneView 接入通道，尚未消费 `/tv/footprint` 数据。
+
+正式模块仍按以下边界拆分：
 
 | 文件 | 职责 |
 |---|---|
-| `loader.js` | 注册 `window.__FootprintPaneView`，模块入口 |
+| `loader.js` | 当前 spike 入口；正式版本负责组装并注册 `window.__FootprintPaneView` |
 | `pane_view.js` | **组合**（而非继承）原蜡烛 PaneView：内部持有一个 `SeriesCandlesPaneView`（窄蜡烛骨架），自己的 `renderer()` 返回 `CompositeRenderer{蜡烛, FootprintRenderer}`；坐标复用蜡烛 items 的 `left/right/center` 像素值 + `priceScale` 价格→像素换算 |
 | `data_cache.js` | 按可见范围增量 `fetch('/tv/footprint')`，Map 缓存（key = barTime），到货后触发重绘 |
 | `renderer.js` | canvas 画格子：色块（按买卖比例着色）→ 数字文本，LOD 分级 |
@@ -89,9 +93,9 @@
 - `20 ~ 60px`：仅色块；
 - `< 20px`：退回蜡烛形态 —— 此时把 0.2 系数动态换成 1，**顺带根治"过早变细线"问题**。
 
-**首日 spike**：先注入一个只画彩色矩形的 dummy renderer，运行时验证 `IPaneRenderer.draw(ctx, …)` 的确切签名（本规划唯一未完全查实的接口细节，最大不确定性最先消化）。
-
-**验收**：A 股日线/分钟图上格子与数字正确对齐蜡烛、缩放平移无错位、一屏 300 根 × 20 行无明显掉帧。
+下一步先在真实浏览器中记录现有 spike 的 `draw()` 参数并确认 append 通道，再替换
+紫色矩形。若接口签名与推断不符，优先包装 `renderer()` 返回值，不直接扩大 bundle
+补丁。仓库目前没有覆盖该 Canvas 通道的自动化像素测试。
 
 ## 5. M3：打磨（约 1~2 天）
 
@@ -103,17 +107,17 @@
 
 | 风险 | 应对 |
 |---|---|
-| renderer 接口签名与推断不符 | M2 首日 spike 验证；失败则改用"劫持 `renderer()` 返回值包一层"的备选注法 |
+| renderer 接口签名与推断不符 | 现有 M2 spike 先在真实浏览器记录参数；失败则包装 `renderer()` 返回值 |
 | 文本绘制性能 | LOD 分级 + 每帧只画可见 bar；数字只在最高档出现 |
 | 库升级丢补丁 | M0 锚点脚本，替换失败即显式报错 |
 | 授权边界 | 改动仅限自用部署的产物注册与外挂渲染，不扩散到分发场景 |
 
-## 7. 总量与默认假设
+## 7. 剩余工作与默认假设
 
-- 总量约 **5~7 个工作日**，各里程碑独立可验收；M0/M1 不碰渲染、风险为零。
+- M0 和 M1 已完成；剩余工作是 M2 正式渲染与 M3 打磨。原始 5~7 个工作日估算已不再代表剩余工期，应在完成真实浏览器 spike 后重新估算。
 - 两个可推翻的默认假设：
-  1. 先只做 A 股市场；
-  2. delta 用分钟级近似而非逐笔数据。
+  1. 正式 UI 验收先以 A 股为主，但后端端点按 provider 的子周期能力工作；
+  2. delta 继续使用子 K 线方向近似，逐笔数据属于后续能力。
 
 ## 附录：本次侦察查实的技术事实
 

@@ -56,4 +56,4 @@ A malformed signal is an `output` failure for that target. Other targets in the 
 
 ## Trust boundary
 
-The canonical signal is data, not authorization or executable configuration. Consumers must not import modules, execute code or render untrusted HTML from `message` or `metadata`. Backtesting `Operation` remains a separate domain protocol; cross-domain conversion is intentionally deferred to the architecture item that owns Signal → Decision → Order semantics.
+The canonical signal is data, not authorization or executable configuration. Consumers must not import modules, execute code or render untrusted HTML from `message` or `metadata`. Backtesting `Operation` remains a separate domain protocol. Cross-domain conversion is opt-in through `tradingview_zy.strategy_bridge` and must follow [`strategy-protocol-boundary.md`](strategy-protocol-boundary.md); the bridge creates only paper/backtest intent and never authorizes live execution.

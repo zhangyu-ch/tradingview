@@ -19,11 +19,11 @@ with `uv sync --locked`.
   SHA-256/provenance manifest, checks deterministic CycloneDX 1.6 and license evidence, and
   runs a live fail-closed OSV batch scan. Its evidence is retained as a workflow artifact.
 
-The read-only repository-hygiene workflow runs `check_quality_gates.py`, the dependency
-source contract, the deterministic supply-chain checkers, and
-`generate_provider_support_matrix.py --check` before dependency installation. The generated
-provider matrix must exactly match `MarketRegistry`, so code capability changes cannot leave
-README/support documentation stale.
+The read-only repository-hygiene workflow runs `check_quality_gates.py`, the readability and
+repository-hygiene contracts, the dependency source contract, deterministic supply-chain checks,
+`generate_provider_support_matrix.py --check`, and both Secret reference/exposure checks before
+dependency installation. The generated provider matrix must exactly match `MarketRegistry`, so
+code capability changes cannot leave README/support documentation stale.
 Removal or weakening of a stable job therefore fails independently. The job identifiers above
 are intentionally stable; maintainers must add all six to repository branch protection after
 the workflow is pushed.

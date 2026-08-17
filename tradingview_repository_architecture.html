@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="tradingview_zy 仓库架构、运行链路、目录职责与清理审计">
+  <title>tradingview_zy 仓库架构说明与清理审计</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5b6b79;
+      --line: #d9e2e8;
+      --paper: #ffffff;
+      --wash: #f4f7f8;
+      --accent: #0b6e69;
+      --accent-soft: #e7f4f1;
+      --blue: #245b8f;
+      --blue-soft: #eaf2fa;
+      --amber: #8a5a00;
+      --amber-soft: #fff5d9;
+      --red: #9b2c2c;
+      --red-soft: #fff0f0;
+      --green: #246b45;
+      --green-soft: #eaf7ef;
+      --shadow: 0 10px 28px rgba(31, 48, 62, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--wash);
+      font: 15px/1.72 "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre, .path { font-family: Consolas, "SFMono-Regular", Menlo, monospace; }
+    code { color: #174f55; background: #eef4f5; padding: 0.08em 0.32em; border-radius: 3px; }
+    .hero {
+      color: #f7fbfb;
+      background: #173b43;
+      border-bottom: 5px solid #2b9b8e;
+      padding: 52px max(24px, calc((100vw - 1320px) / 2));
+    }
+    .hero h1 { margin: 10px 0 12px; font-size: clamp(30px, 4vw, 52px); line-height: 1.12; letter-spacing: 0; }
+    .hero p { max-width: 900px; margin: 0; color: #dbeceb; font-size: 17px; }
+    .eyebrow { color: #8de0d1; font: 700 12px/1.2 Consolas, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 25px; }
+    .meta { border: 1px solid rgba(222, 245, 241, 0.28); background: rgba(255,255,255,0.07); padding: 7px 11px; border-radius: 4px; color: #e2f2f0; font-size: 13px; }
+    .layout { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 30px; padding: 30px 24px 70px; }
+    .toc { position: sticky; top: 18px; align-self: start; max-height: calc(100vh - 36px); overflow: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); padding: 16px; }
+    .toc strong { display: block; margin-bottom: 10px; color: var(--accent); }
+    .toc a { display: block; padding: 4px 6px; color: var(--muted); font-size: 13px; border-left: 2px solid transparent; }
+    .toc a:hover { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); text-decoration: none; }
+    main { min-width: 0; }
+    section { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow); padding: 28px 30px; margin-bottom: 24px; }
+    section > h2 { margin: 0 0 18px; padding-bottom: 10px; border-bottom: 2px solid var(--accent-soft); color: #183f46; font-size: 26px; letter-spacing: 0; }
+    section > h3 { margin: 28px 0 8px; color: #24545b; font-size: 19px; }
+    h4 { margin: 20px 0 5px; color: #315b63; }
+    p { margin: 8px 0 12px; }
+    ul, ol { margin: 8px 0 14px; padding-left: 24px; }
+    li + li { margin-top: 4px; }
+    .lead { font-size: 16px; color: #30434e; }
+    .notice { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 13px 16px; margin: 15px 0; }
+    .warning { border-left-color: #d59a16; background: var(--amber-soft); }
+    .danger { border-left-color: #c94b4b; background: var(--red-soft); }
+    .success { border-left-color: #389866; background: var(--green-soft); }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+    .card { border: 1px solid var(--line); border-top: 4px solid var(--accent); padding: 14px; background: #fbfdfd; border-radius: 4px; }
+    .card strong { display: block; font-size: 24px; color: var(--accent); line-height: 1.2; }
+    .card span { display: block; color: var(--muted); font-size: 13px; margin-top: 5px; }
+    .diagram { overflow: auto; margin: 15px 0; padding: 18px; color: #e9f6f4; background: #17343c; border-radius: 5px; font-size: 13px; line-height: 1.55; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; }
+    th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #edf4f5; color: #244a50; font-weight: 700; }
+    tr:nth-child(even) td { background: #fcfdfd; }
+    .path { white-space: normal; overflow-wrap: anywhere; color: #175c61; font-size: 12px; }
+    .tag { display: inline-block; border-radius: 3px; padding: 1px 7px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .tag.keep { color: var(--green); background: var(--green-soft); }
+    .tag.confirm { color: var(--amber); background: var(--amber-soft); }
+    .tag.delete { color: var(--red); background: var(--red-soft); }
+    .tag.info { color: var(--blue); background: var(--blue-soft); }
+    .small { color: var(--muted); font-size: 13px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .subpanel { border: 1px solid var(--line); padding: 15px; border-radius: 4px; background: #fcfefe; }
+    .subpanel h4 { margin-top: 0; }
+    details { border: 1px solid var(--line); border-radius: 4px; margin: 10px 0; background: #fcfefe; }
+    summary { cursor: pointer; padding: 9px 12px; color: #24545b; font-weight: 700; }
+    details > div { padding: 0 12px 12px; }
+    .filter { width: 100%; max-width: 420px; border: 1px solid #b9cbd0; border-radius: 4px; padding: 9px 11px; font: inherit; margin: 4px 0 14px; }
+    .filter:focus { outline: 2px solid #8bd0c5; border-color: var(--accent); }
+    .footer { color: var(--muted); text-align: center; font-size: 13px; padding: 18px 0 0; }
+    @media (max-width: 940px) {
+      .layout { grid-template-columns: 1fr; padding: 18px 12px 50px; }
+      .toc { position: static; max-height: none; }
+      .toc a { display: inline-block; margin-right: 6px; }
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      section { padding: 22px 18px; }
+    }
+    @media (max-width: 600px) {
+      .hero { padding: 34px 18px; }
+      .hero h1 { font-size: 32px; }
+      .cards, .two-col { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; white-space: normal; }
+      th, td { min-width: 145px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="eyebrow">Repository architecture dossier</div>
+    <h1>tradingview_zy 仓库架构说明</h1>
+    <p>面向维护者和架构师的静态审计文档，解释模块边界、运行链路、目录职责、扩展方法，并记录长期未维护内容的删除候选。本文档由当前工作树审计生成，并在 2026-08-17 文档刷新中复核关键结论；本文档本身不代表已经执行候选删除。</p>
+    <div class="meta-row">
+      <span class="meta">快照：Git HEAD 7f517793</span>
+      <span class="meta">最近提交：2026-08-16</span>
+      <span class="meta">Python：3.11.x</span>
+      <span class="meta">测试基线：687 passed / 2 skipped</span>
+      <span class="meta">文档文件：tradingview_repository_architecture.html</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <strong>文档目录</strong>
+      <a href="#scope">1. 审计范围</a>
+      <a href="#overview">2. 总体架构</a>
+      <a href="#modules">3. 模块协调</a>
+      <a href="#markets">4. 市场与 Provider</a>
+      <a href="#runtime">5. 运行链路</a>
+      <a href="#folders">6. 文件夹地图</a>
+      <a href="#frontend">7. 前端与图表库</a>
+      <a href="#architecture">8. 架构师解读</a>
+      <a href="#extension">9. 拓展与修改</a>
+      <a href="#cleanup">10. 清理审计</a>
+      <a href="#verification">11. 验证与限制</a>
+    </aside>
+
+    <main>
+      <section id="scope">
+        <h2>1. 审计范围与结论摘要</h2>
+        <p class="lead">仓库当前不是单一 Web 项目，而是一个以多市场行情为核心、同时承载 TradingView 图表、数据同步、策略监控、选股和离线回测的 Python 工作区。Web 只是其中一个运行面。</p>
+        <div class="cards">
+          <div class="card"><strong>8</strong><span>MarketRegistry 注册市场：A、HK、FX、US、国内期货、纽约期货、合约币、现货币</span></div>
+          <div class="card"><strong>2024</strong><span>web 目录受版本控制文件数，主要体量来自 TradingView JavaScript bundle 和 CSS</span></div>
+          <div class="card"><strong>91</strong><span>tests/ 测试文件，包含领域、Web、Provider、质量门禁和删除能力防回归</span></div>
+          <div class="card"><strong>体量</strong><span>工作树大小会受 .venv、linked worktree、缓存和未跟踪文件影响；清理判断不使用不可复现的单一数字</span></div>
+        </div>
+        <div class="notice warning"><strong>重要边界：</strong>本文最初由只读架构审计生成，随后在 2026-08-17 文档刷新中同步 README、活动文档和示例配置注释。产品运行逻辑、锁文件、测试、archive 和 audit 原始证据未改；ECharts 删除是文档刷新前已存在的工作树变更。</div>
+        <h3>核心判断</h3>
+        <ul>
+          <li>当前架构的组合根是 <code>web/tradingview_zy_chart/cl_app/__init__.py:create_app</code>，它把安全、数据库、市场元数据、缓存、任务服务和蓝图组装成一个 Flask 应用。</li>
+          <li>Provider 路由的单一事实来源是 <code>src/tradingview_zy/market_registry.py</code>。标准工厂先解析市场和配置，再在 import、构造和缓存发布之前执行已移除 Provider 的 tombstone 检查。</li>
+          <li>Web 进程和 APScheduler 进程是两个明确的所有权域。Web 保存任务配置并读取状态快照，只有独立 scheduler 进程执行监控任务。</li>
+          <li>实盘下单不是当前支持能力。<code>Exchange.order()</code> 和取消入口 fail-closed，回测的 <code>Operation</code> 不能被解释成券商订单。</li>
+          <li>没有证据证明当前测试套件整体过时。完整本地回归通过，专用环境的 MySQL/Chromium 测试按环境变量设计性跳过。</li>
+        </ul>
+      </section>
+
+      <section id="overview">
+        <h2>2. 总体架构</h2>
+        <p>系统可以拆成六层。箭头表示依赖或数据流，虚线边界表示独立进程或外部系统。</p>
+        <pre class="diagram">安装与配置
+  pyproject.toml + uv.lock + package/*.whl
+              │
+              ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Web 进程                                                         │
+│ web/tradingview_zy_chart/app.py → Tornado HTTPServer → WSGIContainer → Flask app │
+│                         │                                          │
+│              WebAppServices + Blueprint routes                     │
+└──────────────┼─────────────────────────────────────────────────────┘
+               │ UDF / storage / watchlist / task requests
+               ▼
+┌──────────────────────┐      ┌─────────────────────────────────────┐
+│ MarketRegistry        │─────▶│ get_exchange → dynamic adapter     │
+│ 市场元数据/能力/分区  │      │ ContractedExchange facade          │
+└──────────┬───────────┘      └──────────────────┬──────────────────┘
+           │                                    │
+           ▼                                    ▼
+┌──────────────────────┐              ┌──────────────────────────────┐
+│ web_payloads/domain  │              │ Provider SDK / DB provider    │
+│ 时间、OHLCV、错误、  │              │ TDX/Futu/QMT/BaoStock/IB 等 │
+│ capability contract  │              └──────────────────────────────┘
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐      ┌─────────────────────────────────────┐
+│ SQLAlchemy DB facade │◀────▶│ DATA_PATH 文件缓存/secret/status    │
+│ K线/自选/任务/图表    │      │ 原子文件、leader.lock、状态快照     │
+└──────────┬───────────┘      └─────────────────────────────────────┘
+           │
+           ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ 独立 scheduler 进程：scheduler.py → scheduler_runtime → AlertTasks │
+│                  → MonitoringRunner → StrategySignal → alert event │
+└────────────────────────────────────────────────────────────────────┘
+
+研究旁路：script/crontab sync → ExchangeDB → BackTestKlines → BackTestTrader
+策略桥接：StrategySignal ──显式 metadata.trade──▶ TradeDecision/Operation
+治理旁路：tests + GitHub Actions + script/remediation + docs/audit</pre>
+        <h3>模块分工总表</h3>
+        <table>
+          <thead><tr><th>模块层</th><th>职责</th><th>主要代码位置</th><th>协调关系</th></tr></thead>
+          <tbody>
+            <tr><td>启动与配置</td><td>读取 Python/uv 契约、私有配置、数据目录、环境状态，准备 Web 或 scheduler 进程。</td><td><span class="path">pyproject.toml<br>uv.lock<br>src/tradingview_zy/config.py.demo<br>check_env.py<br>windows_install.bat<br>windows_run.bat</span></td><td>所有运行层共享 Python 3.11、<code>DATA_PATH</code> 和配置引用。</td></tr>
+            <tr><td>领域契约</td><td>定义 Market、Frequency、Capability、错误类型、订单/持仓枚举和跨边界数据校验。</td><td><span class="path">src/tradingview_zy/base.py<br>src/tradingview_zy/domain.py<br>src/tradingview_zy/data_contracts.py</span></td><td>被 Registry、Provider facade、Web、策略和回测共同使用。</td></tr>
+            <tr><td>市场注册表</td><td>集中声明市场标签、默认代码、周期、时区、交易时段、Provider module/class、能力和数据库分区函数。</td><td><span class="path">src/tradingview_zy/market_registry.py<br>src/tradingview_zy/market_metadata.py<br>docs/provider-support-matrix.md</span></td><td>Web 元数据、同步配置、Provider 工厂和文档生成器都从这里派生。</td></tr>
+            <tr><td>Provider 适配</td><td>把不同 SDK、数据库和文件缓存转换成统一的 K 线、Tick、目录、交易日历和只读账户接口。</td><td><span class="path">src/tradingview_zy/exchange/</span></td><td>由 <code>get_exchange()</code> 惰性导入，外部异常在 facade 边界转换成稳定领域错误。</td></tr>
+            <tr><td>行情规范化</td><td>统一市场时区、OHLCV 质量、时间范围、Tick 输入边界、足迹聚合和交易日历。</td><td><span class="path">src/tradingview_zy/web_payloads.py<br>src/tradingview_zy/exchange/tdx_quotes.py<br>src/tradingview_zy/trading_calendar.py<br>src/tradingview_zy/footprint.py<br>src/tradingview_zy/tick_request.py</span></td><td>Provider 原始数据必须先过契约，才能进入 Web、策略或回测。</td></tr>
+            <tr><td>持久化</td><td>管理 SQLAlchemy engine、K 线分区表、自选、任务、事件、TradingView 图表/绘图、缓存和迁移。</td><td><span class="path">src/tradingview_zy/db.py<br>src/tradingview_zy/database_catalog.py<br>src/tradingview_zy/tv_storage.py<br>src/tradingview_zy/file_db.py</span></td><td>Web 和 scheduler 共享 DB；同步和回测通过 ExchangeDB 使用同一历史数据边界。</td></tr>
+            <tr><td>Web 组合与路由</td><td>认证、CSRF、服务容器、页面、UDF、存储、自选、任务和设置接口。</td><td><span class="path">web/tradingview_zy_chart/app.py<br>web/tradingview_zy_chart/cl_app/</span></td><td>蓝图只通过 <code>WebAppServices</code> 取依赖，避免把 provider 构造散落在路由里。</td></tr>
+            <tr><td>策略与任务</td><td>加载受信任策略注册表，按目标运行选股/监控，规范化信号并保存事件或替换自选快照。</td><td><span class="path">src/tradingview_zy/strategies/<br>src/tradingview_zy/selection.py<br>src/tradingview_zy/monitoring.py<br>web/tradingview_zy_chart/cl_app/alert_tasks.py<br>web/tradingview_zy_chart/cl_app/xuangu_tasks.py</span></td><td>任务服务由 Web 惰性加载，监控执行由 scheduler 进程拥有。</td></tr>
+            <tr><td>回测</td><td>从 DB 回放 K 线，驱动 Strategy/Operation/Position，计算资金、手续费、持仓和报告。</td><td><span class="path">src/tradingview_zy/backtesting/</span></td><td>与 Web 实时 provider 解耦，默认数据源是 ExchangeDB，结果不能直接视作实盘成交。</td></tr>
+            <tr><td>同步与治理</td><td>可恢复 K 线批次、质量门禁、供应链证据、支持矩阵、Secret 检查和 CI。</td><td><span class="path">script/crontab/<br>script/remediation/<br>.github/workflows/<br>docs/<br>audit/</span></td><td>将架构约束从说明文字变成可执行检查，阻止能力声明与代码漂移。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="modules">
+        <h2>3. 模块协调与关键接口</h2>
+        <h3>3.1 组合根与依赖注入</h3>
+        <p><code>create_app()</code> 在 <code>web/tradingview_zy_chart/cl_app/__init__.py:37</code> 完成以下工作：检查非回环监听必须有登录凭据，解析会话密钥和 CSRF 信任源，创建 Tick 限流器与 Provider 并发门，建立 HistoryRequestTracker 和状态存储，生成市场静态元数据，惰性注册 <code>AlertTasks</code>/<code>XuanguTasks</code>，执行 TradingView 存储迁移，然后把依赖装入不可变的 <code>WebAppServices</code>。</p>
+        <p>蓝图通过 <code>get_web_services()</code> 读取容器，不直接从全局配置构造第三方对象。这样做的价值是：应用 factory 可被测试重复创建，Provider 和 APScheduler 不会因为只访问首页而启动网络线程。</p>
+        <h3>3.2 MarketRegistry → Provider facade</h3>
+        <ol>
+          <li>路由或任务把字符串市场解析成 <code>Market</code>，入口在 <code>src/tradingview_zy/market_registry.py:572</code> 附近。</li>
+          <li><code>selected_provider()</code> 按 <code>MARKET_PROVIDERS</code>、旧配置属性、descriptor 默认值的顺序选择 Provider，但不 import SDK。</li>
+          <li><code>get_exchange()</code> 在 <code>src/tradingview_zy/exchange/__init__.py:58</code> 先执行已移除 CTP/ZB 的 tombstone，再加锁检查缓存、读取 <code>ProviderSpec</code>、动态导入并构造适配器。</li>
+          <li><code>ContractedExchange</code> 在构造时验证声明能力对应的方法不是继承自宽泛基类的空桩；调用时检查 capability、转换异常并验证响应类型。</li>
+          <li>只有完整构造且能力检查通过的 facade 才进入 <code>g_exchange_obj</code>。关闭或切换 provider 时先关闭旧对象，再清除缓存。</li>
+        </ol>
+        <h3>3.3 数据边界</h3>
+        <div class="two-col">
+          <div class="subpanel"><h4>Provider → canonical K 线</h4><p><code>web_payloads.prepare_klines_for_market()</code> 深拷贝 DataFrame，绑定 code/frequency，按市场时区本地化 naive 时间，拒绝重复或非递增时间、缺列、非有限数值、负 volume 和不一致 OHLC。它是 UDF 和策略输入的防腐层。</p></div>
+          <div class="subpanel"><h4>Strategy → BatchRunResult</h4><p><code>strategies/base.py</code> 将策略输出限制为 <code>StrategySignal</code> 或有限 list，并按 Selection/Monitoring purpose 检查动作集合、目标身份、时间、消息和 metadata。批次显式区分 hits、misses、failures。</p></div>
+          <div class="subpanel"><h4>Web → DB</h4><p><code>tv_storage.py</code> 按 UTF-8 字节限制图表、模板、绘图字段，并以认证主体绑定 owner；<code>db.py</code> 在同一事务内执行配额、唯一性和迁移逻辑。</p></div>
+          <div class="subpanel"><h4>Signal → Operation</h4><p><code>strategy_bridge.py</code> 只接受带明确 <code>metadata.trade</code> 的可执行监控信号，产生带快照的 TradeDecision/Operation。桥接不绕过 live-trading-disabled 边界。</p></div>
+        </div>
+      </section>
+
+      <section id="markets">
+        <h2>4. 市场与 Provider 组织</h2>
+        <p>完整支持矩阵由 <code>script/remediation/generate_provider_support_matrix.py</code> 从 Registry 生成，当前文件是 <code>docs/provider-support-matrix.md</code>。下面是架构阅读所需的压缩视图，能力名称与生成矩阵一致。</p>
+        <table>
+          <thead><tr><th>Market</th><th>默认 Provider</th><th>默认代码</th><th>时区与会话</th><th>可选 Provider</th></tr></thead>
+          <tbody>
+            <tr><td><code>a</code> 沪深 A 股</td><td><code>tdx</code></td><td><code>SH.000001</code></td><td>Asia/Shanghai；0930-1130、1300-1500</td><td>futu、baostock、qmt、db</td></tr>
+            <tr><td><code>hk</code> 港股</td><td><code>tdx_hk</code></td><td><code>HK.00700</code></td><td>Asia/Hong_Kong；0930-1200、1300-1600</td><td>futu、db</td></tr>
+            <tr><td><code>fx</code> 外汇</td><td><code>tdx_fx</code></td><td><code>USDCNH</code></td><td>America/New_York 语义；24x5</td><td>db</td></tr>
+            <tr><td><code>us</code> 美股</td><td><code>tdx_us</code></td><td><code>AAPL</code></td><td>America/New_York；0930-1600</td><td>alpaca、polygon、ib、db</td></tr>
+            <tr><td><code>futures</code> 国内期货</td><td><code>tdx_futures</code></td><td><code>KQ.m@SHFE.rb</code></td><td>Asia/Shanghai；按品种区分日盘/夜盘/CFFEX profile</td><td>tq、db</td></tr>
+            <tr><td><code>ny_futures</code> 纽约期货</td><td><code>tdx_ny_futures</code></td><td><code>CO.GC00W</code></td><td>America/New_York；1800-1700</td><td>db</td></tr>
+            <tr><td><code>currency</code> 合约币</td><td><code>binance</code></td><td><code>BTC/USDT</code></td><td>UTC；24x7</td><td>db</td></tr>
+            <tr><td><code>currency_spot</code> 现货币</td><td><code>binance_spot</code></td><td><code>BTC/USDT</code></td><td>UTC；24x7</td><td>db</td></tr>
+          </tbody>
+        </table>
+        <h3>Provider 代码位置</h3>
+        <table>
+          <thead><tr><th>适配器类别</th><th>文件</th><th>职责</th></tr></thead>
+          <tbody>
+            <tr><td>TDX 家族</td><td><span class="path">exchange_tdx.py<br>exchange_tdx_hk.py<br>exchange_tdx_us.py<br>exchange_tdx_fx.py<br>exchange_tdx_futures.py<br>exchange_tdx_ny_futures.py</span></td><td>股票、港股、美股、外汇和期货的 TDX/ExHq 行情、目录、Tick 及市场时段适配。共享 <code>tdx_reliability.py</code>、<code>tdx_quotes.py</code>、<code>tools/tdx_node_selector.py</code>。</td></tr>
+            <tr><td>交易所/数据服务</td><td><span class="path">exchange_baostock.py<br>exchange_binance.py<br>exchange_binance_spot.py<br>exchange_alpaca.py<br>exchange_polygon.py</span></td><td>分别封装 BaoStock、Binance 合约/现货、Alpaca、Polygon 的历史数据、目录和 Tick；分页、美国时间和异常协议由旁路 helper 约束。</td></tr>
+            <tr><td>连接型 Provider</td><td><span class="path">exchange_futu.py<br>exchange_qmt.py<br>exchange_ib.py<br>exchange_tq.py</span></td><td>Futu、QMT、IB、天勤的行情和已声明的只读账户/持仓能力；Futu context、IB Redis RPC、TQ worker 生命周期分别由 <code>futu_context.py</code>、<code>ib_rpc.py</code>、<code>worker_lifecycle.py</code> 管理。</td></tr>
+            <tr><td>数据库与公共适配</td><td><span class="path">exchange_db.py<br>exchange.py<br>contracted.py<br>contracts.py<br>provider_observability.py<br>stocks_bkgn.py</span></td><td>DB 是离线历史数据和派生目录 Provider；<code>exchange.py</code> 保留宽泛兼容基类与周期转换；<code>contracted.py</code> 是标准 facade；板块目录服务由 <code>stocks_bkgn.py</code> 提供。</td></tr>
+          </tbody>
+        </table>
+        <div class="notice danger"><strong>能力边界：</strong>适配器上存在某个方法不代表标准支持。只有 Registry 声明的 capability 才能通过 facade；当前没有内置 Provider 声明 <code>live_orders</code>。</div>
+      </section>
+
+      <section id="runtime">
+        <h2>5. 运行链路</h2>
+        <h3>5.1 安装与 Web 启动</h3>
+        <ol>
+          <li>使用 Python 3.11 和 uv 0.10.0，执行 <code>uv sync --locked</code>。<code>pyproject.toml</code> 声明依赖，<code>uv.lock</code> 决定安装结果，<code>package/</code> 提供平台 wheel。</li>
+          <li>复制 <code>src/tradingview_zy/config.py.demo</code> 为私有 <code>config.py</code>。凭据字段保存 <code>env://</code>、<code>managed://</code>、<code>file://</code> 或 <code>keyring://</code> 引用，不把 Secret 放进版本库。</li>
+          <li><code>check_env.py</code> 从 <code>project.requires-python</code> 读取版本约束，检查项目导入、代理、Redis 和 MySQL，并用 OK/DEGRADED/FAILED 返回可靠退出码。</li>
+          <li><code>web/tradingview_zy_chart/app.py:58</code> 调用 <code>create_app()</code>，把 Flask WSGI 应用放进 Tornado <code>WSGIContainer</code>，线程池大小为 10，监听配置的 host 和 9900 端口。</li>
+          <li>Flask factory 注册蓝图。首页由 <code>pages.py</code> 渲染，认证由 Flask-Login 管理，所有非安全 HTTP 方法由 <code>core.py</code> 统一校验 CSRF。</li>
+        </ol>
+        <h3>5.2 TradingView UDF 行情请求</h3>
+        <pre class="diagram">TradingView widget
+  → datafeeds/udf/dist/bundle.js
+  → GET /tv/config, /tv/symbols, /tv/search, /tv/history
+  → udf.py 参数解析与登录校验
+  → WebAppServices.get_exchange(Market)
+  → get_exchange → ContractedExchange
+  → provider.klines / all_stocks / stock_info
+  → prepare_klines_for_market
+  → 时区、范围、历史请求 tracker
+  → {s, t, o, h, l, c, v, update}</pre>
+        <p><code>firstDataRequest=true</code> 用于完整历史；后续请求才进入 HistoryRequestTracker。Tick 路由在 provider 调用前做代码数量/字节、IP 滑动窗口、固定并发槽和总超时控制。足迹路由使用显示周期与子周期 K 线聚合，并由 10 秒 TTL cache 缓存。</p>
+        <h3>5.3 图表布局、绘图与安全存储</h3>
+        <ol>
+          <li><code>charts.js</code> 创建 TradingView widget，设置 UDF datafeed、<code>charts_storage_url=/tv</code>、client/user namespace 和自定义指标。</li>
+          <li>图表自动保存调用 <code>/tv/&lt;version&gt;/charts</code>，模板调用 <code>study_templates</code>，绘图调用 <code>drawings</code>。</li>
+          <li><code>storage.py</code> 将协议 user 映射到认证主体，调用 <code>tv_storage.py</code> 做 UTF-8 字节和记录配额校验，再交给 DB 事务。</li>
+          <li>数据库用 owner lock、唯一约束和 upsert/更新边界保证同一 namespace 的容量与一致性；绘图保存失败返回稳定错误码和 request_id。</li>
+        </ol>
+        <h3>5.4 自选、监控和选股</h3>
+        <pre class="diagram">前端 zixuan.js / alert.js
+  → watchlist.py / tasks.py
+  → ZiXuan → DB 自选表
+  → alert_save / xuangu_task_add 写任务配置
+  → 独立 scheduler 读取 DB
+  → AlertTasks / XuanguTasks
+  → 注册策略 loader
+  → SelectionRunner 或 MonitoringRunner
+  → BatchRunResult
+  → 自选快照原子替换，或 alert_event_save 写事件</pre>
+        <p>策略注册表来自私有配置中的 <code>ALERT_STRATEGIES</code> 和 <code>XUANGU_STRATEGIES</code>。请求不能直接提交任意 module path，loader 只加载服务端注册的类，并在构造前校验允许参数。</p>
+        <h3>5.5 独立 Scheduler</h3>
+        <ol>
+          <li><code>web/tradingview_zy_chart/scheduler.py:28</code> 是独立 CLI，先把 <code>src</code> 和 <code>cl_app</code> 加入路径，再调用 <code>run_scheduler()</code>。</li>
+          <li><code>SchedulerLeaderLock</code> 在 <code>DATA_PATH/scheduler/leader.lock</code> 上做跨进程非阻塞锁，第二个实例退出码为 2。</li>
+          <li><code>build_scheduler()</code> 惰性导入 APScheduler，创建 <code>AlertTasks(scheduler)</code>，立即 reconcile 一次，再按 5 到 3600 秒范围内的周期重建任务。</li>
+          <li>状态 listener 将 job id、名称、更新时间、下一次运行时间和状态写入原子快照；Web 的 <code>/jobs</code> 只读取快照，不在请求进程补启动调度器。</li>
+        </ol>
+        <h3>5.6 数据同步与回测</h3>
+        <p>同步入口在 <code>script/crontab/reboot_sync_*_klines.py</code>。它们只读取 JSON 配置并调用 <code>sync_batch.configured_sync_cli()</code>，真正的 Provider 构造和查询发生在 CLI 执行路径。<code>sync_batch.py</code> 为每个 code/frequency 维护配置摘要、attempt、状态、页数和错误，并以 fsync + replace 原子写 checkpoint。</p>
+        <p>回测入口由调用方、Notebook 或脚本创建 <code>BackTest</code>。<code>BackTestKlines</code> 使用 <code>ExchangeDB</code> 读取指定区间，缓存并按当前时间裁剪多周期 K 线；<code>BackTestTrader</code> 执行 <code>Operation</code>，更新 <code>POSITION</code>、资金、费用和统计。它不经过 Web factory，也不代表真实券商成交。</p>
+      </section>
+
+      <section id="folders">
+        <h2>6. 文件夹与代码作用地图</h2>
+        <p>文件数量来自当前 Git 工作树静态盘点。大规模 bundle 按工程边界分组说明，避免把生成文件误写成可维护业务模块。</p>
+        <input class="filter" id="folder-filter" type="search" placeholder="筛选目录或职责，例如 exchange、测试、归档">
+        <table id="folder-table">
+          <thead><tr><th>目录</th><th>包含内容</th><th>作用与维护边界</th><th>判断</th></tr></thead>
+          <tbody>
+            <tr><td class="path">src/</td><td>Python package 根，约 86 个受版本控制文件。</td><td>产品核心库的 source root。运行时通过 PYTHONPATH 或脚本路径加入。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/</td><td>配置、领域、DB、Web contract、日历、策略、同步、缓存、自选和监控公共模块。</td><td>跨场景共享的领域层和基础设施层。关键文件：<code>domain.py</code>、<code>market_registry.py</code>、<code>db.py</code>、<code>web_payloads.py</code>、<code>secret_store.py</code>。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/exchange/</td><td>31 个 Python 文件，Provider adapter、能力 facade、数据质量 helper、板块目录。</td><td>连接第三方行情/账户 SDK 或 DB。新增 Provider 必须先注册，再声明 capability，再通过 facade 测试。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/backtesting/</td><td><code>BackTest</code>、<code>BackTestKlines</code>、<code>BackTestTrader</code>、POSITION/Operation、期货参数、优化和结果输出。</td><td>离线研究和回测边界。<code>futures_parameters.json</code> 是打包数据，不是临时缓存。</td><td><span class="tag keep">研究运行核心</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/strategies/</td><td><code>base.py</code>、<code>loader.py</code>、<code>__init__.py</code>。</td><td>版本化 StrategySignal、BatchRunResult、输入输出验证和受信注册策略加载。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/tools/</td><td><code>tdx_best_ip.py</code>、<code>tdx_node_selector.py</code>。</td><td>TDX 节点并发探测、缓存 TTL 和连接选择；由 TDX Provider 使用。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/trader/</td><td><code>online_market_datas.py</code> 与包初始化文件。</td><td><code>OnlineMarketDatas</code> 是保留行情读取、禁用未验证券商下单后的数据能力边界；<code>tests/test_cr03_live_trading_disabled.py</code> 明确要求它存在。</td><td><span class="tag keep">安全边界，保留</span></td></tr>
+            <tr><td class="path">web/</td><td>单一应用目录 <code>tradingview_zy_chart/</code>，约 2024 个受版本控制文件。</td><td>Web 运行面及其 vendored 前端资产，不是 Python package 的替代品。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/</td><td><code>app.py</code>、<code>scheduler.py</code>、<code>cl_app/</code>、favicon。</td><td>两个进程入口：Web server 和独立 scheduler。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/</td><td>Flask factory、services container、task services、scheduler runtime、任务类、模板和 static。</td><td>Web 组合根及功能边界。业务路由应放入 blueprint，不应重新塞回 factory。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/blueprints/</td><td><code>auth.py</code>、<code>core.py</code>、<code>pages.py</code>、<code>udf.py</code>、<code>storage.py</code>、<code>watchlist.py</code>、<code>tasks.py</code>、<code>settings.py</code>。</td><td>按功能拆分 HTTP route：认证/CSRF、页面、UDF、TradingView 存储、自选、监控选股和设置。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/templates/</td><td>10 个 Jinja 模板：<code>index</code>、<code>login</code>、<code>setting</code>、<code>alert</code>、<code>jobs</code>、<code>zixuan</code>、<code>xuangu_list</code>、<code>sub_temp</code>、<code>dark</code>、<code>options</code>。</td><td>页面和 iframe/弹层模板。除 <code>options.html</code> 外均能找到当前渲染或 include 关系；options 是旧不可用页候选。</td><td><span class="tag confirm">含一个清理候选</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/js/</td><td><code>charts.js</code>、<code>zixuan.js</code>、<code>alert.js</code>、<code>bkgn.js</code>、<code>csrf.js</code>、<code>utils.js</code>、footprint loader。</td><td>可维护业务前端：TradingView widget、自选/任务/板块交互、CSRF 注入和足迹实验入口。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/js/tv_indicators/</td><td>17 个 TradingView 自定义指标脚本。</td><td>由 <code>index.html</code> 全量加载并由 <code>charts.js:getCustomIndicators</code> 注册。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/js/footprint/</td><td><code>loader.js</code>，当前是 M2 spike/dummy renderer。</td><td>由 charting library iframe 补丁注入。它证明外挂 renderer 通道，真实分价渲染仍是未完成规划。</td><td><span class="tag info">实验/计划中的当前资产</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/css/</td><td>layui、应用、登录、暗色主题和 xm-select 样式。</td><td>页面视觉依赖。<code>layui-theme-dark-legacy.css</code> 无引用，其他文件有当前引用。</td><td><span class="tag confirm">含一个清理候选</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/datafeeds/udf/</td><td>TypeScript source、配置、Rollup、<code>dist/bundle.js</code>、README。</td><td>TradingView UDF datafeed 客户端。<code>src</code> 是维护源，<code>dist</code> 是页面加载产物；构建由 npm scripts 管理。</td><td><span class="tag keep">当前运行核心</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/charting_library/</td><td>TradingView CL v31 产物、d.ts、bundles、datafeed 类型、sameorigin。</td><td>第三方 vendored 图表库。产物不是普通缓存，必须由 <code>charting_library_patches</code> 重放和校验。</td><td><span class="tag keep">受补丁工程管理</span></td></tr>
+            <tr><td class="path">script/</td><td>crontab 数据同步、remediation 质量/供应链脚本、PM2/Jupyter 配置。</td><td>运维和治理入口；是否被仓库内引用不能代替外部部署确认。</td><td><span class="tag keep">运维边界</span></td></tr>
+            <tr><td class="path">script/crontab/</td><td>7 个 registry 同步 wrapper、GM/IB 可选集成脚本、3 个 Chanlun 墓碑、JSON 配置。</td><td>同步脚本是 DB 历史数据入口。GM 脚本通过外部 <code>gm.api</code>、GM Token 和 ExchangeDB 执行真实同步；三个墓碑脚本没有业务实现。</td><td><span class="tag confirm">混合目录，逐项维护</span></td></tr>
+            <tr><td class="path">script/crontab/sync_configs/</td><td>A、HK、US、期货、合约币、现货币的 JSON batch 配置。</td><td>绑定 source Provider、destination ExchangeDB、universe、周期和分页策略。</td><td><span class="tag keep">同步契约</span></td></tr>
+            <tr><td class="path">script/remediation/</td><td>质量门禁、依赖/供应链、Secret、文档矩阵和历史问题台账工具。</td><td>CI 直接执行其中多数脚本；只有 parse/update issue 工具属于一次性历史治理候选。</td><td><span class="tag keep">CI 核心，局部可归档</span></td></tr>
+            <tr><td class="path">tests/</td><td>91 个 <code>test_*.py</code>。</td><td>从纯领域单测、AST 契约、Provider fake，到 MySQL、Chromium、Windows 和供应链门禁。命名中的 removed/legacy 多数是防回归，不是过时。</td><td><span class="tag keep">质量门禁</span></td></tr>
+            <tr><td class="path">test_support/</td><td><code>web_routes.py</code> 和初始化文件。</td><td>提供 blueprint 源码定位、AST route 编译和测试隔离 helper；多个 Web 测试依赖。</td><td><span class="tag keep">测试基础设施</span></td></tr>
+            <tr><td class="path">docs/</td><td>Provider 矩阵/能力、质量门禁、供应链、Secret、策略协议、消息、实盘禁用和不支持 Provider。</td><td>当前支持边界与 CI 契约文档，部分由脚本生成；整体不可按历史文档清理。</td><td><span class="tag keep">当前契约文档</span></td></tr>
+            <tr><td class="path">audit/</td><td>81 条问题台账、原始问题清单、来源哈希、SBOM/许可证/漏洞/策略证据。</td><td>供应链文件仍被门禁读取；原始问题清单和 remediation state 是历史审计证据。</td><td><span class="tag keep">证据资产</span></td></tr>
+            <tr><td class="path">archive/</td><td>Chanlun runtime ZIP、JoinQuant ZIP、历史 docs、cookbook 和图片。</td><td>明确不导入/不打包/不测试，但保留迁移和研究证据；README 与文档测试仍引用它。</td><td><span class="tag confirm">可冷存储，需同步契约</span></td></tr>
+            <tr><td class="path">notebook/</td><td>11 个回测、数据导入、图表和旧策略研究 Notebook，含编码后的中文文件名。</td><td>无活动代码引用，部分内容依赖旧 Chanlun/外部环境；研究结果所有权未知。</td><td><span class="tag confirm">高优先级人工确认</span></td></tr>
+            <tr><td class="path">package/</td><td>6 个平台 TA-Lib wheel 和 pytdx wheel。</td><td>由 <code>pyproject.toml</code> 的 <code>tool.uv.sources</code> 直接引用，并由供应链 manifest 校验。</td><td><span class="tag keep">安装必需</span></td></tr>
+            <tr><td class="path">charting_library_patches/</td><td><code>pristine/</code> 原版、<code>patches.json</code>、apply/extract 脚本和 README。</td><td>把手改压缩 bundle 变成可 review、可重放、可检测升级失配的工程链。</td><td><span class="tag keep">构建维护核心</span></td></tr>
+            <tr><td class="path">charting_library_patches/pristine/bundles/</td><td>受保护的原版 bundle。</td><td>补丁基准，不直接加载；删除会使补丁无法重放和验证。</td><td><span class="tag keep">不可删</span></td></tr>
+            <tr><td class="path">.github/workflows/</td><td><code>tests.yml</code>、<code>repository-hygiene.yml</code>。</td><td>六类测试 job 和安装前治理门禁；是架构契约的执行者。</td><td><span class="tag keep">CI 核心</span></td></tr>
+            <tr><td class="path">.pi/</td><td>本地 Pi/远程运行配置。</td><td>开发工具元数据，不属于产品运行包；是否纳入交付取决于仓库协作规范。</td><td><span class="tag confirm">工具资产，需确认</span></td></tr>
+            <tr><td class="path">.planning/tradingview-architecture/</td><td>本次 task_plan、findings、progress。</td><td>本次审计的持久化工作记忆，不是产品模块；可在交付后按团队流程保留或归档。</td><td><span class="tag info">本次新增审计记录</span></td></tr>
+          </tbody>
+        </table>
+        <h3>嵌套目录补充</h3>
+        <p class="small">下表补齐主表中按父模块聚合但未单列的 Git 跟踪目录。至此，当前受版本控制目录均已归入职责边界。</p>
+        <table>
+          <thead><tr><th>目录</th><th>包含内容</th><th>归属与作用</th></tr></thead>
+          <tbody>
+            <tr><td class="path">.github/</td><td><code>workflows/</code></td><td>GitHub 仓库自动化根；产品运行时不 import，但合并质量依赖它。</td></tr>
+            <tr><td class="path">.pi/remote-pi/</td><td><code>config.json</code></td><td>远程 Pi 开发工具配置，归属于协作工具资产，不进入 Python 包。</td></tr>
+            <tr><td class="path">.planning/</td><td>本次 active plan 指针和 scoped planning 子目录。</td><td>架构审计工作区，只服务本次任务进度恢复与证据留存。</td></tr>
+            <tr><td class="path">archive/docs/</td><td>旧 Chanlun 说明和 <code>cookbook/</code>。</td><td>历史概念、安装、策略和接口说明；不得作为当前 API 文档。</td></tr>
+            <tr><td class="path">archive/docs/cookbook/</td><td>旧市场、回测、Web、VNPY/WTPY/JoinQuant/消息指南。</td><td>迁移与研究参考；内容与当前无 Chanlun runtime 的边界不一致。</td></tr>
+            <tr><td class="path">archive/docs/img/<br>archive/docs/cookbook/img/</td><td>历史文档 PNG/JPG/ICO 截图与示意图。</td><td>只为 archive 文档提供图像证据，不被当前 Web 模板加载。</td></tr>
+            <tr><td class="path">audit/supply-chain/</td><td>SBOM、license report、vulnerability report/policy、local artifact manifest。</td><td>由供应链 checker 和 CI 逐项校验，是可再现安装证据。</td></tr>
+            <tr><td class="path">charting_library_patches/pristine/</td><td>2 个根图表文件和 <code>bundles/</code> 中 4 个原始 bundle。</td><td>补丁重放输入；<code>pristine</code> 与 Web 生效产物必须区分。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/</td><td>根级 jQuery、layui、xm-select、marked 候选、字体、图片、JS、CSS、datafeed 和图表库；ECharts 已处于删除状态。</td><td>Flask static 根。根级文件仍要按模板和动态加载关系逐项判断，不能整目录清理。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/charting_library/bundles/</td><td>TradingView 压缩 JavaScript、CSS、字体和 locale chunk。</td><td>由 charting library 运行时按 chunk 名动态请求；静态全文引用缺失不等于可删除。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/datafeeds/</td><td>UDF 子工程父目录。</td><td>把图表库 datafeed 协议实现与其他 static 资产隔离。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/datafeeds/udf/src/</td><td>12 个 TypeScript 模块，含 data-pulse、history-provider、quotes-provider、symbols-storage 和 UDF adapter。</td><td>维护源代码；修改后通过 TypeScript/Rollup 构建。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/datafeeds/udf/dist/</td><td><code>bundle.js</code></td><td><code>index.html</code> 实际加载的发布产物，必须与 <code>src/</code> 一起管理。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/font/</td><td>layui 图标字体。</td><td>由 layui CSS 引用的二进制前端依赖。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/imgs/</td><td>favicon、logo 和页面图片。</td><td>由模板、CSS 或浏览器图标路径使用的静态视觉资产。</td></tr>
+          </tbody>
+        </table>
+        <h3>根目录文件职责</h3>
+        <table>
+          <thead><tr><th>文件</th><th>作用</th><th>清理判断</th></tr></thead>
+          <tbody>
+            <tr><td class="path">README.md</td><td>当前能力边界、安装、Web/scheduler 启动、安全、策略注册和供应链入口。</td><td><span class="tag keep">保留</span></td></tr>
+            <tr><td class="path">pyproject.toml / uv.lock</td><td>唯一依赖声明与解析结果，含本地 wheel source 和 Python 版本契约。</td><td><span class="tag keep">保留</span></td></tr>
+            <tr><td class="path">check_env.py</td><td>环境状态检查和退出码。</td><td><span class="tag keep">保留</span></td></tr>
+            <tr><td class="path">windows_install.bat / windows_run.bat</td><td>Windows 安装、配置、环境检查和 Web 启动。</td><td><span class="tag keep">安装固定 uv 0.10.0；启动入口接受 0.10/0.11</span></td></tr>
+            <tr><td class="path">FOOTPRINT_RENDERING_PLAN.md</td><td>足迹图 M0/M1/M2/M3 计划：M0 补丁工程和 M1 数据端点已完成，M2 spike 已落地、正式渲染待实现。</td><td><span class="tag keep">持续维护</span></td></tr>
+            <tr><td class="path">task_plan.md / findings.md / progress.md / remediation_report.md</td><td>81 条治理任务的计划、发现、过程和交付报告。</td><td><span class="tag confirm">审计留存确认后归档</span></td></tr>
+            <tr><td class="path">LICENSE</td><td>Apache-2.0 项目许可证。</td><td><span class="tag keep">保留</span></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="frontend">
+        <h2>7. 前端、UDF 与图表库</h2>
+        <h3>页面与业务脚本</h3>
+        <p><code>templates/index.html</code> 是主页面：加载 jQuery、layui、xm-select、TradingView charting library、UDF bundle、17 个自定义指标和业务脚本。<code>charts.js</code> 创建 widget 并把客户端事件映射到存储 API；<code>zixuan.js</code> 管理自选组、Tick 刷新和代码切换；<code>alert.js</code> 管理监控列表和事件记录；<code>bkgn.js</code> 管理板块概念；<code>csrf.js</code> 为 jQuery、fetch、XHR 和 HTML form 统一添加 CSRF token。</p>
+        <table>
+          <thead><tr><th>前端资产</th><th>调用后端</th><th>数据/职责</th></tr></thead>
+          <tbody>
+            <tr><td><code>charts.js</code></td><td><code>/tv/*</code>、TradingView storage</td><td>Widget 生命周期、标的/周期变化、自动保存、标记删除、自定义指标。</td></tr>
+            <tr><td><code>zixuan.js</code></td><td><code>/get_zixuan_*</code>、<code>/set_stock_zixuan</code>、<code>/ticks</code>、<code>/tv/search</code></td><td>自选组渲染、涨跌幅、颜色/排序、搜索和市场切换。</td></tr>
+            <tr><td><code>alert.js</code></td><td><code>/alert_list</code>、<code>/alert_records</code>、<code>/alert_del</code></td><td>监控任务列表、事件记录和删除动作。</td></tr>
+            <tr><td><code>static/datafeeds/udf/src/</code></td><td><code>/tv/config</code>、symbols、search、history</td><td>TypeScript UDF datafeed source；Rollup 输出 <code>dist/bundle.js</code>。</td></tr>
+            <tr><td><code>static/js/footprint/loader.js</code></td><td>当前不调用后端；仅注入 charting iframe</td><td>当前是 spike renderer，尚未消费 <code>/tv/footprint</code>；正式 <code>data_cache.js</code> 才会接入端点。</td></tr>
+          </tbody>
+        </table>
+        <h3>图表库补丁链</h3>
+        <ol>
+          <li><code>charting_library_patches/pristine/</code> 保存未经修改的基准文件。</li>
+          <li><code>patches.json</code> 为每个变更保存唯一 <code>find</code> 锚点、替换内容和说明。</li>
+          <li><code>apply_patches.py --check</code> 将 pristine 重放后与 Web 生效文件逐字节比较；当前 6 个受管文件全部一致。</li>
+          <li>iframe HTML 的补丁会注入 <code>/static/js/footprint/loader.js</code>，随后 library bundle 的样式 17 分支可接入外挂 PaneView。</li>
+        </ol>
+        <div class="notice warning"><strong>当前功能状态：</strong>Footprint M0 补丁工程和 M1 聚合端点已完成并进入测试；M2 loader 仍是紫色矩形 spike，真实分价成交量渲染和部分状态栏兼容问题属于后续工作。因此不能把 footprint 相关资产当成无用代码。</div>
+      </section>
+
+      <section id="architecture">
+        <h2>8. 架构师视角的深度讲解</h2>
+        <h3>8.1 设计主线：把变化最大的地方放在边界</h3>
+        <p>市场和第三方 SDK 是变化最大的部分。仓库没有让 Web、策略和回测分别认识每个 SDK，而是把变化集中到 <code>exchange/</code> adapter，再用 Registry 描述“这个市场有哪些 provider、每个 provider 能做什么”。这使上层依赖稳定的 capability，而不是依赖类上偶然存在的方法。</p>
+        <p>同样，TradingView 协议和内部领域模型也被分开：<code>udf.py</code> 负责 HTTP 参数和响应形状，<code>web_payloads.py</code> 负责时间/OHLCV，<code>domain.py</code> 负责枚举和错误，策略层收到的是规范化目标。任何一层都不应该把 SDK 原始对象直接传给下一层。</p>
+        <h3>8.2 进程所有权比共享全局更重要</h3>
+        <p>Web worker 的职责是响应请求和持久化配置，scheduler 进程的职责是拥有 APScheduler、执行任务和写状态快照。这个拆分解决了 Flask reloader、多 worker 重复创建 scheduler 和请求线程持有后台任务线程的问题。代价是部署必须同时管理两个进程，并让它们共享同一个 <code>DATA_PATH</code> 和数据库。</p>
+        <h3>8.3 兼容性被显式限制</h3>
+        <p>数据库仍有旧字段和迁移函数，策略存储仍能识别已保存的旧 path，<code>exchange/contracts.py</code> 保留领域类型的兼容 re-export。这些不是“忘记删除”的充分证据，而是迁移层。判断它们能否清掉，必须先证明线上数据已经迁移，并删除对应兼容测试和回滚策略。</p>
+        <h3>8.4 失败策略是 fail-closed</h3>
+        <p>Provider 不可用、能力未声明、Secret 无法解析、交易日历未知、图表 owner 不合法、策略输出不规范时，系统倾向于返回稳定错误或空结果，不猜测成功。实盘下单更是直接关闭。这个策略牺牲了一部分“看起来能跑”的路径，换取不把错误状态写进账本、任务或用户界面。</p>
+        <h3>8.5 当前架构的真实风险</h3>
+        <table>
+          <thead><tr><th>风险</th><th>原因</th><th>维护建议</th></tr></thead>
+          <tbody>
+            <tr><td>启动路径依赖 sys.path 注入</td><td><code>app.py</code> 和 <code>scheduler.py</code> 按脚本相对路径加入 src/web。</td><td>若要打包或从仓库外以模块运行，应先定义正式 packaging/console script，再移除隐式路径假设。</td></tr>
+            <tr><td>Scheduler 是部署必需的第二进程</td><td>Web 不会自动补启动 scheduler，/jobs 只读状态快照。</td><td>在 Windows/容器/进程管理器中把 Web 和 scheduler 建成两个明确 service，并监控 leader lock 和状态快照。</td></tr>
+            <tr><td>Provider SDK 仍有外部副作用</td><td>惰性构造延迟了副作用，但首次请求/任务仍可能连接网络、线程或专有客户端。</td><td>继续维护 fake/protocol 测试，必要时为每个 Provider 增加 health/readiness 和显式 close。</td></tr>
+            <tr><td>回测与实时 provider 不同源</td><td>回测默认读取 ExchangeDB，Web 可读取 TDX、Futu、IB 等。</td><td>报告中明确数据版本和来源；不要用回测通过替代实时联调。</td></tr>
+            <tr><td>Registry 与配置仍有 legacy reader</td><td>为旧 <code>EXCHANGE_*</code> 配置保留兼容读取。</td><td>统计实际部署后，设计迁移窗口，再删除旧字段和对应测试。</td></tr>
+            <tr><td>时间/日历是版本化数据</td><td>现金市场和期货 profile 需要按年份和品种维护，未知年份 fail-closed。</td><td>把交易所公告、版本、覆盖年份和更新责任纳入发布流程。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="extension">
+        <h2>9. 后续拓展与修改方法</h2>
+        <h3>新增市场或 Provider</h3>
+        <ol>
+          <li>在 <code>domain.py</code> 增加市场枚举或领域类型，并明确是否会影响持久化主键。</li>
+          <li>在 <code>market_registry.py</code> 增加完整 <code>MarketSpec</code>：默认代码、周期、TradingView type、payload timezone、session、DB partition 和 provider map。</li>
+          <li>实现 <code>Exchange</code> 所需真实方法，在 <code>ProviderSpec.capabilities</code> 只声明已有行为；禁止用继承空桩充数。</li>
+          <li>为第三方返回值写边界 normalizer 和故障注入测试，覆盖超时、空数据、乱序、缺字段、重复数据和关闭。</li>
+          <li>运行支持矩阵生成器，提交生成的 <code>docs/provider-support-matrix.md</code>，再更新同步 JSON 和前端所需 metadata。</li>
+          <li>如果需要秘密，先在 <code>secret_store.py</code> 的 inventory 中分类，配置只存引用。</li>
+        </ol>
+        <h3>新增策略</h3>
+        <ol>
+          <li>实现普通 K 线输入的 <code>run(context)</code>，明确选择或监控 purpose。</li>
+          <li>在私有 config 的 <code>ALERT_STRATEGIES</code> 或 <code>XUANGU_STRATEGIES</code> 注册 id、路径、默认 kwargs、允许覆盖字段和 JSON schema。</li>
+          <li>使用 <code>StrategySignal</code>，不要返回任意 dict、generator 或未经限制的 iterable。</li>
+          <li>用对应的 <code>MonitoringRunner</code>/<code>SelectionRunner</code> 测试目标绑定、时区、动作集合和失败隔离。</li>
+          <li>需要回测时，显式设计 Signal → Decision → Operation 的桥接；不能把 score 当 position size，也不能把回测 Operation 当 live order。</li>
+        </ol>
+        <h3>新增 Web 功能</h3>
+        <ol>
+          <li>先定义 public request/response 和稳定错误码，再在 <code>web_api_validation.py</code> 或领域 contract 中集中解析。</li>
+          <li>把路由放入对应 blueprint，通过 <code>get_web_services()</code> 注入 DB、provider、限流器和 logger。</li>
+          <li>所有写请求沿用 core 的 CSRF 保护；文件/JSON 输入在 DB 或 SDK 调用之前限制字节、数量和结构。</li>
+          <li>前端模板、业务 JS 和 UDF bundle 的 source/产物关系必须同步维护；图表库 bundle 只能走锚点补丁流程。</li>
+          <li>为 route 写行为测试和 AST/调用顺序测试；需要真实 DOM 或 MySQL 时放到专门 CI job，不在单元测试中伪装基础设施。</li>
+        </ol>
+        <h3>恢复实盘交易的准入条件</h3>
+        <div class="notice danger"><strong>不能只恢复一个 adapter 的 order 方法。</strong>必须先有持久化 client_order_id、broker order id、状态转移、逐笔 Fill、幂等回调、重启对账、断线恢复和 Provider sandbox 测试；在确认 fill 之前不得更新本地现金、持仓或成功通知。完成这些条件后，才应新增独立的 <code>LIVE_ORDERS</code> capability 和对应 CI/运行文档。</div>
+      </section>
+
+      <section id="cleanup">
+        <h2>10. 清理审计：可删除内容与证据</h2>
+        <p>清理结论分为四级：<span class="tag delete">确认无活动引用</span> 表示静态证据很强但仍需检查外部部署；<span class="tag confirm">高概率过时/需确认</span> 表示存在旧入口或动态使用风险；<span class="tag keep">不建议删除</span> 表示有当前运行、CI 或供应链证据；<span class="tag info">条件性</span> 表示只有在先归档某组资产后才能删除。</p>
+        <div class="notice warning"><strong>删除原则：</strong>“rg 没搜到引用”只证明仓库内静态引用缺失，不能证明外部 cron、Notebook、动态 import、用户书签或生产数据库没有使用。以下建议都不在本次执行。</div>
+        <h3>10.1 (a) 已经用不到或疑似用不到的代码/资产</h3>
+        <table>
+          <thead><tr><th>候选</th><th>证据</th><th>建议动作</th><th>级别</th></tr></thead>
+          <tbody>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/templates/options.html</td><td>全仓没有 <code>render_template('options.html')</code> 或 include。页面内容是“配置不可用”旧页，引用不存在的 <code>docs/custom-strategy-integration.md</code>，还写着当前保留交易执行能力，与 README/live-trading-disabled 冲突。</td><td>先确认没有外部直接渲染模板的部署，再删除；若要保留迁移提示，应改写为当前策略文档链接后移到 archive。</td><td><span class="tag delete">强候选</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/echarts.min.js</td><td>文件约 1 MB，全仓没有模板 script、JS import 或运行时调用；Notebook 使用公网 ECharts URL。</td><td>当前工作树已经删除该文件，复核和完整测试均支持保持删除状态。</td><td><span class="tag delete">已验证删除</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/css/layui-theme-dark-legacy.css</td><td>活动 <code>dark.html</code> 只加载 <code>layui-theme-dark.css</code>，全仓没有 legacy 文件引用。</td><td>可在一次静态资源 smoke test 后删除。</td><td><span class="tag delete">高置信</span></td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/marked.min.js</td><td>首页加载它，但全仓没有对 <code>marked</code>、<code>marked.parse</code> 的业务调用；约 72 KB 只增加页面依赖。</td><td>同步移除首页 script 标签，执行浏览器首页和设置页回归后删除。不能只删文件而保留标签。</td><td><span class="tag confirm">需联动</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/backtesting/klines_generator.py</td><td><code>KlinesGenerator</code> 只在自身 <code>__main__</code> 示例出现，仓库没有 import。</td><td>检查 Notebook 和外部研究脚本；若无人使用，可迁入 research archive 或删除。</td><td><span class="tag confirm">疑似孤立</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/backtesting/signal_to_trade.py</td><td><code>SignalToTrade</code> 无仓库内 import，是旧的“信号回测结果转交易回测”工具。</td><td>确认是否仍有历史回测文件依赖 pickle 兼容；无使用者时连同文档/样例归档。</td><td><span class="tag confirm">疑似孤立</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/trader/online_market_datas.py</td><td><code>tests/test_cr03_live_trading_disabled.py</code> 明确要求该文件存在，用于保留行情 facade，同时删除未验证的券商订单模块。</td><td>保留；它是 fail-closed 实盘边界的一部分，不能按“无业务 import”单独删除。</td><td><span class="tag keep">明确保留</span></td></tr>
+            <tr><td class="path">src/tradingview_zy/db.py:334 TableByAIAnalyse</td><td>表模型存在，但没有对应 save/query API 或运行调用。AI token/model 只存在 config template 和 Secret inventory，当前 README/Web 没有 AI 功能。</td><td>确认数据库是否已有该表和外部 SQL 使用，再设计迁移后删除模型、配置字段、依赖和相关 Secret policy；不能单独删模型。</td><td><span class="tag confirm">需数据库迁移</span></td></tr>
+            <tr><td class="path">script/crontab/run_history_xuangu.py<br>script/crontab/xuangu_by_same.py<br>script/crontab/xuangu_by_process.py</td><td>三个文件都是 7 行墓碑入口，只输出“缠论模块已移除”，并指向不存在的 custom-strategy 文档。</td><td>确认外部 cron 不再按旧文件名调用后删除；否则改成有效的迁移提示或统一的新策略 CLI。</td><td><span class="tag delete">无当前实现</span></td></tr>
+            <tr><td class="path">script/crontab/reboot_sync_gm_a_klines.py<br>script/crontab/reboot_sync_gm_futures_klines.py</td><td>两个脚本包含完整 GM 行情同步逻辑，通过 <code>gm.api</code>、<code>GM_TOKEN</code> 和 <code>ExchangeDB</code> 执行可选外部集成。</td><td>保留，除非运维明确决定停用 GM 集成并同步移除配置、Secret policy 和部署任务；不能因 SDK 未进入默认依赖就判定死代码。</td><td><span class="tag keep">可选集成入口</span></td></tr>
+            <tr><td class="path">script/remediation/parse_issue_report.py<br>script/remediation/update_issue.py</td><td>只服务 81 条历史 remediation state/report；CI 当前不调用 update，测试只通过报告计数间接加载 parser。</td><td>若 81 条问题已转为不可变发布证据，可整组归档；归档前保留最终 HTML/摘要和原始哈希。</td><td><span class="tag info">条件性</span></td></tr>
+          </tbody>
+        </table>
+        <h3>10.2 (b) 过时或用不到的文档</h3>
+        <table>
+          <thead><tr><th>文档/目录</th><th>为什么显得过时</th><th>建议</th></tr></thead>
+          <tbody>
+            <tr><td class="path">archive/docs/**</td><td>目录和 archive README 明确是 Chanlun/JoinQuant 历史迁移资料，不属于当前运行文档；文件名包含编码后的旧中文名。</td><td>不作为当前 docs 使用。若仓库体积或维护成本需要降低，可先做完整冷存储并更新 archive/README 与文档测试，再从 Git 移除。</td></tr>
+            <tr><td class="path">audit/tradingview_current_open_issues_v1.md</td><td>原始问题报告保留了修复前结论，例如已删除 CTP/ZB 文件仍被旧段落描述为存在。</td><td>保留为不可变审计证据，不要在当前架构说明中引用其旧结论。若合规允许，压缩为外部审计包并保留 source_sha256。</td></tr>
+            <tr><td class="path">remediation_report.md<br>task_plan.md<br>findings.md<br>progress.md</td><td>81 条修复已经完成，报告约数百 KB，历史过程里有改名测试路径和旧命令。</td><td>可生成精简交付摘要后归档/删除；删除前确认是否需要逐条提交和环境限制证据。</td></tr>
+            <tr><td class="path">FOOTPRINT_RENDERING_PLAN.md</td><td>已在 2026-08-17 刷新为当前状态：M0/M1 完成，M2 spike 已落地但正式渲染待实现，并改用实际的 <code>patches.json</code>。</td><td>作为活动实施计划保留；后续完成 M2/M3 时继续同步状态和验收证据。</td></tr>
+            <tr><td class="path">script/crontab/*xuangu*.py 中的迁移提示</td><td>提示链接 <code>docs/custom-strategy-integration.md</code> 不存在，维护者复制提示会得到死链接。</td><td>更新为现有 <code>docs/strategy-protocol.md</code> 或新增正式策略接入文档；这是文档漂移修复，不是删除测试。</td></tr>
+            <tr><td class="path">web/tradingview_zy_chart/cl_app/static/datafeeds/udf/README.md<br>charting_library_js_files_explained.md</td><td>它们看起来像第三方/构建说明，未被 CI 直接引用。</td><td>暂不删除。它们解释 source → lib/dist 和 vendor bundle，属于维护图表资产所需的上下文。</td></tr>
+          </tbody>
+        </table>
+        <h3>10.3 (c) 过时的测试用例</h3>
+        <div class="notice success"><strong>当前结论：没有确认过时的活动测试文件。</strong>完整 suite 通过，CI 的 unit job 直接执行全部 pytest；测试名称中的 <code>removed</code>、<code>legacy</code> 和 <code>no_runtime_chanlun</code> 是防止已下线能力回归的当前约束。</div>
+        <table>
+          <thead><tr><th>测试候选</th><th>当前用途</th><th>可删除条件</th></tr></thead>
+          <tbody>
+            <tr><td class="path">tests/test_remediation_report_counts.py</td><td>验证历史报告生成器对“已完成（说明）”状态的计数，当前仍随完整 pytest 运行。</td><td>只有在 <code>parse_issue_report.py</code>、<code>remediation_report.md</code> 和历史台账一起封存后删除；不能单独删除。</td></tr>
+            <tr><td class="path">tests/test_new05_fifo_atomicity_guard.py</td><td>当前源码没有 FIFO 实现，它保护未来若重新引入 FIFO 时先验证结算再消费 lots 的顺序。</td><td>若架构决策永久放弃 FIFO，并把该问题记录归档，可连同 <code>check_fifo_atomicity.py</code> 删除；否则它是前置安全护栏。</td></tr>
+            <tr><td class="path">tests/test_cr03_live_trading_disabled.py<br>tests/test_cr04_qmt_trader_removed.py<br>tests/test_cr05_ctp_removed.py<br>tests/test_mx02_zb_removed.py<br>tests/test_no_runtime_chanlun_imports.py</td><td>验证实盘/旧 Provider/旧 Chanlun 不会重新进入运行树。</td><td>不建议删除。只要文档继续承诺能力下线，这些就是防回归测试。</td></tr>
+            <tr><td>MySQL、Chromium、Windows 专项</td><td>通过环境变量控制，离线时设计性 skip；CI 在真实服务/浏览器/Windows 上启用。</td><td>不能因为本机 skip 就删除。若基础设施永久取消，必须先删除对应 CI job、文档和分支保护要求。</td></tr>
+          </tbody>
+        </table>
+        <h3>10.4 非 Git 交付物的本地清理</h3>
+        <p>以下由 <code>.gitignore</code> 排除，属于本地环境而非产品源码：<code>.venv/</code>、<code>.pytest_cache/</code>、各级 <code>__pycache__/</code>、<code>.artifacts/</code>、<code>.ci-test-runtime/</code>。本次产生的 <code>.pi-subagents/</code> 也是协作临时产物。<code>.worktrees/</code> 和 <code>.pi/</code> 可能承载其他工作区或工具配置，删除前必须确认所有者。本次不处理这些目录。</p>
+        <h3>10.5 不建议删除的内容</h3>
+        <ul>
+          <li><code>package/</code>：被 uv source 直接引用，供应链清单和哈希门禁依赖。</li>
+          <li><code>charting_library_patches/</code> 及 pristine：图表 vendor 产物的唯一可重放来源。</li>
+          <li><code>docs/</code> 当前能力/质量/Secret/供应链文档：被 checker、生成器或测试读取。</li>
+          <li><code>tests/</code> 中的 Provider、Web、存储、策略、调度和 removed 能力门禁。</li>
+          <li><code>src/tradingview_zy/file_db.py</code>、<code>futu_context.py</code>、<code>scheduler_status.py</code> 等看似基础设施的小模块：已有动态 import 或多个 Provider 引用。</li>
+        </ul>
+      </section>
+
+      <section id="verification">
+        <h2>11. 验证证据与限制</h2>
+        <h3>已执行命令</h3>
+        <table>
+          <thead><tr><th>检查</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr><td><code>python script/remediation/check_quality_gates.py</code></td><td>通过，六个稳定 job 存在并符合约束。</td></tr>
+            <tr><td><code>python script/remediation/check_dependency_contract.py</code></td><td>通过，pyproject.toml + uv.lock 是唯一安装解析源。</td></tr>
+            <tr><td><code>python script/remediation/check_repository_hygiene.py</code></td><td>通过，无临时 patch transport 或 force-push workflow。</td></tr>
+            <tr><td><code>python script/remediation/generate_provider_support_matrix.py --check</code></td><td>通过，生成矩阵与 MarketRegistry 一致。</td></tr>
+            <tr><td><code>python charting_library_patches/apply_patches.py --check</code></td><td>通过，6 个受管产物逐字节一致。</td></tr>
+            <tr><td>供应链和 Secret checker</td><td>通过：local artifacts、SBOM、license、policy、Secret reference、Secret exposure 均符合当前契约。</td></tr>
+            <tr><td><code>PYTHONPATH='.;src' uv run pytest -q</code></td><td><strong>687 passed, 2 skipped, 1 warning</strong>，耗时约 39 秒。</td></tr>
+          </tbody>
+        </table>
+        <h3>限制与后续人工确认</h3>
+        <ul>
+          <li>静态引用分析看不到外部 cron、PM2、用户 Notebook、私有策略包、部署脚本和生产数据库 SQL。</li>
+          <li>没有执行真实券商、Futu OpenD、TQ、IB、TDX 或交易所联调；CI 的 provider fake 和协议测试不等价于真实账户验收。</li>
+          <li>完整回归的一个 warning 来自第三方 pyfolio 缺少可选 <code>zipline.assets</code>；它没有使测试失败，也不是删除测试的理由。</li>
+          <li>Notebook、历史 ZIP 和图片没有逐个运行/阅读；其研究价值和许可留存责任需要仓库所有者确认。</li>
+          <li>仓库最近提交日期为 2026-08-16，因此“长期未修改”不能作为删除证据。应以引用、运行入口、维护责任和历史价值做决定。</li>
+        </ul>
+        <div class="notice success"><strong>最终结论：</strong>当前架构主线完整且可验证。无活动引用的旧模板/静态资源仍是最明确的清理对象；<code>online_market_datas.py</code>、GM/IB 集成和活动测试已有安全或运行证据，应保留。Python 研究工具、历史台账和 Notebook 仍需人工确认或成组迁移。本文档没有执行新的候选删除。</div>
+        <p class="footer">生成范围：初始只读架构审计，后于 2026-08-17 完成活动文档复核。关键事实来源包括 README.md、pyproject.toml、MarketRegistry、Web factory、scheduler runtime、CI workflow、docs 和 tests。</p>
+      </section>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var input = document.getElementById("folder-filter");
+      var table = document.getElementById("folder-table");
+      if (!input || !table) return;
+      input.addEventListener("input", function () {
+        var query = input.value.trim().toLowerCase();
+        var rows = table.querySelectorAll("tbody tr");
+        rows.forEach(function (row) {
+          row.hidden = query !== "" && row.textContent.toLowerCase().indexOf(query) === -1;
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

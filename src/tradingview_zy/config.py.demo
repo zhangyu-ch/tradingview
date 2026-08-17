@@ -58,7 +58,8 @@ WEB_HISTORY_MAX_REQUESTS_PER_WINDOW = 6
 # 独立监控调度进程重新读取数据库任务的周期，运行时限制为 5–3600 秒。
 SCHEDULER_RECONCILE_SECONDS = 30
 
-# 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来
+# 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来。
+# 默认目录名为兼容已有安装保留，不表示当前仍启用 Chanlun 运行时；改名需要先迁移现有数据。
 DATA_PATH = ".chanlun_pro"
 
 # 代理服务器配置
@@ -71,6 +72,7 @@ DB_HOST = '127.0.0.1'
 DB_PORT = 3306
 DB_USER = 'root'
 DB_PWD = 'env://TRADINGVIEW_ZY_DB_PASSWORD'
+# 默认数据库名为兼容已有安装保留；新部署可自行修改，旧部署改名需同步迁移数据库。
 DB_DATABASE = 'chanlun_klines'
 
 # Redis 配置，不使用可将 REDIS_HOST 设置为空字符串（基本不用）
@@ -119,16 +121,11 @@ IB_PORT = 7497
 IB_CLIENT_ID = 1
 IB_ACCOUNT = 'env://TRADINGVIEW_ZY_IB_ACCOUNT'
 
-# AI 分析配置  （硅基流动和 Openrouteai 二选一，都配置优先使用 Openrouteai）
-# 使用硅基流动的API调用模型，并返回数据
-# 邀请链接：https://cloud.siliconflow.cn/i/HwLeeOjK   （注册送 14 元）
+# 旧 AI 配置兼容字段：当前 Web 与工具链不提供 AI 分析入口。
+# 暂时保留这些 reference-only 字段用于旧私有配置迁移和 Secret inventory 门禁；新部署无需配置。
 AI_TOKEN = 'env://TRADINGVIEW_ZY_AI_TOKEN'
 AI_MODEL = "Pro/deepseek-ai/DeepSeek-R1"
-# AI_MODEL = "Pro/deepseek-ai/DeepSeek-V3"
 
-# OpenRouterAI 的api key
-# API KEY 获取地址： https://openrouter.ai/settings/keys
-# 模型获取地址：https://openrouter.ai/models
 OPENROUTER_AI_KEYS = 'env://TRADINGVIEW_ZY_OPENROUTER_API_KEY'
 OPENROUTER_AI_MODEL = "google/gemini-2.5-pro-preview"
 
