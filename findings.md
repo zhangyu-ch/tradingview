@@ -568,6 +568,13 @@
 - 可选搜索依赖 `pinyin` 应在实际搜索调用点惰性导入；应用启动不应因未使用功能的依赖缺失而失败。
 - Secret/质量门禁也必须跟随职责迁移：以 AST 定位 settings Blueprint 的 `setting()`，而不是依赖旧 route 文本边界。
 
+## 2026-08-18 `master` 归档基线治理
+- `main` 与 `master` 没有共同祖先；`main` 是当前默认分支，`master` 是原始远端基线，不应作为合并或发布主线。
+- GitHub API 已确认 `master` 启用分支保护：`lock_branch=true`、禁止强制推送和删除，并对管理员生效；当前没有以它为目标的开放 PR，也没有 tag 包含其当前顶点。
+- 现行 `main` 的 `.github/workflows/tests.yml` 与 `repository-hygiene.yml` 已收敛为仅监听 `main`；仓库卫生门禁会拒绝未来工作流中出现 `master`。
+- GitHub 登记的 16 条历史 remediation/export Actions 工作流已手动停用；只保留现行测试、仓库卫生和 GitHub Dependabot 工作流。
+- 归档政策同时记录远端锁分支、禁止 PR 合并、现行文档声明和后续恢复必须显式解锁/新建迁移分支的流程。
+
 
 ## MX-12 通用任务服务加载边界
 - LO-01 已把业务路由移出 app factory，但 `create_app()` 仍内嵌旧缠论模块名集合、ImportError 文本匹配、Unavailable/Lazy 类和 guard 闭包；问题仍存在。

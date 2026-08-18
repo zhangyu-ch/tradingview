@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when temporary remediation transport artifacts enter .github again."""
+"""Fail when temporary remediation transport or archived-branch workflow references enter .github."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ FORBIDDEN_WORKFLOW_PATTERNS = (
     re.compile(r"(?mi)^\s*contents\s*:\s*write\s*(?:#.*)?$"),
     re.compile(r"(?i)git\s+reset\s+--soft\b"),
     re.compile(r"(?i)git\s+push\b[^\n]*(?:--force(?:-with-lease)?|-f\b)"),
+    re.compile(r"(?i)\bmaster\b"),
 )
 
 
@@ -46,7 +47,7 @@ def find_violations(root: Path) -> list[str]:
         text = path.read_text(encoding="utf-8", errors="replace")
         for pattern in FORBIDDEN_WORKFLOW_PATTERNS:
             if pattern.search(text):
-                violations.append(f"forbidden write/force operation in {relative}: {pattern.pattern}")
+                violations.append(f"forbidden workflow content in {relative}: {pattern.pattern}")
 
     return sorted(set(violations))
 
@@ -61,7 +62,7 @@ def main() -> int:
         for violation in violations:
             print(f"- {violation}")
         return 1
-    print("Repository hygiene check passed: no remediation transport or force-push workflow found.")
+    print("Repository hygiene check passed: no remediation transport, force-push workflow, or archived-branch workflow reference found.")
     return 0
 
 

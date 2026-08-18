@@ -33,7 +33,7 @@
 - Provider 支持范围：[`docs/provider-support-matrix.md`](docs/provider-support-matrix.md)（由 Registry 生成）和 [`docs/provider-capabilities.md`](docs/provider-capabilities.md)。
 - 策略协议：[`docs/strategy-protocol.md`](docs/strategy-protocol.md) 和 [`docs/strategy-protocol-boundary.md`](docs/strategy-protocol-boundary.md)。
 - 安全边界：[`docs/live-trading-disabled.md`](docs/live-trading-disabled.md)、[`docs/secrets.md`](docs/secrets.md) 和 [`docs/unsupported-providers.md`](docs/unsupported-providers.md)。
-- 运维与治理：[`docs/quality-gates.md`](docs/quality-gates.md)、[`docs/supply-chain.md`](docs/supply-chain.md) 和 [`docs/messaging-channels.md`](docs/messaging-channels.md)。
+- 运维与治理：[`docs/branch-governance.md`](docs/branch-governance.md)、[`docs/quality-gates.md`](docs/quality-gates.md)、[`docs/supply-chain.md`](docs/supply-chain.md) 和 [`docs/messaging-channels.md`](docs/messaging-channels.md)。
 - 图表库维护：[`charting_library_patches/README.md`](charting_library_patches/README.md) 和 [`FOOTPRINT_RENDERING_PLAN.md`](FOOTPRINT_RENDERING_PLAN.md)。
 
 `archive/` 和 `audit/` 保存迁移、研究和审计证据，不是当前安装、API 或能力说明。

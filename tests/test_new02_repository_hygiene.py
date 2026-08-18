@@ -37,3 +37,16 @@ def test_read_only_hygiene_workflow_is_allowed(tmp_path):
         encoding="utf-8",
     )
     assert find_violations(tmp_path) == []
+
+
+def test_hygiene_check_rejects_archived_master_workflow_reference(tmp_path):
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "tests.yml").write_text(
+        "on:\n  push:\n    branches: [main, master]\n",
+        encoding="utf-8",
+    )
+
+    violations = find_violations(tmp_path)
+
+    assert any("master" in violation for violation in violations)

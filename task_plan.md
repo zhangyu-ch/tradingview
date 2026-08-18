@@ -280,3 +280,11 @@
 | LO-03 顶层最小 config 测试桩污染后续 ME-10 测试，导致真实生成配置未被导入 | 1 | 删除顶层测试桩；将 exchange 配置导入改为 `get_exchange()` 调用时惰性加载，使纯 facade/package 导入无配置副作用 |
 | LO-03 相邻测试仍受 config 污染：不是顶层导入，而是 SQLite helper 在测试结束后保留临时模块 | 1 | helper 改用 pytest monkeypatch 事务化替换/恢复 `config/db/fun` 和 package 属性，确保测试隔离 |
 | LO-03 恢复稳定 config 绑定的脚本先检测到函数内旧 import，随后删除旧 import，导致未补顶层绑定并产生 NameError | 1 | 改为删除后单独断言顶层 import 存在；编译并执行 CR-05/ME-10/MX-02 工厂测试 |
+
+## 阶段 11：`master` 归档基线治理
+- [x] 在 GitHub 锁定 `master`，禁止任何写入和 PR 合并。
+- [x] 将现行 CI 触发范围收敛为 `main`，消除活动配置中的 `master` 引用。
+- [x] 停用遗留 remediation Actions 工作流，避免历史分支重新触发写权限自动化。
+- [x] 在仓库文档中声明 `master` 仅用于审计，不作为开发、发布或合并目标。
+- [x] 复核远端保护、工作流状态及仓库内分支引用。
+- **状态：** complete

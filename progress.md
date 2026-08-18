@@ -920,3 +920,16 @@
 - 规划阶段全部 complete；最后一次 amend 仅封闭本段交付状态，不改变产品代码。
 - 最终规划检查首次误用 Python 执行 shell 脚本，只产生 SyntaxError，未修改仓库；已改用 `sh` 执行正确检查。
 - 最终固定点脚本首次按无粗体字面量查找报告计数而失败；报告实际结构正确，改用正则解析 `已完成=81`、`待处理=0` 后重验。
+
+## 会话：2026-08-18 `master` 归档基线治理
+- **状态：** in_progress
+- 确认远端默认分支为 `main`，本地工作树干净并与 `origin/main` 同步。
+- 确认 `main`/`master` 无共同祖先；`master` 当前未受 GitHub 分支保护。
+- 确认没有以 `master` 为目标的开放 PR，且无 tag 包含其当前顶点。
+- 定位到两份现行 CI 工作流仍监听 `master`；GitHub 还保留多条历史 remediation/export Actions 工作流记录，待收敛和停用。
+- 工具限制：当前 shell 未安装 `apply_patch`；后续改用受控 Edit 工具执行最小文件修改。
+- 远端锁分支首轮调用使用 `gh api -f`，布尔值和 `null` 被序列化为字符串，GitHub 以 HTTP 422 拒绝，未改变远端状态；改用原生 JSON 请求体。
+- 原生 JSON 请求成功启用 `master` 保护：`lock_branch=true`、`enforce_admins=true`、禁止强制推送和删除。
+- 已手动停用 16 条历史 remediation/export Actions 工作流；只保留 `Tests`、`Repository hygiene` 和 GitHub `Dependency Graph`。
+- 最终复核：无以 `master` 为目标的开放 PR，现行 `.github` 无该分支引用，`core.whitespace=cr-at-eol` 的 diff 检查通过，23 项相关 pytest 通过，仓库卫生和质量门禁通过。
+- 阶段 11 完成，待提交并推送现行工作流、门禁和文档变更。
