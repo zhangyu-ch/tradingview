@@ -88,9 +88,8 @@ uv run --locked python web/tradingview_zy_chart/scheduler.py
 
 ### 兼容配置说明
 
-`config.py.demo` 的默认 `DATA_PATH = ".chanlun_pro"` 和
-`DB_DATABASE = "chanlun_klines"` 为兼容已有数据目录和数据库而保留；这些名称不代表
-当前运行路径仍包含 Chanlun。模板中的 AI 配置字段同样只作为旧私有配置和 Secret
+`config.py.demo` 的默认 `DATA_PATH = ".quant_zy"` 和
+`DB_DATABASE = "chanlun_klines"`；若从历史环境迁移，可将旧数据目录 `.chanlun_pro` 重命名为 `.quant_zy`。模板中的 AI 配置字段同样只作为旧私有配置和 Secret
 inventory 的兼容残留，当前 Web 和工具链不提供 AI 分析入口。
 
 Web worker 不再启动 APScheduler。多个 Web worker 可以共享同一数据库；监控任务只由
