@@ -59,9 +59,6 @@ var TvIdxHDLY = (function () {
           format: {},
         },
         constructor: function () {
-          this.init = function (context, inputCallback) {
-            this.prev_big_money = NaN;
-          };
           this.main = function (context, inputCallback) {
             this._context = context;
             this._input = inputCallback;
@@ -110,6 +107,8 @@ var TvIdxHDLY = (function () {
             const big_money = this._context.new_var(
               PineJS.Std.ema(if_money, 3, this._context) / 618
             );
+            // 无条件读取历史，初始化阶段也需要登记一根K线的序列深度。
+            const prev_big_money = big_money.get(1);
             // STICKLINE(BIG_MONEY>-150,0,BIG_MONEY*2,1,0),COLORRED;
             let red_value = NaN;
             let green_value = NaN;
@@ -124,14 +123,12 @@ var TvIdxHDLY = (function () {
                 return [NaN, NaN];
               }
 
-              if (big_money.get(0) > this.prev_big_money) {
+              if (big_money.get(0) > prev_big_money) {
                 red_value = big_money.get(0) * 2;
-              } else if (big_money.get(0) < this.prev_big_money) {
+              } else if (big_money.get(0) < prev_big_money) {
                 green_value = big_money.get(0) * 2;
               }
             }
-            // 更新前一个周期的big_money
-            this.prev_big_money = big_money.get(0);
             return [red_value, green_value];
           };
         },

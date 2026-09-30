@@ -20,8 +20,8 @@ market-data, broker-trading, messaging, or AI. The AI entries remain in the inve
 legacy private configuration reference-only while that residue is removed; the current Web and tool
 runtime does not expose AI analysis. Configuration references use external rotation ownership: the
 operator changes the environment/file/keyring value and revokes the prior provider credential.
-The Feishu Web App Secret is the managed exception: each update creates a new versioned private
-file, commits only its reference, and retires the superseded local version after the database write.
+The Feishu Web settings and notification channel have been retired. No active Web setting writes
+managed message credentials; the generic managed store remains available for other secret references.
 `check_secret_references.py` derives its field list from this inventory so a newly added credential
 cannot silently bypass classification.
 
@@ -38,10 +38,12 @@ Windows access-control guarantee. Use platform-managed secret injection or the o
 keyring, or have deployment automation apply and verify a restrictive DACL on `DATA_PATH/secrets`
 and every operator-managed secret file.
 
-The system settings page follows this process for Feishu App Secret. Existing historical
-`fs_app_secret` cache rows are migrated on first read and immediately rewritten without plaintext.
-Leaving the password field blank keeps the existing reference; submitting a value creates a new
-version. The page never receives either the old value or the reference path.
+Historical Feishu `fs_keys` cache rows and `DATA_PATH/secrets/feishu` files are left untouched,
+including any legacy plaintext cache values: retired code no longer reads or migrates them.
+After backing up and confirming they are unused, operators can remove these records/files and
+revoke the external credentials. Do not delete the whole secret directory; other configured
+`managed://` references may still use it. Restoration notes are in
+[`archive/feishu-notifications.md`](../archive/feishu-notifications.md).
 
 ## Deployment examples
 
@@ -70,9 +72,8 @@ and errors never include the reference's resolved value.
 ## Rotation and logging
 
 Changing an environment or file-backed secret requires replacing the external value and restarting
-or recreating the affected provider. Managed Feishu rotation is available through the settings
-page. Third-party revocation remains an operator responsibility: rotate or revoke the old key at
-the provider as part of the same change window.
+or recreating the affected provider. Third-party revocation remains an operator responsibility:
+rotate or revoke the old key at the provider as part of the same change window.
 
 Resolved values are registered with the central redactor. Public errors and message delivery logs
 remove exact registered values, bearer/basic authorization values, credential-bearing URL userinfo,

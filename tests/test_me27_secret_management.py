@@ -30,11 +30,6 @@ from tradingview_zy.secret_store import (  # noqa: E402
     resolve_config_secret,
     resolve_secret,
 )
-from tradingview_zy.settings_security import (  # noqa: E402
-    merge_feishu_settings,
-    migrate_feishu_settings,
-    retire_superseded_feishu_secret,
-)
 
 
 def test_environment_reference_resolves_and_plaintext_is_fail_closed(monkeypatch) -> None:
@@ -113,44 +108,6 @@ def test_config_resolver_requires_explicit_legacy_switch(monkeypatch) -> None:
     assert resolve_config_secret(settings, "API", required=True) == "resolved"
 
 
-def test_feishu_cache_migrates_and_rotation_never_returns_plaintext(tmp_path) -> None:
-    store = ManagedSecretStore(tmp_path)
-    migrated, changed = migrate_feishu_settings(
-        {
-            "fs_app_id": "app-id",
-            "fs_app_secret": "legacy-secret",
-            "fs_user_id": "user-id",
-        },
-        store=store,
-    )
-    assert changed is True
-    assert "fs_app_secret" not in migrated
-    assert store.read(migrated["fs_app_secret_ref"]) == "legacy-secret"
-
-    preserved, old = merge_feishu_settings(
-        migrated,
-        app_id="app-id-2",
-        app_secret="",
-        user_id="user-id-2",
-        store=store,
-    )
-    assert preserved["fs_app_secret_ref"] == migrated["fs_app_secret_ref"]
-    assert old is None
-
-    rotated, old = merge_feishu_settings(
-        migrated,
-        app_id="app-id-2",
-        app_secret="new-secret",
-        user_id="user-id-2",
-        store=store,
-    )
-    assert old == migrated["fs_app_secret_ref"]
-    assert store.read(rotated["fs_app_secret_ref"]) == "new-secret"
-    assert "new-secret" not in repr(rotated)
-    retire_superseded_feishu_secret(store, old)
-    assert store.exists(old) is False
-
-
 def test_central_redactor_removes_registered_and_structured_credentials(monkeypatch) -> None:
     monkeypatch.setenv("ME27_LOG_SECRET", "registered-secret-value")
     resolve_secret("env://ME27_LOG_SECRET", required=True)
@@ -188,9 +145,7 @@ def test_secret_inventory_declares_classification_and_rotation_owner() -> None:
         policy.rotation is RotationMode.EXTERNAL
         for policy in CONFIG_SECRET_POLICIES.values()
     )
-    feishu = MANAGED_SECRET_POLICIES["feishu.web.app_secret"]
-    assert feishu.classification is SecretClass.MESSAGING
-    assert feishu.rotation is RotationMode.MANAGED_VERSIONED
+    assert "feishu.web.app_secret" not in MANAGED_SECRET_POLICIES
 
 
 def test_database_check_redacts_and_fails_cleanly_when_driver_import_fails(monkeypatch) -> None:

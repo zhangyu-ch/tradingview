@@ -4,7 +4,6 @@ import logging
 import baostock as bs
 import pandas as pd
 import pytz
-from tradingview_zy import fun
 from tradingview_zy.exchange.baostock_reliability import (
     BaostockQueryError,
     BaostockUnavailableError,
@@ -27,7 +26,6 @@ def market_date(tz) -> datetime.date:
     return datetime.datetime.now(tz).date()
 
 
-@fun.singleton
 class ExchangeBaostock(Exchange):
     """
     Baostock 行情接口服务，非实时

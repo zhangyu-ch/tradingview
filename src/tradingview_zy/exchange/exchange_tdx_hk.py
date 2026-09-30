@@ -1,6 +1,5 @@
 import datetime
 import time
-import traceback
 from typing import Dict, List, Union
 
 import akshare as ak
@@ -8,21 +7,28 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.exhq import TdxExHq_API
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from tradingview_zy import fun
 from tradingview_zy.base import Market
+from tradingview_zy.domain import InvalidRequestError, ProviderUnavailableError
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
+from tradingview_zy.exchange.tdx_cache import refresh_tdx_window, tdx_cache_key
 from tradingview_zy.file_db import FileCacheDB
-from tradingview_zy.exchange.tdx_reliability import TdxExHqLifecycleMixin
+from tradingview_zy.exchange.adjustment_reliability import fetch_adjustment_factors
+from tradingview_zy.exchange.tdx_reliability import (
+    TdxExHqLifecycleMixin,
+    call_with_bounded_retry,
+    remaining_request_seconds,
+    tdx_kline_connection,
+)
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.tools.tdx_node_selector import NodeSelectionError
 from tradingview_zy.trading_calendar import is_market_open
 
 
-@fun.singleton
 class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
     """
     通达信香港行情接口
@@ -106,11 +112,6 @@ class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
         market_info = self.market_maps[code_infos[0]]
         return market_info["market"], code_infos[1]
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_random(min=1, max=5),
-        retry=retry_if_result(lambda _r: _r is None),
-    )
     def klines(
         self,
         code: str,
@@ -118,16 +119,18 @@ class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame:
         """
         通达信，不支持按照时间查找
         """
-        if args is None:
-            args = {}
-        if "pages" not in args.keys():
-            args["pages"] = 8
-        else:
-            args["pages"] = int(args["pages"])
+        deadline = time.monotonic() + 12.0
+        args = dict(args or {})
+        try:
+            args["pages"] = int(args.get("pages", 8))
+        except (TypeError, ValueError) as error:
+            raise InvalidRequestError("TDX pages 必须是正整数") from error
+        if args["pages"] < 1:
+            raise InvalidRequestError("TDX pages 必须是正整数")
 
         frequency_map = {
             "y": 11,
@@ -141,85 +144,75 @@ class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
             "5m": 0,
             "1m": 8,
         }
-        market, tdx_code = self.to_tdx_code(code)
-        if market is None or start_date is not None or end_date is not None:
-            print("不支持的调用参数")
-            return None
-
-        # _time_s = time.time()
+        if frequency not in frequency_map:
+            raise InvalidRequestError(f"TDX 不支持周期 {frequency!r}")
+        if start_date is not None or end_date is not None:
+            raise InvalidRequestError("TDX 不支持按起止时间查询")
+        if not isinstance(code, str) or not code.strip():
+            raise InvalidRequestError("TDX 代码不能为空")
+        if "." not in code or not all(code.split(".", 1)):
+            raise InvalidRequestError("TDX 代码应为 市场.合约")
         try:
+            market, tdx_code = self.to_tdx_code(code)
+        except KeyError:
+            return pd.DataFrame([])
+        if market is None:
+            return pd.DataFrame([])
+
+        cache_key = tdx_cache_key(Market.HK.value, code, frequency)
+
+        def fetch_klines(remaining_seconds):
             client = self._new_tdx_client()
-            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                klines_df: pd.DataFrame = self.fdb.get_tdx_klines(
-                    Market.HK.value, code, frequency
+            with tdx_kline_connection(client, self.connect_info, remaining_seconds):
+                cached = self.fdb.get_tdx_klines(
+                    Market.HK.value, cache_key, frequency
                 )
-                if klines_df is None:
-                    # 获取 8*700 = 5600 条数据
-                    klines_df = pd.concat(
-                        [
-                            client.to_df(
-                                client.get_instrument_bars(
-                                    frequency_map[frequency],
-                                    market,
-                                    tdx_code,
-                                    (i - 1) * 700,
-                                    700,
-                                )
-                            )
-                            for i in range(1, args["pages"] + 1)
-                        ],
-                        axis=0,
-                        sort=False,
-                    )
-                    klines_df.loc[:, "date"] = pd.to_datetime(klines_df["datetime"])
-                    klines_df.sort_values("date", inplace=True)
-                else:
-                    for i in range(1, args["pages"] + 1):
-                        # print(f'{code} 使用缓存，更新获取第 {i} 页')
-                        _ks = client.to_df(
-                            client.get_instrument_bars(
-                                frequency_map[frequency],
-                                market,
-                                tdx_code,
-                                (i - 1) * 700,
-                                700,
-                            )
+
+                def normalize_page(page):
+                    page["date"] = pd.to_datetime(page["datetime"])
+                    return page
+
+                return refresh_tdx_window(
+                    cached,
+                    lambda page_index: client.to_df(
+                        client.get_instrument_bars(
+                            frequency_map[frequency], market, tdx_code,
+                            page_index * 700, 700,
                         )
-                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
-                        _ks.sort_values("date", inplace=True)
-                        new_start_dt = _ks.iloc[0]["date"]
-                        old_end_dt = klines_df.iloc[-1]["date"]
-                        klines_df = pd.concat([klines_df, _ks], ignore_index=True)
-                        # 如果请求的第一个时间大于缓存的最后一个时间，退出
-                        if old_end_dt >= new_start_dt:
-                            break
+                    ),
+                    normalize_page,
+                    args["pages"],
+                )
 
-            # 删除重复数据
-            klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
-                "date"
-            )
-            self.fdb.save_tdx_klines(Market.HK.value, code, frequency, klines_df)
-
-            klines_df.loc[:, "date"] = klines_df["date"].dt.tz_localize(self.tz)
-            klines_df = klines_df.sort_values("date")
-            klines_df.loc[:, "code"] = code
-            klines_df.loc[:, "volume"] = klines_df["amount"]
-
-            klines_df = klines_df[
-                ["code", "date", "open", "close", "high", "low", "volume"]
-            ]
-            klines_df = self.klines_qfq(code, klines_df)
+        klines_df = call_with_bounded_retry(
+            fetch_klines,
+            recover=lambda: self.reset_tdx_ip(
+                deadline_seconds=min(3.0, remaining_request_seconds(deadline)),
+            ),
+            retry_on=(TdxConnectionError, OSError, NodeSelectionError),
+            max_attempts=3,
+            deadline_seconds=remaining_request_seconds(deadline),
+            description="exchange_tdx_hk klines",
+        )
+        if klines_df.empty:
             return klines_df
-        except TdxConnectionError:
-            print("连接失败，重新选择最优服务器")
-            self.reset_tdx_ip()
 
-        except Exception as e:
-            print(f"获取行情异常 {code} Exception ：{str(e)}")
-        finally:
-            pass
-            # print(f'请求行情用时：{time.time() - _s_time}')
-        return None
+        # 删除重复数据
+        klines_df = klines_df.drop_duplicates(["date"], keep="last").sort_values(
+            "date"
+        )
+        self.fdb.save_tdx_klines(Market.HK.value, cache_key, frequency, klines_df)
+
+        klines_df.loc[:, "date"] = klines_df["date"].dt.tz_localize(self.tz)
+        klines_df = klines_df.sort_values("date")
+        klines_df.loc[:, "code"] = code
+        klines_df.loc[:, "volume"] = klines_df["amount"]
+
+        klines_df = klines_df[
+            ["code", "date", "open", "close", "high", "low", "volume"]
+        ]
+        klines_df = self.klines_qfq(code, klines_df, deadline=deadline)
+        return klines_df
 
     def stock_info(self, code: str) -> Union[Dict, None]:
         """
@@ -274,7 +267,9 @@ class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
         """Return a strict instrument-aware state from the shared calendar."""
         return is_market_open('hk', code=code, at=at)
 
-    def klines_qfq(self, code: str, klines: pd.DataFrame):
+    def klines_qfq(self, code: str, klines: pd.DataFrame, *, deadline=None):
+        if deadline is None:
+            deadline = time.monotonic() + 12.0
         try:
             xdxr_path = get_data_path() / "xdxr"
             if xdxr_path.is_dir() is False:
@@ -288,8 +283,9 @@ class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
             )
                 != now_day
             ):
-                qfq_factor_df = ak.stock_hk_daily(
-                    symbol=code.split(".")[1], adjust="qfq-factor"
+                qfq_factor_df = fetch_adjustment_factors(
+                    ak.stock_hk_daily, deadline=deadline, provider="tdx_hk",
+                    symbol=code.split(".")[1], adjust="qfq-factor",
                 )
                 if qfq_factor_df is not None and len(qfq_factor_df) > 0:
                     qfq_factor_df.to_csv(xdxr_file, index=False)
@@ -318,6 +314,8 @@ class ExchangeTDXHK(TdxExHqLifecycleMixin, Exchange):
             df["low"] = df["low"] * df["qfq_factor"]
             df["close"] = df["close"] * df["qfq_factor"]
             return df[["code", "date", "open", "high", "low", "close", "volume"]]
+        except ProviderUnavailableError:
+            raise
         except Exception as e:
             print(f"计算 {code} 复权异常： {e}")
             return klines

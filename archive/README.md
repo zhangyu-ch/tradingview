@@ -5,6 +5,8 @@ imported, packaged, tested as supported runtime modules, or included in the prov
 matrix.
 
 - `chanlun-runtime-source.zip` preserves the removed Chanlun calculation runtime.
+- `feishu-notifications-legacy.zip` preserves the retired Feishu notification source, tests,
+  and dependency snapshot. See [restoration notes](feishu-notifications.md); it contains no user secrets.
 - `docs/` preserves historical Chanlun documentation.
 - `joinquant-legacy.zip` preserves the former top-level JoinQuant notebooks and helper module.
   That code imports the proprietary `jqdata` environment and the removed `cl` package; it is

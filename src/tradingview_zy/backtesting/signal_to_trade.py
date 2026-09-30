@@ -94,7 +94,7 @@ class SignalToTrade(BackTestTrader):
                 kline = self.cache_klines[code][
                     self.cache_klines[code]["date"] < self.now_datetime
                 ]
-            elif self.market in ["currency", "futures"]:
+            elif self.market in ["currency", "currency_spot", "futures"]:
                 end_date = self.now_datetime
                 kline = self.cache_klines[code][
                     self.cache_klines[code]["date"] < end_date
@@ -124,11 +124,13 @@ class SignalToTrade(BackTestTrader):
         BT = BackTest()
         BT.save_file = bt_file
         BT.load(BT.save_file)
+        BT._require_time_version()
 
         BT.mode = "trade"
 
         # 设置交易数据
         self.market = BT.market
+        self.crypto_time_version = BT.crypto_time_version
         self.fee_rate = BT.fee_rate
         self.max_pos = BT.max_pos
         self.frequencys = BT.frequencys

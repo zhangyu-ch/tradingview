@@ -36,7 +36,7 @@ def task_config_query(task_name, return_obj=True):
         return task_config
 
     # 检查并设置默认值
-    keys = ["is_run", "is_send_msg"]
+    keys = ["is_run"]
     for key in keys:
         if (
             key in task_config

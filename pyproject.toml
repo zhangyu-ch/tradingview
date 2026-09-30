@@ -20,7 +20,6 @@ dependencies = [
     "gevent>=25.5.1",
     "ib-insync>=0.9.86",
     "ipywidgets>=8.1.7",
-    "lark-oapi>=1.4.17",
     "websockets>=13.1,<14",
     "matplotlib>=3.10.3",
     "mytt>=2.9.3",

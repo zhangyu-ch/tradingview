@@ -141,7 +141,7 @@ def test_shared_exhq_lifecycle_replaces_invalid_cache_and_filters_markets() -> N
         ("tdxex_connect_ip", {"ip": "node-1", "port": 7727}, 9_999)
     ]
     assert kwargs_seen == [
-        {"raise_exception": True, "auto_retry": True, "multithread": True}
+        {"raise_exception": True, "auto_retry": False, "multithread": True}
     ]
     assert connect_calls[0][0:2] == ("node-1", 7727)
     assert 0.1 <= connect_calls[0][2] <= 4.0

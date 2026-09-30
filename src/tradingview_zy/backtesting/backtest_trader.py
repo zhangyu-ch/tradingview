@@ -3,6 +3,7 @@ import datetime
 import time
 from typing import Dict, List, Tuple
 
+from tradingview_zy.crypto_time import CRYPTO_TIME_VERSION, artifact_path, as_utc, is_crypto, require_current_version
 from tradingview_zy.backtesting import futures_contracts
 from tradingview_zy.backtesting.base import POSITION, MarketDatas, Operation, Strategy, Trader
 
@@ -44,6 +45,7 @@ class BackTestTrader(Trader):
         self.name = name
         self.mode = mode
         self.market = market
+        self.crypto_time_version = CRYPTO_TIME_VERSION if is_crypto(market) else None
 
         self.can_close_today: bool = False  # 是否可以平今
         self.can_short: bool = False  # 是否可以做空
@@ -272,10 +274,12 @@ class BackTestTrader(Trader):
         """
         将对象数据保存到安全、不可执行的状态缓存中
         """
+        require_current_version(self.market, getattr(self, "crypto_time_version", None))
         save_infos = {
             "name": self.name,
             "mode": self.mode,
             "market": self.market,
+            "crypto_time_version": CRYPTO_TIME_VERSION if is_crypto(self.market) else None,
             "can_close_today": self.can_close_today,
             "can_short": self.can_short,
             "allow_mmds": self.allow_mmds,
@@ -298,7 +302,7 @@ class BackTestTrader(Trader):
         if key is not None:
             from tradingview_zy.file_db import fdb
 
-            fdb.cache_pkl_to_file(key, save_infos)
+            fdb.cache_pkl_to_file(artifact_path(key) if is_crypto(self.market) else key, save_infos)
         return save_infos
 
     def load_from_pkl(self, key: str, save_infos: dict = None):
@@ -308,9 +312,11 @@ class BackTestTrader(Trader):
         if save_infos is None:
             from tradingview_zy.file_db import fdb
 
-            save_infos = fdb.cache_pkl_from_file(key)
+            save_infos = fdb.cache_pkl_from_file(artifact_path(key) if is_crypto(self.market) else key)
             if save_infos is None:
                 return False
+        require_current_version(save_infos.get("market"), save_infos.get("crypto_time_version"))
+        self.crypto_time_version = save_infos.get("crypto_time_version")
         self.name = save_infos["name"]
         self.mode = save_infos["mode"]
         self.market = save_infos["market"] if "market" in save_infos.keys() else None
@@ -373,8 +379,8 @@ class BackTestTrader(Trader):
         """
         if self.mode in ["signal", "trade"]:
             # 回测时用回测的当前时间
-            return self.datas.now_date
-        return datetime.datetime.now()
+            return as_utc(self.datas.now_date) if is_crypto(self.market) else self.datas.now_date
+        return datetime.datetime.now(datetime.timezone.utc) if is_crypto(self.market) else datetime.datetime.now()
 
     def get_opt_close_uids(
         self, code: str, signal: str, allow_close_uids: list, pos_type: str = None
@@ -413,7 +419,7 @@ class BackTestTrader(Trader):
         # 如果设置开始执行时间，并且当前时间小于等于设置的时间，则不执行策略
         if (
             self.begin_run_dt is not None
-            and self.begin_run_dt >= self.get_now_datetime()
+            and (as_utc(self.begin_run_dt) if is_crypto(self.market) else self.begin_run_dt) >= self.get_now_datetime()
         ):
             return True
 
@@ -602,14 +608,14 @@ class BackTestTrader(Trader):
                 high_profit_rate = round(
                     (pos.price - price_info["low"])
                     / pos.price
-                    / contract_info["margin_rate_long"]
+                    / contract_info["margin_rate_short"]
                     * 100,
                     4,
                 )
                 low_profit_rate = round(
                     (pos.price - price_info["high"])
                     / pos.price
-                    / contract_info["margin_rate_long"]
+                    / contract_info["margin_rate_short"]
                     * 100,
                     4,
                 )

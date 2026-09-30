@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 from polygon.rest import RESTClient
 
-from tradingview_zy import config, fun
+from tradingview_zy import config
 from tradingview_zy.data_contracts import ProviderBarPayload
 from tradingview_zy.domain import InvalidRequestError, UnsupportedCapabilityError
 from tradingview_zy.exchange.exchange import Exchange, Tick
@@ -20,7 +20,6 @@ from tradingview_zy.trading_calendar import is_market_open
 LOGGER = logging.getLogger(__name__)
 
 
-@fun.singleton
 class ExchangePolygon(Exchange):
     """US equity market-data adapter backed by Polygon."""
 

@@ -8,6 +8,7 @@ import pytz
 from tqdm.auto import tqdm
 
 from tradingview_zy.backtesting.base import MarketDatas
+from tradingview_zy.crypto_time import CryptoTimezoneError, as_utc, is_crypto
 
 
 def _datetime_to_str(_dt: datetime.datetime, _format="%Y-%m-%d %H:%M:%S"):
@@ -41,6 +42,10 @@ class BackTestKlines(MarketDatas):
             self.tz = pytz.timezone("US/Eastern")
 
         self.market = market
+        if is_crypto(market):
+            self.tz = pytz.UTC
+            start_date = as_utc(start_date)
+            end_date = as_utc(end_date)
         self.base_code = None
         self.frequencys = frequencys
         self.data_config = data_config or {}
@@ -184,6 +189,7 @@ class BackTestKlines(MarketDatas):
                 key = "%s-%s" % (code, _f)
                 if self.market in [
                     "currency",
+                    "currency_spot",
                     "futures",
                     "us",
                 ]:  # 后对其的，不能包含当前日期
@@ -207,6 +213,8 @@ class BackTestKlines(MarketDatas):
                     end_date=_datetime_to_str(self.now_date),
                     args={"limit": 10000},
                 )
+                if is_crypto(self.market):
+                    klines[_f] = klines[_f][klines[_f]["date"] < self.now_date]
                 if self.del_volume_zero and len(klines[_f]) > 0:
                     klines[_f] = klines[_f][klines[_f]["volume"] != 0]
                 klines[_f].sort_values("date", inplace=True)
@@ -240,6 +248,32 @@ class BackTestKlines(MarketDatas):
         for i in range(len(self.frequencys), 1, -1):
             min_f = self.frequencys[i - 1]
             max_f = self.frequencys[i - 2]
+            if is_crypto(self.market):
+                period = pd.Timedelta({"d": "1d", "w": "7d"}.get(max_f, max_f))
+                lower_period = pd.Timedelta({"d": "1d", "w": "7d"}.get(min_f, min_f))
+                # 120 minute bars cannot reconstruct a 3h/day bucket. Include at
+                # least a whole target bucket, while bounding repeated work.
+                source = klines[min_f].iloc[-max(120, int(period / lower_period) + 1):]
+                rebuilt = self.ex.convert_kline_frequency(source, max_f)
+                if rebuilt is None:
+                    raise CryptoTimezoneError(f"无法重合成 {code} {max_f}，请提供受支持的基础周期")
+                if len(rebuilt) and source.iloc[0]["date"] > rebuilt.iloc[0]["date"]:
+                    rebuilt = rebuilt.iloc[1:]  # incomplete beginning of the source window
+                existing = klines[max_f]
+                complete = existing[existing["date"] + period <= self.now_date]
+                incomplete = existing[existing["date"] + period > self.now_date]
+                if len(incomplete) and not incomplete["date"].isin(rebuilt["date"]).all():
+                    raise CryptoTimezoneError(
+                        f"{code} {max_f} 基础历史不足，不能复用含未来数据的完整高周期K线；"
+                        f"请补齐 {min_f} 桶起点以来数据或添加中间周期"
+                    )
+                klines[max_f] = (
+                    pd.concat([complete, rebuilt], ignore_index=True)
+                    .drop_duplicates(subset=["date"], keep="last")
+                    .sort_values("date")
+                    .reset_index(drop=True)
+                )
+                continue
             new_kline = self.ex.convert_kline_frequency(klines[min_f][-120::], max_f)
             if new_kline is None:
                 continue
@@ -356,7 +390,7 @@ class BackTestKlines(MarketDatas):
             if _freq == frequency:
                 return (
                     start_date
-                    - datetime.timedelta(days=market_days_freq_maps[self.market][_freq])
+                    - datetime.timedelta(days=market_days_freq_maps["currency" if is_crypto(self.market) else self.market][_freq])
                 ).strftime(self.time_fmt)
         raise Exception(f"不支持的周期 {frequency}")
 

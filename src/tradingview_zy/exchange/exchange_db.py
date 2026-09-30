@@ -6,6 +6,7 @@ import pandas as pd
 from tradingview_zy import fun
 from tradingview_zy.base import Market
 from tradingview_zy.db import db
+from tradingview_zy.crypto_time import as_utc, is_crypto
 from tradingview_zy.web_payloads import market_timezone
 from tradingview_zy.exchange.exchange import (
     Exchange,
@@ -196,9 +197,9 @@ class ExchangeDB(Exchange):
         if start_date is not None and end_date is not None and "limit" not in args:
             limit = None
         if start_date is not None:
-            start_date = fun.str_to_datetime(start_date, tz=self.tz)
+            start_date = as_utc(start_date) if is_crypto(self.market) else fun.str_to_datetime(start_date, tz=self.tz)
         if end_date is not None:
-            end_date = fun.str_to_datetime(end_date, tz=self.tz)
+            end_date = as_utc(end_date) if is_crypto(self.market) else fun.str_to_datetime(end_date, tz=self.tz)
         klines = db.klines_query(
             self.market, code, frequency, start_date, end_date, limit, order
         )
@@ -224,9 +225,12 @@ class ExchangeDB(Exchange):
 
         kline_pd = pd.DataFrame(kline_pd)
         kline_pd["code"] = code
-        kline_pd["date"] = pd.to_datetime(kline_pd["date"]).dt.tz_localize(
-            self.tz, ambiguous=True
-        )  # .map(lambda d: d.to_pydatetime())
+        if is_crypto(self.market):
+            kline_pd["date"] = pd.to_datetime(kline_pd["date"], utc=True)
+        else:
+            kline_pd["date"] = pd.to_datetime(kline_pd["date"]).dt.tz_localize(
+                self.tz, ambiguous=True
+            )
         kline_pd["date"] = kline_pd["date"].apply(self.__convert_date)
         kline_pd.sort_values(by="date", inplace=True)
         kline_pd = kline_pd.reset_index(drop=True)

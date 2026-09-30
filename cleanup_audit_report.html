@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tradingview_zy 冗余代码与无效测试审计（2026-09-26）</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --card:#fff; --ink:#1f1f1d; --muted:#6b6a65; --line:#e4e2dc;
+    --red:#b42318; --red-bg:#fdecea; --amber:#9a5b00; --amber-bg:#fdf3e1;
+    --green:#1d6b3a; --green-bg:#e7f4ec; --blue:#1d4f91; --blue-bg:#e8f0fb;
+    --violet:#5b3a99; --violet-bg:#f0eafa; --gray-bg:#efeee9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.65 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  header{padding:36px 48px 20px;border-bottom:1px solid var(--line);background:var(--card)}
+  header h1{margin:0 0 6px;font-size:24px;letter-spacing:.2px}
+  header p{margin:0;color:var(--muted)}
+  nav{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:8px 48px;display:flex;flex-wrap:wrap;gap:6px 18px}
+  nav a{color:var(--blue);text-decoration:none;font-size:13px}
+  nav a:hover{text-decoration:underline}
+  main{max-width:1320px;margin:0 auto;padding:24px 48px 80px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 26px;margin:0 0 22px}
+  h2{margin:0 0 4px;font-size:19px}
+  h2 + .sub{color:var(--muted);margin:0 0 14px}
+  h3{font-size:15px;margin:22px 0 8px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0 4px}
+  th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+  th{background:#faf9f6;font-weight:600;white-space:nowrap;position:sticky;top:37px}
+  tr:hover td{background:#fcfbf8}
+  code{font:12px/1.4 Consolas,"Cascadia Mono",monospace;background:var(--gray-bg);padding:1px 4px;border-radius:4px;word-break:break-all}
+  .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .tag{display:inline-block;font-size:12px;padding:0 7px;border-radius:10px;white-space:nowrap;font-weight:600}
+  .del{color:var(--red);background:var(--red-bg)}
+  .ref{color:var(--blue);background:var(--blue-bg)}
+  .keep{color:var(--green);background:var(--green-bg)}
+  .dec{color:var(--violet);background:var(--violet-bg)}
+  .bug{color:#fff;background:var(--red)}
+  .arc{color:var(--amber);background:var(--amber-bg)}
+  .hi{color:var(--red)} .md{color:var(--amber)} .lo{color:var(--green)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:10px 0 6px}
+  .kpi{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:#fcfbf8}
+  .kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+  .kpi span{color:var(--muted);font-size:12px}
+  .note{border-left:3px solid var(--amber);background:var(--amber-bg);padding:8px 12px;border-radius:0 6px 6px 0;margin:10px 0}
+  .note.red{border-color:var(--red);background:var(--red-bg)}
+  .note.blue{border-color:var(--blue);background:var(--blue-bg)}
+  ol.steps li{margin:6px 0}
+  details{margin:8px 0}
+  summary{cursor:pointer;color:var(--blue);font-weight:600}
+  .legend span{margin-right:10px}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>tradingview_zy：过度编程、冗余代码与无效测试审计</h1>
+  <p>2026-09-26 · 基线提交 <code>7bece68</code>（main，工作区干净）· 只读审计，未修改任何代码 · 5 路并行子审计 + 主线程抽查复核</p>
+</header>
+<nav>
+  <a href="#overview">总览</a>
+  <a href="#bugs">P0 疑似 Bug</a>
+  <a href="#tests">测试整理</a>
+  <a href="#src">src 核心模块</a>
+  <a href="#exchange">exchange / 回测 / 策略</a>
+  <a href="#web">Web 前后端</a>
+  <a href="#scripts">治理脚本与仓库杂项</a>
+  <a href="#decisions">需你决策</a>
+  <a href="#roadmap">执行路线</a>
+</nav>
+<main>
+
+<!-- ================= 总览 ================= -->
+<section id="overview">
+  <h2>一、总览</h2>
+  <p class="sub">核心判断：项目经历 81 条"整改审计"后，积累了大量<b>为通过审计而写的代码与测试</b>：墓碑测试、源码字符串断言、检查 CI 的 CI、为零实现准备的能力框架。同时迁移留下了<b>整块没有生产调用方的子系统</b>，主要是回测引擎、订单模型和飞书推送。</p>
+  <div class="kpis">
+    <div class="kpi"><b>~2,000–2,700</b><span>src 核心可删/合并行数（10,720 行中占 18–25%）</span></div>
+    <div class="kpi"><b>~2,500</b><span>exchange 可删/合并行数（不动回测）；回测整包归档再 +4,200</span></div>
+    <div class="kpi"><b>~8,000</b><span>Web 可减行数，其中 ~5,700 为零引用静态资源 +2MB 二进制</span></div>
+    <div class="kpi"><b>~1,400</b><span>remediation 治理脚本中可删行数（共 2,088 行）</span></div>
+    <div class="kpi"><b>~1,500+</b><span>可直接删除的"做样子"测试行数（约 26 个文件，测试共 14,296 行）</span></div>
+    <div class="kpi"><b>~24 MB</b><span>工作树垃圾：ta-lib wheel 12MB + notebook 输出 10MB + 过程文档 1.5MB</span></div>
+    <div class="kpi"><b>20+</b><span>顺带发现的疑似功能 Bug（见 P0）</span></div>
+  </div>
+  <p class="legend">图例：
+    <span class="tag del">删除</span><span class="tag ref">重构/合并</span><span class="tag arc">归档</span><span class="tag dec">需决策</span><span class="tag keep">保留</span><span class="tag bug">Bug</span>
+    ；置信度 <span class="hi">高</span>/<span class="md">中</span>/<span class="lo">低</span>，指"判断正确"的把握。</p>
+  <div class="note blue">行数为子审计估算值（由 grep/AST 统计引用得到），执行时以实际 diff 为准。"零引用"是在 <code>src/ web/ script/ tests/ notebook/ test_support/</code> 中按词边界检索后确认的；外部 cron/pm2 是否调用，仓库内无法判断。</div>
+</section>
+
+<!-- ================= P0 Bugs ================= -->
+<section id="bugs">
+  <h2>二、P0：审计中顺带发现的疑似 Bug（应先于清理处理）</h2>
+  <p class="sub">这些不属于冗余，但部分会在清理时被"顺手删掉"或掩盖，建议先确认。标 ✔ 的已由主线程读源码复核。</p>
+  <table>
+    <tr><th>#</th><th>位置</th><th>问题</th><th>影响</th><th>置信度</th></tr>
+    <tr><td>B1 ✔</td><td><code>src/tradingview_zy/trading_calendar.py:78</code> 起</td><td>假日表只覆盖 2026 年（<code>covered_years=(2026,)</code>），并且 fail-closed</td><td><b>2027-01-01 起</b>，A 股、港股、美股、国内期货、纽约期货的 <code>now_trading()</code> 全部返回 False，监控和同步会静默停摆。距今约 3 个月</td><td class="hi">高</td></tr>
+    <tr><td>B2 ✔</td><td><code>web/.../static/js/csrf.js:26-31, 57-61</code></td><td>jQuery <code>ajaxPrefilter</code> 设置一次 <code>X-CSRF-Token</code>，被补丁改写的 <code>XHR.send</code> 又设置一次；XHR 规范会把同名头合并为 <code>tok, tok</code>，服务端 <code>hmac.compare_digest</code> 整串比较会失败</td><td>所有 jQuery POST（<code>/set_stock_zixuan</code>、<code>/alert_save</code> 等）可能返回 403。<code>test_hi06</code> 只检查源码字符串，所以测不出来</td><td class="md">中高，需 DevTools 验证</td></tr>
+    <tr><td>B3</td><td><code>csrf.js</code> 整体</td><td>TradingView 图表库运行在 iframe 中，使用 iframe 自己的 <code>fetch</code>，父页面的补丁覆盖不到</td><td><code>/tv/*/charts</code>、<code>drawings</code> 的自动保存可能一直 403</td><td class="md">中</td></tr>
+    <tr><td>B4 ✔</td><td><code>src/.../utils.py:233</code></td><td>飞书推送 <code>send_fs_msg</code> 只在本文件的 <code>__main__</code> 里被调用，<code>alert_tasks</code> 从不读取 <code>is_send_msg</code></td><td>页面上的"是否发送消息"开关和飞书设置页都不起作用（见"需决策"D2）</td><td class="hi">高</td></tr>
+    <tr><td>B5 ✔</td><td><code>exchange/exchange_tdx_futures.py:162 vs :216</code></td><td>读取缓存用 key <code>code</code>，写入用 <code>f"v1_{code}"</code></td><td>缓存永远命中不了，每次都全量拉取 8 页</td><td class="hi">高</td></tr>
+    <tr><td>B6 ✔</td><td><code>backtesting/backtest.py:632</code></td><td><code>["a","us","hk" "futures"]</code> 缺逗号，实际拼成了 <code>"hkfutures"</code></td><td>港股和期货的年化天数按 365 计算，夏普等指标失真</td><td class="hi">高</td></tr>
+    <tr><td>B7 ✔</td><td><code>backtesting/backtest.py:579-608</code></td><td><code>return results</code> 缩进在 <code>except</code> 里面</td><td><code>run_optimization</code> 正常跑完时返回 None</td><td class="hi">高</td></tr>
+    <tr><td>B8</td><td><code>backtest.py:446-458</code>、<code>:317-320</code></td><td>try/except 结构错乱；<code>begin_start_dt</code> 的过滤结果赋给局部变量 <code>_dts</code> 后被丢弃</td><td>日志错位；该参数完全无效</td><td class="hi">高</td></tr>
+    <tr><td>B9</td><td><code>backtest_trader.py:605,612</code></td><td>期货<b>空头</b>的最大盈亏率用了 <code>margin_rate_long</code></td><td>空头统计失真</td><td class="hi">高</td></tr>
+    <tr><td>B10</td><td><code>backtesting/base.py:78-95</code></td><td><code>self.close_uid_profit</code> 在类里从未定义，只有测试手动塞了这个属性</td><td>按 uid 平仓统计会触发 AttributeError</td><td class="hi">高</td></tr>
+    <tr><td>B11</td><td><code>backtesting/futures_parameters.json</code></td><td>只有一个版本，<code>effective_from=2024-12-13</code></td><td>2024-12-13 之前的期货回测会直接抛错</td><td class="hi">高</td></tr>
+    <tr><td>B12</td><td><code>exchange/exchange.py</code> 中 <code>convert_currency_kline_frequency</code> 的 <code>"d"</code> 分支</td><td>过滤条件 <code>&gt;=08:00 | &lt;08:00</code> 恒为真</td><td>过滤无效</td><td class="hi">高</td></tr>
+    <tr><td>B13</td><td><code>static/js/bkgn.js:111-117</code></td><td>使用了未定义的 <code>table</code>，应为 <code>layui.table</code></td><td>点击时报 ReferenceError</td><td class="hi">高</td></tr>
+    <tr><td>B14</td><td><code>static/css/app.css:47</code></td><td><code>.ai-analyse-div table, tr, td, th</code> 实际是 4 个独立选择器（AI 功能的残留）</td><td>全站所有 tr/td/th 都被加上边框</td><td class="hi">高</td></tr>
+    <tr><td>B15</td><td><code>templates/dark.html:32-38</code></td><td>残留百度统计脚本 <code>hm.baidu.com/hm.js?572abd07…</code>（原上游作者的统计 ID）</td><td>每次访问都向第三方上报，<b>属于隐私问题</b></td><td class="hi">高</td></tr>
+    <tr><td>B16</td><td><code>db.py:81-88, 802-817</code></td><td><code>__table_args__</code> 被赋值两次，前一次的 <code>UniqueConstraint</code> 被覆盖</td><td>有复合主键兜底，暂无实际影响</td><td class="hi">高</td></tr>
+    <tr><td>B17</td><td><code>db.py:433-521</code></td><td><code>migrate_alert_event_storage</code> 和 <code>migrate_tv_storage_schema</code> 在<b>每次启动</b>时执行（包括全表 SELECT，以及 MySQL 上的 <code>ALTER ... MODIFY</code>）</td><td>启动变慢，并且反复执行 DDL</td><td class="hi">高</td></tr>
+    <tr><td>B18</td><td>6 个 TDX 适配器、binance、ib、tq 的 <code>klines</code></td><td><code>except Exception: print; return None</code> 外面再套 <code>@retry(retry_if_result(None))</code></td><td>参数错误也会被重试 3 次（每次随机等 1–5 秒）；真实异常被吞，上层的错误分类形同虚设</td><td class="hi">高</td></tr>
+    <tr><td>B19</td><td><code>@fun.singleton</code> 加上 <code>get_exchange</code> 缓存</td><td><code>reset_exchange_cache()</code> 会 close facade，但单例仍持有已关闭的实例</td><td>重置后拿到的是已关闭的对象</td><td class="md">中</td></tr>
+    <tr><td>B20</td><td>tv_indicators：cdbb / ama / macdbl / rsx / hdly</td><td>跨 bar 状态存在 JS 对象或数组里；PineJS 在实时 bar 上会反复调用 <code>main</code></td><td>实时 bar 的状态被重复累加；ama 的数组会无限增长</td><td class="md">中</td></tr>
+  </table>
+</section>
+
+<!-- ================= Tests ================= -->
+<section id="tests">
+  <h2>三、测试整理：哪些是"做样子"的测试</h2>
+  <p class="sub">tests/ 下有 92 个文件、14,296 行，其中 82 个按整改编号命名（cr/hi/me/mx/nx/lo/new/rv）。统计每个文件中"对源码/文档文本做 <code>in</code> / <code>not in</code> 断言"的比例：<b>12 个文件超过 60%</b>，<b>21 个文件</b>依赖 <code>test_support/web_routes.py</code> 的 AST 抽取机制。</p>
+
+  <div class="note red"><b>最能说明问题的例子：</b><code>test_hi06_csrf.py</code> 用 26% 的源码字符串断言"证明"CSRF 注入存在，却没能发现 B2（请求头被写两次）。<code>test_cr03:60</code> 更是反向断言死文件 <code>trader/online_market_datas.py</code> <b>必须存在</b>。这类测试不但不防回归，还会阻碍清理。</div>
+
+  <h3>3.1 墓碑测试：断言"某东西已被删除"（一次性整改，已无回归价值）</h3>
+  <table>
+    <tr><th>文件</th><th class="num">行</th><th>在测什么</th><th>处理</th><th>置信度</th></tr>
+    <tr><td><code>test_cr04_qmt_trader_removed.py</code></td><td class="num">31</td><td><code>trader_qmt_stock.py</code> 不存在；全树 grep 不到 <code>QMTTraderStock</code>；docs 里有指定英文句子</td><td><span class="tag del">删除</span></td><td class="hi">高</td></tr>
+    <tr><td><code>test_hi01_trader_futures_removed.py</code></td><td class="num">28</td><td><code>trader_futures.py</code> 不存在；grep 不到 <code>TraderFutures</code>；docs 字符串</td><td><span class="tag del">删除</span></td><td class="hi">高</td></tr>
+    <tr><td><code>test_mx01_dingding_removed.py</code></td><td class="num">29</td><td>grep 不到 <code>send_dd_msg</code>；<code>utils.py</code> 源码里包含 <code>"def send_fs_msg("</code>（而这个函数本身从未被调用，见 B4）</td><td><span class="tag del">删除</span></td><td class="hi">高</td></tr>
+    <tr><td><code>test_mx16_dead_code_removal.py</code></td><td class="num">38</td><td><code>ai.js</code>、<code>other_tasks.py</code> 不存在；全树 grep 不到 <code>OtherTasks</code></td><td><span class="tag del">删除</span></td><td class="hi">高</td></tr>
+    <tr><td><code>test_mx06_db_module_safe.py</code></td><td class="num">29</td><td><code>db.py</code> 没有 <code>__main__</code>；不含 <code>"测试标记2"</code>；源码里有 <code>"db: DB = DB()"</code> 字符串</td><td><span class="tag del">删除</span></td><td class="hi">高</td></tr>
+    <tr><td><code>test_nx09_removed_us_fee_stub.py</code></td><td class="num">51</td><td>AST 全树扫描确认没有 <code>fee_us</code>；只有 1 个用例测了 <code>fee_a</code> 的行为</td><td><span class="tag del">删除</span>（<code>fee_a</code> 本身是死代码，见 exchange #18）</td><td class="hi">高</td></tr>
+    <tr><td><code>test_cr05_ctp_removed.py</code> + <code>test_nx01_ctp_front_address_removed.py</code></td><td class="num">63+53</td><td>两个文件重复守护同一件事：CTP 已删除</td><td><span class="tag del">删除</span>。如果想保留"工厂拒绝未知 provider"，改成 1 个参数化行为测试（覆盖 ctp/zb/…）</td><td class="hi">高</td></tr>
+    <tr><td><code>test_mx02_zb_removed.py</code> + <code>test_nx25_zb_tls_removal.py</code></td><td class="num">69+69</td><td>两个文件重复守护 ZB 已删除；nx25 另有一条"禁止 <code>verify=False</code>"</td><td><span class="tag del">删除</span>；TLS 那条改用 ruff 的 <code>S501</code> 规则</td><td class="hi">高</td></tr>
+    <tr><td><code>test_no_runtime_chanlun_imports.py</code></td><td class="num">143</td><td>AST 扫描禁止导入已删除的缠论模块，外加 3 个测它自己扫描器的用例</td><td><span class="tag del">删除</span>（模块已经不存在，导入会直接 ImportError，测试兜不到更多）</td><td class="md">中高</td></tr>
+    <tr><td><code>lo07</code>/<code>lo05</code>/<code>lo08</code> 中的 <code>*_do_not_return</code>、<code>*_are_removed</code> 用例</td><td class="num">~90</td><td>断言旧 map、旧桩、许可证漂移"不回来"</td><td><span class="tag del">删除这些用例</span></td><td class="hi">高</td></tr>
+  </table>
+
+  <h3>3.2 文档契约测试与治理脚本复读测试</h3>
+  <table>
+    <tr><th>文件</th><th class="num">行</th><th>问题</th><th>处理</th><th>置信度</th></tr>
+    <tr><td><code>test_lo08_documentation_contract.py</code></td><td class="num">156</td><td>断言 README/docs 里包含特定句子；另有 1 个用例测 provider 矩阵是否由注册表生成</td><td><span class="tag del">删除</span>，只保留 <code>provider_support_matrix</code> 的 <code>--check</code> 那一条</td><td class="hi">高</td></tr>
+    <tr><td><code>test_remediation_report_counts.py</code></td><td class="num">54</td><td>测整改报告 md 里的计数是否正确</td><td><span class="tag del">删除</span>（随过程文档一起归档）</td><td class="hi">高</td></tr>
+    <tr><td><code>test_me29_quality_gates.py</code></td><td class="num">176</td><td>用字符串匹配检查 CI YAML 里的 job 名、<code>uv==0.10.0</code>、文档关键词（81% 为文本断言）</td><td><span class="tag del">删除</span>，只保留 <code>prepare_test_config</code> 的测试</td><td class="hi">高</td></tr>
+    <tr><td><code>test_lo06_readability_contract.py</code></td><td class="num">94</td><td>测试手写的 AST 版 ruff（F403/BLE001）</td><td><span class="tag del">删除</span>，改在 CI 里直接跑 <code>ruff check</code></td><td class="hi">高</td></tr>
+    <tr><td><code>test_new02_repository_hygiene.py</code></td><td class="num">52</td><td>禁止出现某次事故里的 patch 路径和 "master" 字样</td><td><span class="tag del">删除</span></td><td class="md">中高</td></tr>
+    <tr><td><code>test_new05_fifo_atomicity_guard.py</code></td><td class="num">49</td><td>守护的 <code>consume_fifo_lots</code> 在 src 里<b>根本不存在</b></td><td><span class="tag del">删除</span></td><td class="hi">高</td></tr>
+    <tr><td><code>test_me25_supply_chain.py</code></td><td class="num">193</td><td>写死 SBOM 组件数 155 和日期 <code>2026-08-04</code>；漏洞报告是占位 <code>not-run-offline</code></td><td><span class="tag del">删除</span>，只保留 pytdx 重打包 wheel 的 sha256 校验</td><td class="md">中</td></tr>
+    <tr><td><code>test_rv08_secret_exposure_guard.py</code></td><td class="num">41</td><td>和 CI 中 <code>check_secret_exposure.py</code> 重复</td><td><span class="tag ref">二选一</span>：保留测试，删掉 CI 步骤</td><td class="md">中</td></tr>
+    <tr><td><code>test_me27_secret_management.py</code>（部分）</td><td class="num">~80/217</td><td>断言 <code>SecretClass</code>、<code>RotationMode</code> 这类只为审计存在的分级声明</td><td><span class="tag ref">删除分级相关用例</span>，保留存储/轮换的行为用例</td><td class="hi">高</td></tr>
+    <tr><td><code>test_new06_db_capability_guard.py</code></td><td class="num">72</td><td>一半是文本断言，另有 1 个用例测 docs</td><td><span class="tag ref">精简</span>为 1 个"注册表不虚报能力"的行为用例</td><td class="md">中</td></tr>
+  </table>
+
+  <h3>3.3 源码形状测试：读 .py/.js/.html 文本做正则或 AST 断言</h3>
+  <p>这类测试把"代码长什么样"当作契约，任何重构都会打断它们，却测不出行为错误。建议<b>改写为行为测试</b>；无法改写的直接删除。</p>
+  <table>
+    <tr><th>文件</th><th class="num">行</th><th class="num">文本断言占比</th><th>处理</th></tr>
+    <tr><td><code>test_mx10_chart_display_contract.py</code></td><td class="num">63</td><td class="num">92%</td><td><span class="tag del">删除</span>，只保留 <code>node --check</code> 语法检查（可以合并成一个"所有 JS 语法检查"测试）</td></tr>
+    <tr><td><code>test_nx18_zixuan_template_scope.py</code></td><td class="num">61</td><td class="num">100%</td><td><span class="tag del">删除</span>（语法检查同上合并）</td></tr>
+    <tr><td><code>test_mx07_alert_column_fields.py</code></td><td class="num">46</td><td class="num">25%</td><td><span class="tag ref">改写</span>：用正则抓 layui 列定义太脆弱，保留 <code>node --check</code> 即可</td></tr>
+    <tr><td><code>test_mx11_ib_account_template.py</code>、<code>test_me05_lazy_web_startup.py</code>、<code>test_me06_watchlist_transfer.py</code>、<code>test_nx14_storage_not_found.py</code></td><td class="num">59/49/58/49</td><td class="num">57–67%</td><td><span class="tag ref">改写</span>为基于 test_client 的行为测试，删掉 <code>in source</code> 断言</td></tr>
+    <tr><td><code>test_me03</code>、<code>test_mx04</code>、<code>test_mx17</code>、<code>test_nx20</code>、<code>test_nx21</code>、<code>test_hi14</code></td><td class="num">~620</td><td class="num">AST 定位</td><td><span class="tag ref">改写</span>：用 AST 检查"某函数被调用了 N 次"，换成 mock 调用计数</td></tr>
+    <tr><td><code>test_me12</code>、<code>test_me30</code> 的 <code>test_all_*_use_shared_*</code>、<code>*_callers_pass_*</code> 用例</td><td class="num">~150</td><td class="num">AST 扫描</td><td><span class="tag ref">删除这些用例</span>；日历、限流的行为用例保留</td></tr>
+    <tr><td><code>test_lo01</code>、<code>test_lo02</code>、<code>test_lo05</code>、<code>test_lo07</code></td><td class="num">1,155</td><td class="num">18–22%</td><td><span class="tag ref">逐个清理</span>：删掉 <code>"market_catalog_items = market_catalog()" in app</code> 这类断言，保留注册表投影的行为用例</td></tr>
+  </table>
+
+  <h3>3.4 测试基础设施过度：<code>test_support/web_routes.py</code></h3>
+  <p>这个 102 行的模块会用 AST 从 blueprint 文件里<b>抽出路由函数体</b>，去掉装饰器，把 <code>services.xxx</code> 改写回旧的全局变量名（<code>__log</code>、<code>_alert_tasks</code>、<code>db</code>…），再 <code>exec</code> 到一个伪命名空间里运行。<b>21 个测试文件</b>依赖它。这样测到的并不是真实的 Flask 路由：装饰器、CSRF、登录态、蓝图注册全被绕过了。它也是 <code>WebAppServices</code> 塞进 35 个字段的根源。</p>
+  <p><span class="tag ref">重构</span> 建议：<code>create_app(test_config)</code> 注入 fake services，统一用 <code>app.test_client()</code>。可以按文件逐步迁移，迁完删掉 <code>web_routes.py</code> 和 <code>SERVICE_ATTRIBUTE_NAMES</code> 映射。置信度 <span class="md">中</span>，工作量中等。</p>
+
+  <h3>3.5 重复与"随源码一起消失"的测试</h3>
+  <table>
+    <tr><th>测试</th><th>情况</th><th>处理</th></tr>
+    <tr><td><code>test_web_payloads.py</code> + <code>test_me04_web_payload_contracts.py</code></td><td>都在测 <code>web_payloads</code> 的准备和过滤</td><td><span class="tag ref">合并</span>为一个文件</td></tr>
+    <tr><td><code>test_mx18_strategy_bridge.py</code>、<code>test_lo04</code>（订单模型部分）</td><td>测的是死模块 <code>strategy_bridge</code> 和 <code>OrderRequest/Fill/OrderState</code></td><td>随源码 <span class="tag del">删除</span></td></tr>
+    <tr><td><code>test_me23</code>、<code>test_rv04</code>、<code>test_rv05</code>、<code>test_nx08</code>、<code>test_hi16</code>（部分）</td><td>测的是回测引擎，而回测在生产中无人调用</td><td>取决于决策 D1</td></tr>
+    <tr><td><code>test_cr03:60</code></td><td>断言死文件 <code>online_market_datas.py</code> 必须存在</td><td><span class="tag del">删除这条断言</span></td></tr>
+    <tr><td><code>test_me29_browser_dom.py</code>、<code>test_me29_mysql_gate.py</code></td><td>分别是浏览器和 MySQL 的环境门禁，本身是真实的集成测试</td><td><span class="tag keep">保留</span>，建议改名（如 <code>test_browser_smoke.py</code>）</td></tr>
+  </table>
+
+  <h3>3.6 建议保留的核心行为测试</h3>
+  <p><span class="tag keep">保留</span>
+  <code>test_footprint</code> · <code>test_hi06_csrf</code>（需补充真实请求头测试）· <code>test_hi13_binance_pagination</code> · <code>test_hi16_file_cache_safety</code> · <code>test_hi17_sync_batch</code> · <code>test_me01_tv_storage_authorization</code> · <code>test_me02_history_request_tracker</code> · <code>test_me11_baostock_reliability</code> · <code>test_me14_tdx_us_timezone</code> · <code>test_me15_futu_context_lifecycle</code> · <code>test_me16_ib_rpc_timeout</code> · <code>test_me17_qmt_contracts</code> · <code>test_me18_strategy_runner_contracts</code> · <code>test_me19_selection_task_atomicity</code> · <code>test_me20_strategy_signal_protocol</code> · <code>test_me22_utility_contracts</code> · <code>test_me24_check_env</code> · <code>test_me26_scheduler_lifecycle</code> · <code>test_me30_trading_calendar</code>（<b>需补 2027 年用例</b>）· <code>test_mx05_rate_timer</code> · <code>test_mx12_task_service_loading</code> · <code>test_new03_dependency_contract</code> · <code>test_nx10</code> · <code>test_nx11</code> · <code>test_nx15</code> · <code>test_nx16</code> · <code>test_nx17</code> · <code>test_nx23</code> · <code>test_rv01</code> · <code>test_rv06</code> · <code>test_rv07</code> · <code>test_selection_monitoring</code> · <code>test_strategy_loader</code> · <code>test_web_security</code> · <code>test_windows_launchers</code> · <code>test_lo03_domain_codes</code></p>
+  <p>另外 82 个按整改编号命名的文件，建议在清理完成后<span class="tag ref">按领域改名或合并</span>（如 <code>test_exchange_tdx.py</code>、<code>test_web_storage.py</code>）。脱离整改台账后，文件名目前无法说明测的是什么。</p>
+
+  <div class="note"><b>测试小计：</b>可直接删除约 <b>26 个文件、~1,500 行</b>（3.1 + 3.2）；需改写约 15 个文件；随死代码一起删除约 5 个文件；AST 路由框架迁移影响 21 个文件。</div>
+</section>
+
+<!-- ================= src core ================= -->
+<section id="src">
+  <h2>四、src/tradingview_zy 顶层模块</h2>
+  <p class="sub">范围：顶层模块加 tools/、trader/，共 10,720 行。死代码约 1,320 行、重复实现约 270 行、过度防御约 450 行、需决策约 630 行。</p>
+
+  <h3>4.1 死代码（生产路径零引用）</h3>
+  <table>
+    <tr><th>#</th><th>位置</th><th>证据</th><th>处理</th><th class="num">减少</th><th>置信度</th></tr>
+    <tr><td>1</td><td><code>strategy_bridge.py</code> 整个文件</td><td>src/web/script 零 import，只有 <code>test_mx18</code> 和 <code>test_lo04</code> 在用</td><td><span class="tag del">删除</span></td><td class="num">372</td><td class="hi">高</td></tr>
+    <tr><td>2</td><td><code>data_contracts.py:285-474</code> 中的 <code>OrderRequest</code>/<code>Fill</code>/<code>OrderState</code>/<code>apply_fill</code>，以及 <code>StrategyParameters.from_json</code></td><td>为一个不存在的下单流程准备，生产代码零引用</td><td><span class="tag del">删除</span></td><td class="num">~210</td><td class="hi">高</td></tr>
+    <tr><td>3</td><td><code>domain.py:52-72,130-165</code> 中的 4 个订单枚举和 4 个 <code>parse_*</code></td><td>随第 2 项连带成为死代码</td><td><span class="tag del">删除</span></td><td class="num">~60</td><td class="hi">高</td></tr>
+    <tr><td>4</td><td><code>domain.py:245-270</code> 的 5 个 <code>@runtime_checkable</code> Protocol + <code>exchange/contracts.py</code></td><td>唯一引用方 <code>contracts.py</code> 本身零 import，也没有任何 <code>isinstance</code> 检查</td><td><span class="tag del">删除</span></td><td class="num">~60</td><td class="hi">高</td></tr>
+    <tr><td>5</td><td><code>db.py</code> 的 11 个死方法：<code>TableByAIAnalyse</code>、<code>order_save</code>、<code>task_save/update</code>（带缠论参数 <code>check_bi_*</code>）、<code>marks_add/del_by_price</code>（还删错了表）、<code>cache_del</code> 等</td><td>逐个 grep，外部调用都是 0</td><td><span class="tag del">删除</span>，连同 <code>monitoring_events.legacy_aliases_for</code></td><td class="num">~300</td><td class="hi">高</td></tr>
+    <tr><td>6</td><td><code>market_metadata.py</code> 的 6 个函数（<code>market_web_metadata</code>、<code>market_ui_options</code> 等）+ 可注入参数 <code>registry=</code></td><td>只有测试在用；可注入参数只为测试里的 "paper" 注册表服务</td><td><span class="tag del">删除</span></td><td class="num">~95</td><td class="hi">高</td></tr>
+    <tr><td>7</td><td><code>secret_store.py:55-110</code> 的 <code>SecretClass</code>/<code>RotationMode</code>/<code>SecretPolicy</code> 分级体系</td><td>生产代码只读取策略表的键名；分级只在 <code>test_me27</code> 里被断言</td><td><span class="tag ref">简化</span>为属性名元组</td><td class="num">~55</td><td class="hi">高</td></tr>
+    <tr><td>8</td><td><code>rd.py:20-78</code>（<code>task_config_*</code>，含 <code>check_beichi</code>）</td><td>缠论残留，零调用</td><td><span class="tag del">删除</span>，只保留 <code>Robj</code></td><td class="num">~57</td><td class="hi">高</td></tr>
+    <tr><td>9</td><td><code>trader/online_market_datas.py</code> 整个包</td><td>零 import，只有 <code>test_cr03</code> 断言它存在</td><td><span class="tag del">删除</span></td><td class="num">62</td><td class="hi">高</td></tr>
+    <tr><td>10</td><td><code>config.py.demo</code> 中的 <code>AI_TOKEN</code>、<code>OPENROUTER_*</code>、<code>IB_CLIENT_ID</code></td><td>全仓库零读取</td><td><span class="tag del">删除</span></td><td class="num">~15</td><td class="hi">高</td></tr>
+    <tr><td>11</td><td><code>zixuan.py</code> 的 <code>query_all_zs_stocks</code>、<code>rename_stock</code>、<code>__main__</code></td><td>零调用，而且 <code>__main__</code> 会往<b>真实数据库</b>写入测试数据</td><td><span class="tag del">删除</span></td><td class="num">~25</td><td class="hi">高</td></tr>
+    <tr><td>12</td><td><code>fun.str_add_seconds_to_str</code>、<code>singleton_lock</code>；<code>file_db</code> 的 <code>tz</code>/<code>home_path</code>；<code>trading_calendar._coerce_legacy_arguments</code></td><td>零引用，或只剩测试在用</td><td><span class="tag del">删除</span></td><td class="num">~40</td><td class="hi">高</td></tr>
+  </table>
+
+  <h3>4.2 重复实现</h3>
+  <table>
+    <tr><th>#</th><th>重复内容</th><th>处理</th><th class="num">减少</th></tr>
+    <tr><td>13</td><td><code>selection.SelectionRunner.run</code> 与 <code>monitoring.MonitoringRunner.run</code> 逐行相同，只差 <code>purpose=</code></td><td><span class="tag ref">合并</span>为 <code>StrategyRunner(purpose)</code></td><td class="num">~50</td></tr>
+    <tr><td>14</td><td><code>tick_request.BoundedProviderCaller</code> 与 <code>sync_batch.DeadlineCaller</code> 都是"信号量 + 线程 + join 超时"</td><td><span class="tag ref">保留一份</span></td><td class="num">~40</td></tr>
+    <tr><td>15</td><td>原子写文件有 4 份（file_db、sync_batch、secret_store、web_security）</td><td><span class="tag ref">统一</span>用 <code>file_db._atomic_write_bytes(mode=)</code></td><td class="num">~50</td></tr>
+    <tr><td>16</td><td>控制字符校验 <code>ord(c)&lt;32 or ==127</code> 复制了 7 份</td><td><span class="tag ref">集中</span>为一个 <code>has_control_char</code> 和 <code>bounded_text</code></td><td class="num">~40</td></tr>
+    <tr><td>17</td><td>市场→时区映射有两份：<code>web_payloads.MARKET_TIMEZONES</code> 和注册表的 <code>payload_timezone</code>，违背"单一事实源"</td><td><span class="tag ref">只读注册表</span></td><td class="num">~12</td></tr>
+    <tr><td>18</td><td>同名不同义：两个 <code>parse_market</code>、两个 <code>BatchRunResult</code></td><td><span class="tag ref">重命名</span></td><td class="num">0</td></tr>
+    <tr><td>19</td><td>滑动窗口限流有 3 份，其中 <code>LoginAttemptLimiter</code> 的 key 数量没有上限</td><td><span class="tag ref">复用</span> <code>SlidingWindowLimiter</code></td><td class="num">~25</td></tr>
+    <tr><td>20</td><td><code>db.py</code> 的 <code>tv_chart_save/update</code> 与 <code>tv_drawing_save_or_update</code> 各写一遍配额计算</td><td><span class="tag ref">抽出</span> <code>_check_quota()</code></td><td class="num">~40</td></tr>
+    <tr><td>21</td><td><code>database_catalog.py</code> 只有一个函数、一个调用方</td><td><span class="tag ref">内联</span>进 db.py</td><td class="num">~10</td></tr>
+  </table>
+
+  <h3>4.3 过度抽象与防御性过度</h3>
+  <table>
+    <tr><th>#</th><th>位置</th><th>问题</th><th>处理</th><th class="num">减少</th></tr>
+    <tr><td>22</td><td><code>market_registry.validate_market_registry()</code></td><td>每次 import 都对静态常量做 60 多行自检</td><td><span class="tag ref">移到测试里</span></td><td class="num">~65</td></tr>
+    <tr><td>23</td><td><code>market_registry</code> 的 <code>config_attribute</code>（旧 <code>EXCHANGE_*</code> 兼容）、<code>kline_has_position</code>、<code>registered_market_values</code></td><td>兼容层和没人读的字段</td><td><span class="tag del">删除</span>（先确认本地 config 已没有 <code>EXCHANGE_*</code>）</td><td class="num">~25</td></tr>
+    <tr><td>24</td><td><code>history_request_tracker.py</code></td><td>对来自 config 的参数做 5 重校验；有只服务测试的方法；文档字符串 21 行</td><td><span class="tag ref">简化</span></td><td class="num">~60</td></tr>
+    <tr><td>25</td><td><code>futu_context.py</code></td><td>fork 处理写了两遍；<code>health()</code> 状态机和上下文协议只有测试在用</td><td><span class="tag ref">简化</span></td><td class="num">~60</td></tr>
+    <tr><td>26</td><td><code>alert_strategy_storage.py</code></td><td>同一段 JSON 被校验 3 遍，还要经过 create→to_mapping→解析→to_json 的往返</td><td><span class="tag ref">只保留一道校验</span></td><td class="num">~40</td></tr>
+    <tr><td>27</td><td><code>db.py:1397,1504,1582</code></td><td>写入后 refresh 回读比对，不一致就抛 RuntimeError</td><td><span class="tag del">删除</span></td><td class="num">~15</td></tr>
+    <tr><td>28</td><td><code>DB.migrate_tv_storage_legacy_owners</code></td><td>只包了一层的转发，参数被规范化两次</td><td><span class="tag del">删除</span>，直接调用模块函数</td><td class="num">~10</td></tr>
+    <tr><td>29</td><td>UDF history 链路（<code>web_payloads</code>）</td><td>同一份 K 线在热点路径上被校验 2 次、深拷贝 3 次</td><td><span class="tag ref">只 prepare 一次</span>（顺带提升性能）</td><td class="num">~20</td></tr>
+    <tr><td>30</td><td><code>trading_calendar.market_calendar_metadata</code></td><td>返回一大堆字段，唯一的调用方只读取 <code>profile</code></td><td><span class="tag ref">精简</span></td><td class="num">~35</td></tr>
+    <tr><td>32</td><td>history_request_tracker、scheduler_status、data_contracts、sync_batch 的模块文档</td><td>大段"整改说明式"文档字符串</td><td><span class="tag ref">缩成一行</span></td><td class="num">~50</td></tr>
+  </table>
+</section>
+
+<!-- ================= exchange ================= -->
+<section id="exchange">
+  <h2>五、exchange / backtesting / strategies</h2>
+  <p class="sub">三个关键事实：① 回测引擎约 4,200 行，在生产中<b>零调用</b>；notebook 入口全部坏掉，只靠测试"续命"。② provider 的 <code>klines(args=...)</code> 选项分支，生产中都走不到（web 只调用 <code>ex.klines(code, frequency)</code>）。③ 两个策略注册表都是空的，仓库里没有任何具体策略。</p>
+  <table>
+    <tr><th>#</th><th>位置</th><th>类型 / 证据</th><th>处理</th><th class="num">减少</th><th>置信度</th></tr>
+    <tr><td>1</td><td><code>backtesting/</code> 整包 + <code>strategy_bridge</code> + <code>trader/</code></td><td>整个子系统没有生产消费者</td><td><span class="tag dec">需决策 D1</span>：保留就精简，不保留就整包归档</td><td class="num">~4,200</td><td class="hi">高</td></tr>
+    <tr><td>2</td><td><code>signal_to_trade.py</code>(325)、<code>klines_generator.py</code>(126)</td><td>全仓零引用</td><td><span class="tag del">删除</span></td><td class="num">451</td><td class="hi">高</td></tr>
+    <tr><td>3</td><td>5 个 TDX ExHq 适配器（hk/us/fx/futures/ny_futures，共 1,777 行）</td><td>复制粘贴：两两 diff 只差 111–180 行；分页拉取、缓存合并、<code>ticks</code>、<code>stock_info</code>、重连尾部逐字相同</td><td><span class="tag ref">抽出 <code>TdxExHqExchange</code> 基类</span>（模板方法 <code>_fetch_bars_paged</code>/<code>_merge_with_cache</code>，子类只声明 <code>MARKET</code>、<code>FREQ_MAP</code> 和 <code>_post_process</code> 钩子）</td><td class="num">700–900</td><td class="hi">高</td></tr>
+    <tr><td>4</td><td><code>backtest_trader.py</code> 的 open/close 多空四个分支和 <code>execute</code> 大分支</td><td>多空版本只差保证金率和盈亏符号</td><td><span class="tag ref">用 side 参数化</span></td><td class="num">~350</td><td class="hi">高</td></tr>
+    <tr><td>5</td><td><code>backtest_trader.py:130-199</code>、<code>backtest.py:744-763</code></td><td>预置 18 个缠论买卖点（1buy、l3sell…）的统计字典，结果表永远多出 18 行全 0</td><td><span class="tag del">删除</span></td><td class="num">~90</td><td class="hi">高</td></tr>
+    <tr><td>6</td><td><code>exchange.py:843-1061</code>（<code>convert_tdx_ny_f_*</code>、模块级 <code>convert_kline_frequency</code>、<code>__main__</code>）</td><td>零引用</td><td><span class="tag del">删除</span></td><td class="num">~215</td><td class="hi">高</td></tr>
+    <tr><td>7</td><td><code>exchange.py</code> 其余 6 个 <code>convert_*</code></td><td>"set_index→resample→agg→dropna" 流程重复 7 次</td><td><span class="tag ref">抽出 <code>_resample_ohlcv()</code> 和共享的 PERIOD_MAP</span></td><td class="num">~200</td><td class="md">中高</td></tr>
+    <tr><td>8</td><td><code>exchange_binance.py</code>(438) 与 <code>exchange_binance_spot.py</code>(371)</td><td>只差 105 行</td><td><span class="tag ref">合并</span>，参数化 <code>(ccxt_cls, market)</code></td><td class="num">~330</td><td class="hi">高</td></tr>
+    <tr><td>9</td><td>binance 的 <code>online_klines</code> 和 <code>use_online</code> 分支</td><td>没有任何调用方</td><td><span class="tag del">删除</span></td><td class="num">~160</td><td class="hi">高</td></tr>
+    <tr><td>10</td><td>futu/tq/binance/ib 的 <code>balance</code>/<code>positions</code> 等账户能力（binance 失败时还会调用 <code>self.__init__()</code>）</td><td>web/script 零调用，但注册表仍声明了这些能力</td><td><span class="tag dec">D3</span>：建议从注册表去掉并删除实现</td><td class="num">~250</td><td class="hi">高</td></tr>
+    <tr><td>11</td><td>16 个适配器里的 <code>def order(...): return super().order(...)</code></td><td>无意义覆盖（基类已经 fail-closed）</td><td><span class="tag del">删除</span></td><td class="num">~60</td><td class="hi">高</td></tr>
+    <tr><td>12</td><td>零引用方法：qmt <code>all_ticks</code> 等、tdx_futures <code>all_ticks</code>、futu <code>query_kline_edu</code>、ib <code>search_stocks</code>、exchange_db <code>del_klines</code> 等</td><td>零引用，或只有测试引用</td><td><span class="tag del">删除</span></td><td class="num">~230</td><td class="hi">高</td></tr>
+    <tr><td>13</td><td>17 个 <code>if __name__ == "__main__"</code> 调试块</td><td>调试残留</td><td><span class="tag del">删除</span></td><td class="num">~420</td><td class="hi">高</td></tr>
+    <tr><td>14</td><td><code>backtest.py</code> 零散项：<code>backtest_charts_by_close_profit</code>、<code>order_draw_tv_mark</code>、未使用的 import 等</td><td>零引用</td><td><span class="tag del">删除</span></td><td class="num">~230</td><td class="hi">高</td></tr>
+    <tr><td>15</td><td><code>run_optimization</code>/<code>OptimizationSetting</code></td><td>优化的 <code>data_config</code> 没有任何代码读取（缠论时代的 cl_config 残留）</td><td><span class="tag del">删除</span></td><td class="num">~150</td><td class="md">中高</td></tr>
+    <tr><td>16</td><td><code>stocks_bkgn.py:39-238</code> 的 <code>reload_*</code></td><td>运维脚本混在库代码里</td><td><span class="tag ref">移到 script/</span></td><td class="num">~200</td><td class="hi">高</td></tr>
+    <tr><td>17</td><td><code>futures_contracts.py</code>(304)</td><td>为 1 个版本、20 个品种做了多版本数据集和双层 SHA256 manifest</td><td><span class="tag ref">简化</span>为"加载 json → 查 dict"</td><td class="num">~220</td><td class="hi">高</td></tr>
+    <tr><td>18</td><td><code>backtesting/base.py</code></td><td>单实现的 <code>Trader</code> ABC（其 <code>__init__</code> 从未被调用）；<code>fee_a</code> 与 <code>cal_fee</code> 重复且算法不一致</td><td><span class="tag del">删除</span></td><td class="num">~110</td><td class="hi">高</td></tr>
+    <tr><td>19</td><td>能力边界守了三层：基类 8 个 <code>_unsupported</code> 桩、<code>ContractedExchange</code>、5 个 Protocol；而 <code>__getattr__</code> 透传又把边界整个放开了</td><td>过度抽象，且自相矛盾</td><td><span class="tag ref">只保留注册表 + facade 一层</span></td><td class="num">~80</td><td class="md">中高</td></tr>
+    <tr><td>20</td><td>异常翻译重复：两处按类名子串匹配；两个同名但不同的 <code>ProviderUnavailableError</code></td><td>重复且混乱</td><td><span class="tag ref">合为一个 <code>classify_provider_error()</code></span></td><td class="num">~30</td><td class="hi">高</td></tr>
+    <tr><td>21</td><td>吞异常 + <code>@retry(None)</code>；exchange 里约 160 处 print</td><td>见 B18</td><td><span class="tag ref">让异常上抛，print 改成 logger</span></td><td class="num">~80</td><td class="hi">高</td></tr>
+    <tr><td>22</td><td><code>@fun.singleton</code>（13 个类）加上工厂缓存</td><td>双重缓存，见 B19</td><td><span class="tag ref">只保留工厂缓存</span></td><td class="num">~15</td><td class="md">中</td></tr>
+    <tr><td>23</td><td><code>strategies/loader.py</code> + <code>base.py</code>（862 行）</td><td>为零个策略实现准备的完整框架，还自带一套 JSON 类型 schema</td><td><span class="tag keep">暂时保留</span>（它是插件安全边界），schema 校验收敛成 <code>inspect.signature().bind()</code></td><td class="num">~100</td><td class="md">中</td></tr>
+  </table>
+  <h3>大数据文件</h3>
+  <table>
+    <tr><th>文件</th><th>规模</th><th>处理</th></tr>
+    <tr><td><code>exchange/us_symbols.csv</code></td><td>13,864 行 / 646KB</td><td><span class="tag ref">移到 package data</span>，或首次运行时下载到 <code>get_data_path()</code></td></tr>
+    <tr><td><code>exchange/new_stocks_bkgn.json</code></td><td>521KB，单行</td><td>同上；生成逻辑移到 script</td></tr>
+    <tr><td><code>exchange/tdx_a_codes.py</code></td><td>720 行硬编码名单</td><td><span class="tag ref">改成 JSON 资源</span>，生成器移到 script</td></tr>
+  </table>
+</section>
+
+<!-- ================= web ================= -->
+<section id="web">
+  <h2>六、Web 前后端（web/tradingview_zy_chart，不含 charting_library）</h2>
+  <p class="sub">17 个指标全部已加载、已注册，不存在"文件在但没加载"的指标。最大的两块冗余：<b>零引用的静态资源</b>，以及<b>指标之间的复制粘贴</b>。</p>
+  <h3>6.1 零引用资源（可直接删）</h3>
+  <table>
+    <tr><th>资源</th><th>证据</th><th class="num">规模</th><th>处理</th></tr>
+    <tr><td><code>static/marked.min.js</code> + <code>index.html:25-27</code> 的 script 标签</td><td>除 script 标签外，没有任何地方调用 <code>marked</code></td><td class="num">2,224 行 / 71KB</td><td><span class="tag del">删除</span></td></tr>
+    <tr><td><code>static/css/admin.css</code></td><td><code>login.html</code> 用到的类在 admin.css 里一个都没有，实际只贡献了 2 条规则</td><td class="num">1,239 行</td><td><span class="tag del">删除</span>，那 2 条规则并入 <code>login.css</code></td></tr>
+    <tr><td><code>static/datafeeds/udf/src/*.ts</code> 及 rollup/tsconfig/package.json</td><td>没有构建流程，入口 <code>lib/</code> 也不存在；页面只加载 <code>dist/bundle.js</code></td><td class="num">~1,800 行</td><td><span class="tag del">删除</span>或 <span class="tag arc">归档</span></td></tr>
+    <tr><td><code>static/css/layui-theme-dark-legacy.css</code></td><td>没有任何引用</td><td class="num">755 行</td><td><span class="tag del">删除</span></td></tr>
+    <tr><td><code>layui.js.map</code>、<code>layui.css.map</code>、<code>imgs/wx.jpg</code>、根目录的 <code>favicon.ico</code></td><td>没有 sourceMappingURL；wx.jpg 只出现在 archive 文档；favicon 与 static 下的重复</td><td class="num">~1.8MB</td><td><span class="tag del">删除</span></td></tr>
+    <tr><td><code>templates/options.html</code></td><td>没有任何渲染入口，内容是"旧分析配置已移除"</td><td class="num">20</td><td><span class="tag del">删除</span></td></tr>
+    <tr><td><code>chart_idx_demo.js</code></td><td>官方示例指标，却出现在用户可见的菜单里</td><td class="num">76</td><td><span class="tag del">删除</span></td></tr>
+    <tr><td><code>cl_app/stocks_bkgn.py</code></td><td>兼容壳，零 import</td><td class="num">10</td><td><span class="tag del">删除</span></td></tr>
+  </table>
+  <h3>6.2 tv_indicators 去重（~1,500–2,000 行）</h3>
+  <p>17 个指标共约 4,000 行：样式块重复 99 次，标题块重复 113 次；<code>ma.js</code> 手写了 14 条均线，<code>hlblw.js</code> 手写了 15 条预测线；TDX 版 SMA、交叉判断、KD、MACD 各自在 3–5 个文件里重复实现。</p>
+  <p><span class="tag ref">重构</span> 新建 <code>tv_indicators/_kit.js</code>，提供 <code>meta()</code>、<code>line()</code>、<code>intInput()</code>、<code>tdxSma()</code>、<code>ref()</code>、<code>cross()</code>、<code>kd()</code>、<code>macd()</code>、<code>ff()</code>。预计 <code>ma.js</code> 从 316 行降到约 40 行，<code>hlblw.js</code> 从 549 行降到约 150 行。重构时一并修复 B20（跨 bar 状态），并清理 atr/heima/hlblw/cdbb/hlftx/vegasma 中的死变量。需要逐个指标对比出图结果。</p>
+  <h3>6.3 Python 侧与模板</h3>
+  <table>
+    <tr><th>位置</th><th>问题</th><th>处理</th><th class="num">减少</th></tr>
+    <tr><td><code>cl_app/task_services.py</code>(182)</td><td>用 Condition/RLock 状态机只为懒加载 2 个模块；<code>on_load</code>、<code>health</code>、<code>__getattr__</code> 在生产中都没有使用</td><td><span class="tag ref">换成 <code>functools.cache</code> + 503 装饰器</span></td><td class="num">~150</td></tr>
+    <tr><td><code>cl_app/__init__.py:38-171</code></td><td><code>security_overrides.get(K, getattr(config, K, d))</code> 重复了 17 次</td><td><span class="tag ref">抽出 <code>_setting()</code></span></td><td class="num">~90</td></tr>
+    <tr><td><code>blueprints/udf.py</code></td><td><code>/tv/time</code>、<code>/tv/symbol_info</code> 在 <code>supports_time/group_request=False</code> 时前端不会请求；参数解析复制了 4 遍；一个 except 分支重复；有无用变量</td><td><span class="tag del">删除</span> + <span class="tag ref">抽出 <code>_parse_bar_query()</code></span></td><td class="num">~45</td></tr>
+    <tr><td><code>blueprints/tasks.py</code>、<code>storage.py</code></td><td>"resolve + 503" 写了 6 遍；422 错误体写了 10 多遍</td><td><span class="tag ref">装饰器 / <code>_err()</code></span></td><td class="num">~45</td></tr>
+    <tr><td><code>cl_app/xuangu_tasks.py:86-115</code></td><td>scheduler 分支永远走不到，真走到也会因为访问不存在的属性而报错</td><td><span class="tag del">删除</span></td><td class="num">~30</td></tr>
+    <tr><td><code>__init__.py:215-216</code>、<code>auth.py:63</code></td><td><code>extensions[...]</code> 标记只为让源码 grep 测试能找到</td><td><span class="tag del">删除</span></td><td class="num">3</td></tr>
+    <tr><td><code>index.html:311-476, 543-576</code></td><td>5 个几乎一样的 <code>layer.open</code>；有两种布局的 <code>chart_configs</code> 算出来没用</td><td><span class="tag ref">抽出 <code>openFrame()</code></span>，删掉死配置</td><td class="num">~66</td></tr>
+    <tr><td><code>alert.html</code>、<code>xuangu_list.html</code></td><td>市场列表硬编码两份；<code>eval('({{…|tojson}})')</code></td><td><span class="tag ref">改用 <code>market_catalog</code> 渲染</span></td><td class="num">~18</td></tr>
+    <tr><td><code>zixuan.js</code>、<code>charts.js</code>、<code>alert.js</code>、<code>csrf.js</code></td><td>4 处几乎一样的 ajax 请求；每个 tick 都 console.log；<code>#ai_code</code> 残留；有死全局变量</td><td><span class="tag ref">抽出 <code>setStock()</code></span>，删掉日志和残留</td><td class="num">~80</td></tr>
+    <tr><td><code>zixuan.html</code>、<code>jobs.html</code>、<code>app.css</code></td><td>整段注释掉的旧代码</td><td><span class="tag del">删除</span></td><td class="num">~70</td></tr>
+    <tr><td><code>static/js/footprint/loader.js:143-200</code></td><td>spike 调试残留：在所有 VolFootprint 图上画紫色矩形，并打印 <code>[fp-spike]</code> 日志</td><td><span class="tag ref">在 M3 前收敛</span></td><td class="num">~40</td></tr>
+  </table>
+  <div class="note blue">错误返回有 5 种格式（<code>{'s':'error'}</code>、<code>{'status':'error'}</code>、<code>{'ok':False}</code>…），但它们分别对应 UDF、TV 存储、Layui 等外部协议，<b>不建议强行统一</b>。<code>/tv/footprint</code> 属于足迹图 M3 规划的一部分，<span class="tag keep">保留</span>。</div>
+</section>
+
+<!-- ================= scripts & repo ================= -->
+<section id="scripts">
+  <h2>七、治理脚本、CI 与仓库杂项</h2>
+  <p class="sub">没有 pycache 或运行时产物被 git 跟踪，<code>.gitignore</code> 是完备的。问题集中在<b>整改流程产物</b>和<b>检查 CI 的 CI</b>。</p>
+  <h3>7.1 治理体系过度工程化</h3>
+  <p><code>script/remediation/</code> 下 15 个脚本共 2,088 行，其中约 1,400 行属于以下几类：检查 CI 自身的 CI、手写版 ruff、守护不存在代码的检查、针对单次事故的规则、提交进仓库的 SBOM 证据链。<b>hygiene workflow 的 9 个步骤全部能在 <code>unit-contracts</code>（pytest）里找到对应测试</b>，供应链检查实际跑了 3 次。</p>
+  <table>
+    <tr><th>脚本</th><th>CI 调用</th><th>对应的重复测试</th><th>处理</th></tr>
+    <tr><td><code>check_quality_gates.py</code>(179)</td><td>hygiene</td><td>test_me29</td><td><span class="tag del">删除</span></td></tr>
+    <tr><td><code>check_readability_contract.py</code>(98)</td><td>hygiene</td><td>test_lo06</td><td><span class="tag del">删除</span>，改用 <code>ruff check</code>（pyproject 里已有配置，只是从没运行过）</td></tr>
+    <tr><td><code>check_repository_hygiene.py</code>(70)</td><td>hygiene</td><td>test_new02</td><td><span class="tag del">删除</span></td></tr>
+    <tr><td><code>check_fifo_atomicity.py</code>(75)</td><td>无</td><td>test_new05</td><td><span class="tag del">删除</span>（守护的代码不存在）</td></tr>
+    <tr><td><code>parse_issue_report.py</code>(194)、<code>update_issue.py</code>(41)</td><td>无</td><td>test_remediation_report_counts</td><td><span class="tag del">删除</span>或 <span class="tag arc">归档</span></td></tr>
+    <tr><td><code>supply_chain_lib.py</code>(664)、<code>check_supply_chain</code>、<code>generate_supply_chain_artifacts</code>、<code>scan_osv</code> + <code>audit/supply-chain/*</code>（270KB）</td><td>hygiene + supply-chain job</td><td>test_me25</td><td><span class="tag dec">D5</span>：建议改为 <code>uv lock --check</code> + CI 中的 pip-audit/osv-scanner（结果只作 artifact，不提交）</td></tr>
+    <tr><td><code>check_secret_exposure.py</code>(82)</td><td>hygiene</td><td>test_rv08</td><td><span class="tag ref">只保留测试</span></td></tr>
+    <tr><td><code>check_dependency_contract</code>、<code>check_secret_references</code>、<code>generate_provider_support_matrix</code>、<code>prepare_test_config</code></td><td>—</td><td>—</td><td><span class="tag keep">保留</span>，迁到 <code>script/ci/</code></td></tr>
+    <tr><td><code>.github/workflows/repository-hygiene.yml</code></td><td colspan="2">9 个步骤与 pytest 完全重复；<code>tests.yml</code> 的 provider-contracts job 又用 <code>-W error</code> 把 11 个测试重跑一遍</td><td><span class="tag del">删除</span> hygiene workflow；在 pyproject 里配置 <code>filterwarnings=error</code> 后合并这些 job</td></tr>
+  </table>
+
+  <h3>7.2 仓库杂项</h3>
+  <table>
+    <tr><th>路径</th><th class="num">规模</th><th>问题</th><th>处理</th><th>置信度</th></tr>
+    <tr><td><code>package/ta_lib-0.6.8-*.whl</code> ×6 + <code>ta-lib</code> 依赖</td><td class="num">11.9MB</td><td>全仓 <code>import talib</code> 为 0；镜像源里已有同版本 wheel</td><td><span class="tag del">删除</span>依赖和 wheel，重新 <code>uv lock</code></td><td class="hi">高</td></tr>
+    <tr><td><code>remediation_report.md</code>、<code>task_plan.md</code>、<code>findings.md</code>、<code>progress.md</code></td><td class="num">~500KB</td><td>81 条整改（已全部完成）的过程日志；根目录的 <code>task_plan.md</code> 可能被 planning 钩子注入到每次会话的上下文</td><td><span class="tag arc">归档</span>到 <code>archive/remediation-81/</code></td><td class="hi">高</td></tr>
+    <tr><td><code>audit/*.md/json/txt</code></td><td class="num">~1MB</td><td>停留在修复前的问题清单；sha256 记录的是 <code>/mnt/data</code> 沙箱路径，本地无法校验</td><td><span class="tag arc">归档或压缩</span></td><td class="hi">高</td></tr>
+    <tr><td><code>notebook/回测_期货策略.ipynb</code>、<code>VNPY_期货回测.ipynb</code></td><td class="num">~10MB 输出</td><td>内嵌 pyecharts 的 JS 输出</td><td><span class="tag ref">清空输出</span>，并加 nbstripout 过滤</td><td class="hi">高</td></tr>
+    <tr><td><code>notebook/</code> 其余 9 个</td><td class="num">0.35MB</td><td>导入的 <code>cl_utils</code>、<code>kcharts</code>、<code>cl</code>、<code>strategy.*</code> 都已不存在，跑不起来</td><td><span class="tag arc">归档</span>，只留 2 个还能运行的</td><td class="hi">高</td></tr>
+    <tr><td><code>pyproject.toml</code> 中未使用的依赖</td><td class="num">7 项</td><td><code>ta-lib</code>、<code>dbutils</code>、<code>dtaidistance</code>、<code>gevent</code>、<code>mytt</code>、<code>openai</code>、<code>pyarrow</code> 零 import；<code>pytest</code>、<code>playwright</code> 放在了运行时依赖里；<code>empyrical</code> 在用却未声明</td><td><span class="tag del">删除</span> / 移到 dev 组 / 补上声明</td><td class="hi">高</td></tr>
+    <tr><td><code>archive/docs/</code></td><td class="num">12MB</td><td>原 chanlun_pro 的商业文档（含售价页、<code>wx_pay.jpg</code>），有 28 张重复图片，存在版权隐患</td><td><span class="tag arc">压缩成 zip</span>，或迁出仓库</td><td class="hi">高</td></tr>
+    <tr><td><code>script/crontab/us_exchange_stocks.json</code></td><td class="num">7,613 行</td><td>全仓零引用</td><td><span class="tag del">删除</span></td><td class="hi">高</td></tr>
+    <tr><td><code>run_history_xuangu.py</code>、<code>xuangu_by_same.py</code>、<code>xuangu_by_process.py</code></td><td class="num">3×7</td><td>墓碑入口，只打印"缠论模块已移除"，提示里还是一个死链</td><td><span class="tag del">删除</span>（先确认外部 cron 没在用）</td><td class="hi">高</td></tr>
+    <tr><td><code>reboot_sync_{a,us,hk,futures,currency,currency_spot}_klines.py</code></td><td class="num">6×20</td><td>只差配置文件名，通用入口已支持 <code>--config</code></td><td><span class="tag ref">合并</span>到 <code>reboot_sync_market_klines.py</code></td><td class="hi">高</td></tr>
+    <tr><td><code>reboot_sync_gm_a/futures_klines.py</code></td><td class="num">428</td><td>约 70% 重复；导入即调用 <code>set_token</code>；有 3 处 <code>if False:</code>；<code>gm</code> 未声明为依赖</td><td><span class="tag dec">D6</span> 还用掘金吗？用就重构，不用就归档</td><td class="md">中</td></tr>
+    <tr><td><code>script/*.config.js</code>（pm2）</td><td class="num">4×10</td><td>写死 <code>/root/miniconda3</code>，与 uv 不符；demo 和 web 两份几乎一样</td><td><span class="tag del">删除</span>或合并</td><td class="md">中高</td></tr>
+    <tr><td><code>tradingview_repository_architecture.html</code> + <code>.planning/</code></td><td class="num">110KB</td><td>一次性架构审计交付物，已过时</td><td><span class="tag arc">归档</span></td><td class="hi">高</td></tr>
+    <tr><td><code>.pi/remote-pi/config.json</code></td><td class="num">104B</td><td>个人工具配置被跟踪</td><td>加入 <code>.gitignore</code></td><td class="md">中</td></tr>
+    <tr><td><code>docs/</code> 11 篇</td><td class="num">57KB</td><td>部分过碎（<code>messaging-channels.md</code> 只有 5 行）</td><td><span class="tag ref">两两合并</span></td><td class="md">中</td></tr>
+    <tr><td><code>check_env.py</code>、<code>windows_*.bat</code>、<code>charting_library_patches/</code>、<code>FOOTPRINT_RENDERING_PLAN.md</code></td><td class="num">—</td><td>在用；两个 bat 对 uv 版本的要求不一致</td><td><span class="tag keep">保留</span>，统一 uv 版本策略</td><td class="hi">高</td></tr>
+  </table>
+  <div class="note">顺带发现：远程还残留约 20 个 <code>origin/agent/*</code> 整改分支和 <code>pr-16*</code>；<code>test_me27</code> 里写着一段字面量 <code>"TlQXy9Y7"</code>，<b>请确认它是否曾是真实凭据</b>。删除工作树文件不会缩小历史 packs（51MB），要瘦身需另行 <code>git filter-repo</code>。</div>
+</section>
+
+<!-- ================= decisions ================= -->
+<section id="decisions">
+  <h2>八、需要你决策的事项</h2>
+  <table>
+    <tr><th>#</th><th>问题</th><th>选项</th><th>建议</th><th class="num">影响行数</th></tr>
+    <tr><td>D1</td><td>回测引擎（约 4,200 行）在生产中零调用，notebook 入口全坏</td><td>A 保留并精简（修 B6–B11，减 ~1,500 行）/ B 整包归档</td><td>如果近期不做回测，选 B；否则选 A，并补一个可运行的入口</td><td class="num">1,500 / 4,200</td></tr>
+    <tr><td>D2</td><td>飞书推送从未接线，前端开关是摆设</td><td>A 接入 <code>alert_tasks</code>（功能修复）/ B 删除整条链路（utils、messaging_reliability、settings_security、FEISHU 配置）</td><td>监控告警需要推送的话选 A</td><td class="num">~400（选 B）</td></tr>
+    <tr><td>D3</td><td>账户能力 balance/positions：注册表有声明，但没有任何调用方</td><td>A 删除 / B 保留等以后做 Web 持仓页</td><td>A（YAGNI）</td><td class="num">~250</td></tr>
+    <tr><td>D4</td><td><code>TableByOrder</code>、<code>TableByTVMarksPrice</code> 只读不写，UDF 的 marks/timescale 接口只能读到遗留数据；缠论遗留列和每次启动都跑的迁移</td><td>写一次性迁移脚本，然后删除</td><td>先确认旧数据不再需要</td><td class="num">~230</td></tr>
+    <tr><td>D5</td><td>供应链证据体系（SBOM、license、OSV 的提交产物）</td><td>A 精简为 <code>uv lock --check</code> + CI 扫描 / B 保留（如有合规要求）</td><td>个人项目选 A</td><td class="num">~1,060 + 270KB</td></tr>
+    <tr><td>D6</td><td>掘金 GM 同步脚本、pm2 配置、crontab 包装脚本的文件名</td><td>需要确认服务器 crontab/pm2 是否还在调用</td><td>先确认，再删除或合并</td><td class="num">~600</td></tr>
+  </table>
+</section>
+
+<!-- ================= roadmap ================= -->
+<section id="roadmap">
+  <h2>九、建议执行路线</h2>
+  <p class="sub">每一步单独提交，完成后跑全量 pytest。先删测试护栏里的"墓碑"，再删代码，否则会被这些测试反向阻挡。</p>
+  <ol class="steps">
+    <li><b>P0 修复（独立于清理）：</b>B1 交易日历补 2027 年（必须在 2026-12 前完成），B15 删除百度统计；在浏览器里验证 B2/B3 CSRF；修 B5、B13、B14；给 <code>test_me30</code> 补上跨年用例。</li>
+    <li><b>P1 删除"做样子"的测试（约 1,500 行）：</b>3.1 墓碑测试、3.2 文档契约和治理复读测试、<code>test_cr03:60</code> 那条反向断言。</li>
+    <li><b>P1 零风险死代码与垃圾文件：</b>strategy_bridge、trader/、signal_to_trade、klines_generator、contracts.py 与 5 个 Protocol、db 的死方法、17 个 <code>__main__</code>、16 个 <code>order()</code> 覆盖；Web 的零引用资源（6.1）；ta-lib wheel 和未使用的依赖；清空 notebook 输出；<code>us_exchange_stocks.json</code>；过程文档归档。</li>
+    <li><b>P2 治理体系精简：</b>删除 hygiene workflow 和 5 个过度设计的 checker；CI 改为 <code>ruff check</code> + <code>uv lock --check</code> + pytest；把保留下来的 4 个脚本迁到 <code>script/ci/</code>。</li>
+    <li><b>P3 结构性重构（逐个回归）：</b>TDX ExHq 基类 → binance 合并 → exchange 的 <code>_resample_ohlcv</code> → tv_indicators 的 <code>_kit.js</code>（逐个对比出图）→ Web 的 <code>_setting()</code> 和 task_services → src 中的重复实现（4.2）→ 过度防御的精简（4.3）。</li>
+    <li><b>P3 测试基础设施：</b>把 21 个依赖 <code>web_routes.py</code> 的测试迁到 <code>test_client</code>，把源码形状测试（3.3）改写为行为测试，最后按领域给测试文件改名。</li>
+    <li><b>P4 决策项：</b>按 D1–D6 的结论执行。</li>
+  </ol>
+  <div class="note"><b>预期总效果：</b>不动回测的情况下，源码和资源约减少 <b>12,000–14,000 行</b>，工作树减少约 <b>24MB</b>，测试减少约 <b>2,000 行</b>；如果回测整包归档，再减 4,200 行。</div>
+</section>
+
+<footer>本报告为只读审计产物，未修改任何源码或测试。行号基于提交 7bece68。</footer>
+</main>
+</body>
+</html>

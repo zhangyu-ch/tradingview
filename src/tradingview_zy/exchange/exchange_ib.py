@@ -8,7 +8,8 @@ import pandas as pd
 import pytz
 from tenacity import retry, stop_after_attempt, wait_random, retry_if_result
 
-from tradingview_zy import config, fun, rd
+from tradingview_zy import config, rd
+from tradingview_zy.domain import InvalidRequestError
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_us_kline_frequency
 from tradingview_zy.exchange.ib_rpc import redis_rpc
 from tradingview_zy.trading_calendar import is_market_open
@@ -25,7 +26,6 @@ class CmdEnum(Enum):
     POSITIONS = "ib_positions"
 
 
-@fun.singleton
 class ExchangeIB(Exchange):
     def __init__(self):
         self.tz = pytz.timezone("US/Eastern")
@@ -82,11 +82,6 @@ class ExchangeIB(Exchange):
         """Return a strict instrument-aware state from the shared calendar."""
         return is_market_open('us', code=code, at=at)
 
-    @retry(
-        stop=stop_after_attempt(2),
-        wait=wait_random(min=1, max=5),
-        retry=retry_if_result(lambda _r: _r is None),
-    )
     def klines(
         self,
         code: str,
@@ -110,6 +105,9 @@ class ExchangeIB(Exchange):
             "2m": "1 min",
             "1m": "1 min",
         }
+
+        if frequency not in frequency_map:
+            raise InvalidRequestError(f"IB 不支持周期 {frequency!r}", provider="ib")
 
         # 控制获取的数量
         duration_map = {
@@ -152,7 +150,7 @@ class ExchangeIB(Exchange):
             klines_df = convert_us_kline_frequency(klines_df, "2m")
 
         if len(klines_df) == 0:
-            return None
+            return klines_df
 
         klines_df["date"] = klines_df["date"].apply(self.__convert_date)
 

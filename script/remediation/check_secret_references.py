@@ -53,24 +53,6 @@ def validate(root: Path) -> list[str]:
         elif not _valid_reference(assignments[name]):
             errors.append(f"{name} must be blank or use an approved secret reference")
 
-    feishu = assignments.get("FEISHU_KEYS")
-    if not isinstance(feishu, dict):
-        errors.append("FEISHU_KEYS must be a literal mapping of references")
-    else:
-        for market, value in feishu.items():
-            if market == "enable_img":
-                continue
-            if market == "user_id":
-                if not _valid_reference(value):
-                    errors.append("FEISHU_KEYS.user_id must use a secret reference")
-                continue
-            if not isinstance(value, dict):
-                errors.append(f"FEISHU_KEYS.{market} must be a mapping")
-                continue
-            for field in ("app_id", "app_secret"):
-                if not _valid_reference(value.get(field)):
-                    errors.append(f"FEISHU_KEYS.{market}.{field} must use a secret reference")
-
     scan_roots = [root / "src", root / "web", root / "script", root / "check_env.py"]
     direct_pattern = re.compile(
         r"\bconfig\.(" + "|".join(re.escape(name) for name in SENSITIVE_ATTRIBUTES) + r")\b"
@@ -86,14 +68,6 @@ def validate(root: Path) -> list[str]:
                 errors.append(
                     f"direct plaintext-prone config consumer: {path.relative_to(root)}:{line} config.{match.group(1)}"
                 )
-
-    allowed_legacy = root / "src/tradingview_zy/settings_security.py"
-    for path in (root / "src").rglob("*.py"):
-        if path == allowed_legacy:
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        if re.search(r'["\']fs_app_secret["\']\s*:', text):
-            errors.append(f"legacy fs_app_secret persistence outside migrator: {path.relative_to(root)}")
 
     return sorted(set(errors))
 

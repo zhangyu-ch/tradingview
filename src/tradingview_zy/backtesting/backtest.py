@@ -21,6 +21,9 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar, Grid, Line
 from tqdm.auto import tqdm
 
+from tradingview_zy.crypto_time import (
+    CRYPTO_TIME_VERSION, CryptoTimezoneError, artifact_path, as_utc, is_crypto, require_current_version,
+)
 from tradingview_zy.backtesting import futures_contracts
 from tradingview_zy.backtesting.backtest_klines import BackTestKlines
 from tradingview_zy.backtesting.backtest_trader import BackTestTrader
@@ -98,6 +101,10 @@ class BackTest:
         self.frequencys = config["frequencys"]
         self.start_datetime = config["start_datetime"]
         self.end_datetime = config["end_datetime"]
+        self.crypto_time_version = CRYPTO_TIME_VERSION if is_crypto(self.market) else None
+        if is_crypto(self.market):
+            self.start_datetime = as_utc(self.start_datetime).isoformat()
+            self.end_datetime = as_utc(self.end_datetime).isoformat()
 
         self.init_balance: int = config["init_balance"]
 
@@ -167,12 +174,18 @@ class BackTest:
 
         self._process_re_again = False
 
+    def _require_time_version(self):
+        require_current_version(self.market, getattr(self, "crypto_time_version", None))
+
     def save(self):
         """
         保存回测结果到配置的文件中
         """
         if self.save_file is None:
             return
+        self._require_time_version()
+        if is_crypto(self.market):
+            self.save_file = artifact_path(self.save_file)
 
         if self.strategy is not None:
             self.strategy.clear()
@@ -180,6 +193,7 @@ class BackTest:
         save_dict = {
             "save_file": self.save_file,
             "mode": self.mode,
+            "crypto_time_version": getattr(self, "crypto_time_version", None),
             "market": self.market,
             "base_code": self.base_code,
             "codes": self.codes,
@@ -212,6 +226,7 @@ class BackTest:
         self.save_file = config_dict["save_file"]
         self.mode = config_dict["mode"]
         self.market = config_dict["market"]
+        self.crypto_time_version = config_dict.get("crypto_time_version")
         self.base_code = config_dict["base_code"]
         self.codes = config_dict["codes"]
         self.frequencys = config_dict["frequencys"]
@@ -300,24 +315,20 @@ class BackTest:
     def run(
         self,
         next_frequency: str = None,
-        begin_start_dt: datetime.datetime = None,
+        *,
         loop_callback_fun: object = None,
     ):
         """
-        执行回测
+        执行回测。回放起点统一由配置 start_datetime 决定。
         """
         if next_frequency is None:
             next_frequency = self.frequencys[-1]
 
+        self._require_time_version()
         self.next_frequency = next_frequency
 
         self.datas.load_data_to_cache = self.load_data_to_cache
         self.datas.init(self.base_code, next_frequency)
-
-        if begin_start_dt is not None:
-            self.log.info(f"起始数据回放位置：{begin_start_dt}")
-            for _f, _dts in self.datas.loop_datetime_list.items():
-                _dts = [_d for _d in _dts if _d >= begin_start_dt]
 
         _st = time.time()
 
@@ -364,7 +375,32 @@ class BackTest:
 
     def run_by_code(self, code: str):
         # Each worker writes a deterministic artifact beside the configured base file.
+        self._require_time_version()
         new_file = str(build_process_output_path(self.save_file, code))
+        if is_crypto(self.market):
+            new_file = artifact_path(new_file)
+            if Path(new_file).exists():
+                cached = BackTest()
+                cached.load(new_file)
+                cached._require_time_version()
+        if getattr(self, "market", None) == "futures":
+            expected_manifest = futures_contracts.validate_futures_parameter_manifest(
+                self.futures_parameter_manifest
+            )
+            expected_hash = expected_manifest["snapshot_sha256"]
+            path = Path(new_file)
+            # 文件名用短摘要，复用时仍比较完整快照哈希。
+            new_file = str(path.with_name(f"{path.stem}_futures_{expected_hash[:16]}.pkl"))
+            if Path(new_file).exists():
+                cached = BackTest()
+                cached.load(new_file)
+                if (
+                    cached.futures_parameter_manifest is None
+                    or cached.futures_parameter_manifest["snapshot_sha256"] != expected_hash
+                ):
+                    raise futures_contracts.FuturesParameterError(
+                        f"cached futures parameter snapshot mismatch: {new_file}"
+                    )
         Path(new_file).parent.mkdir(parents=True, exist_ok=True)
         # 默认如果之前的回测文件还有保存，可以直接返回，如果设置 重新运行，则不返回
         if self._process_re_again is False and Path(new_file).exists():
@@ -442,20 +478,16 @@ class BackTest:
                 del BT
                 gc.collect()
 
-                # 整理并汇总资金变动历史
+            # 整理并汇总资金变动历史
             try:
                 bh_df = pd.DataFrame(balance_history.values())
-                bh_df = bh_df.T.sort_index().fillna(method="ffill").fillna(0)
+                bh_df = bh_df.T.sort_index().ffill().fillna(0)
                 self.trader.balance_history = bh_df.sum(axis=1)
             except Exception:
                 self.log.error("合并资金历史记录异常")
                 self.log.error(traceback.format_exc())
-
+            else:
                 self.log.info("合并回测结果完成，可调用 save 方法进行保存")
-            except Exception as e:
-                self.log.error("多进程回测执行异常")
-                self.log.error(traceback.format_exc())
-                raise e
             finally:
                 # 确保资源被释放
                 gc.collect()
@@ -465,6 +497,7 @@ class BackTest:
         """
         参数优化，执行不同的数据配置。
         """
+        self._require_time_version()
         copy_data_config = copy.deepcopy(self.data_config)
         for k, v in new_data_setting.items():
             if "default" in copy_data_config.keys():
@@ -473,13 +506,10 @@ class BackTest:
                 copy_data_config[k] = v
         # 生成一个唯一的key，用于避免重复执行相同配置的回测
         key = f"{self.base_code}_{self.market}_{self.codes}_{self.frequencys}_{self.start_datetime}_{self.end_datetime}_{type(self.strategy)}_{copy_data_config}"
-        key = hashlib.md5(key.encode(encoding="UTF-8")).hexdigest()
-        # 保存到新的文件中，进行落地
-        new_save_file = f"./data/bk/_optimization_{key}.pkl"
 
         BT = BackTest(
             {
-                "save_file": new_save_file,
+                "save_file": None,
                 # 设置策略对象
                 "strategy": self.strategy,
                 # 回测模式：signal 信号模式，固定金额开仓； trade 交易模式，按照实际金额开仓
@@ -507,6 +537,18 @@ class BackTest:
             }
         )
 
+        expected_hash = None
+        if self.market == "futures":
+            expected_hash = BT.futures_parameter_manifest["snapshot_sha256"]
+            key += f"_futures_{expected_hash}"
+        if is_crypto(self.market):
+            key += "_" + CRYPTO_TIME_VERSION
+        key = hashlib.md5(key.encode(encoding="UTF-8")).hexdigest()
+        # 期货参数修订使用新产物，保留旧版本文件。
+        new_save_file = f"./data/bk/_optimization_{key}.pkl"
+        if is_crypto(self.market):
+            new_save_file = artifact_path(new_save_file)
+        BT.save_file = new_save_file
         BT.load_data_to_cache = self.load_data_to_cache
 
         BT.log.info(
@@ -524,13 +566,28 @@ class BackTest:
             else:
                 BT.log.info(f"落地文件：{new_save_file} 已经存在，直接进行加载")
                 BT.load(new_save_file)
+                BT._require_time_version()
+                if expected_hash is not None and (
+                    BT.futures_parameter_manifest is None
+                    or BT.futures_parameter_manifest["snapshot_sha256"] != expected_hash
+                ):
+                    raise futures_contracts.FuturesParameterError(
+                        f"cached futures parameter snapshot mismatch: {new_save_file}"
+                    )
 
             # 如果是交易模式，评价标准是最终余额，信号模式，总盈利比率
             pos_pd = BT.positions()
             balance = pos_pd[self.evaluate].sum() if len(pos_pd) > 0 else 0
 
             BT.log.info(f"回测{new_data_setting} : {new_save_file} 结果：{balance}")
-        except Exception:
+        except Exception as exc:
+            if isinstance(exc, CryptoTimezoneError):
+                raise
+            if expected_hash is not None and isinstance(
+                exc, futures_contracts.FuturesParameterError
+            ):
+                # 参数校验失败不能伪装成收益为零的有效优化结果。
+                raise
             BT.log.error(f"执行回测异常：{new_data_setting} : {new_save_file}")
             BT.log.error(traceback.format_exc())
 
@@ -600,15 +657,11 @@ class BackTest:
             except Exception:
                 self.log.error("处理优化结果集异常")
                 self.log.error(traceback.format_exc())
-
-                return results
-            except Exception as e:
-                self.log.error("参数优化执行异常")
-                self.log.error(traceback.format_exc())
-                raise e
             finally:
                 # 确保资源被释放
                 gc.collect()
+
+        return results
 
     def result(self, is_print=True):
         """
@@ -629,7 +682,7 @@ class BackTest:
             base_close = float(base_klines.iloc[-1]["close"])
 
             # 每年交易日设置
-            annual_days = 240 if self.market in ["a", "us", "hk" "futures"] else 365
+            annual_days = 240 if self.market in ["a", "us", "hk", "futures"] else 365
             # 无风险收益率
             risk_free = 0.03
 

@@ -39,16 +39,6 @@ var TvIdxCDBB = (function () {
           },
         },
         constructor: function () {
-          this.init = function (context, inputCallback) {
-            // 初始化历史数据存储
-            context.yaod17_history = [];
-            context.yaod19_history = [];
-            context.yaod20_history = [];
-            context.yaod4_filter_last = -999;
-            context.yaod19_filter_last = -999;
-            context.yaod20_filter_last = -999;
-            context.bar_count = 0;
-          };
           this.main = function (context, inputCallback) {
             this._context = context;
             this._input = inputCallback;
@@ -57,6 +47,20 @@ var TvIdxCDBB = (function () {
             const h = this._context.new_var(PineJS.Std.high(this._context));
             const l = this._context.new_var(PineJS.Std.low(this._context));
             const c = this._context.new_var(PineJS.Std.close(this._context));
+            const bar_index = this._context.new_var();
+            const previous_bar = bar_index.get(1);
+            const bar_count = isNaN(previous_bar) ? 0 : previous_bar + 1;
+            bar_index.set(bar_count);
+
+            function filter(condition, period) {
+              const last_signal = context.new_var();
+              const previous = last_signal.get(1);
+              const last = isNaN(previous) ? -999 : previous;
+              // 保留原公式的 >= 边界，只把调用次数改为K线次数。
+              const signal = condition && bar_count - last >= period;
+              last_signal.set(signal ? bar_count : last);
+              return signal ? 1 : 0;
+            }
 
             // YAOD1: ((MA(C,30)-L)/MA(C,60))*200
             const ma_c_30 = PineJS.Std.sma(c, 30, this._context);
@@ -90,14 +94,7 @@ var TvIdxCDBB = (function () {
             const yaod3_ref1 = yaod3.get(1);
             const yaod4_condition =
               yaod3_ref1 < 20 && yaod3.get(0) > yaod3_ref1;
-            let yaod4 = 0;
-            if (
-              yaod4_condition &&
-              this._context.bar_count - this._context.yaod4_filter_last >= 5
-            ) {
-              yaod4 = 1;
-              this._context.yaod4_filter_last = this._context.bar_count;
-            }
+            const yaod4 = filter(yaod4_condition, 5);
 
             // YAOD5: C/MA(C,40)<0.74
             const ma_c_40 = PineJS.Std.sma(c, 40, this._context);
@@ -167,11 +164,7 @@ var TvIdxCDBB = (function () {
             // YAOD17: YAOD5 AND YAOD12 AND YAOD16
             const yaod17 = yaod5 && yaod12 && yaod16;
 
-            // 存储YAOD17历史值
-            this._context.yaod17_history.push(yaod17);
-            if (this._context.yaod17_history.length > 50) {
-              this._context.yaod17_history.shift();
-            }
+            const yaod17_series = this._context.new_var(yaod17 ? 1 : 0);
 
             // YAOD18: CROSS(YAOD15,-0.9)
             const yaod15_ref1 = yaod15.get(1);
@@ -195,70 +188,28 @@ var TvIdxCDBB = (function () {
             );
 
             // 获取REF(YAOD17,1) - 前一个周期的YAOD17值
-            const yaod17_ref1 =
-              this._context.yaod17_history.length >= 2
-                ? this._context.yaod17_history[
-                    this._context.yaod17_history.length - 2
-                  ]
-                : false;
+            const yaod17_ref1 = yaod17_series.get(1) === 1;
 
             // YAOD19: FILTER((YAOD4 AND YAOD1>20 OR C>REF(C,1)) AND REF(YAOD17,1),10)
             const yaod19_condition =
               ((yaod4 && yaod1.get(0) > 20) || c.get(0) > c.get(1)) &&
               yaod17_ref1;
-            let yaod19 = 0;
-            if (
-              yaod19_condition &&
-              this._context.bar_count - this._context.yaod19_filter_last >= 10
-            ) {
-              yaod19 = 1;
-              this._context.yaod19_filter_last = this._context.bar_count;
-            }
-
-            // 存储YAOD19历史值
-            this._context.yaod19_history.push(yaod19);
-            if (this._context.yaod19_history.length > 20) {
-              this._context.yaod19_history.shift();
-            }
+            const yaod19 = filter(yaod19_condition, 10);
 
             // YAOD20: FILTER(REF(YAOD17,1) AND (YAOD18 OR C>REF(C,1)) AND "MACD.MACD">-1.5,10)
             const yaod20_condition =
               yaod17_ref1 &&
               (yaod18 || c.get(0) > c.get(1)) &&
               macd_macd.get(0) > -1.5;
-            let yaod20 = 0;
-            if (
-              yaod20_condition &&
-              this._context.bar_count - this._context.yaod20_filter_last >= 10
-            ) {
-              yaod20 = 1;
-              this._context.yaod20_filter_last = this._context.bar_count;
-            }
-
-            // 存储YAOD20历史值
-            this._context.yaod20_history.push(yaod20);
-            if (this._context.yaod20_history.length > 15) {
-              this._context.yaod20_history.shift();
-            }
+            const yaod20 = this._context.new_var(filter(yaod20_condition, 10));
 
             // 抄底必备: COUNT(YAOD20,13)>=1 AND YAOD19
             let count_yaod20 = 0;
-            // 统计过去13个周期内YAOD20为1的次数
-            const lookback_periods = Math.min(
-              13,
-              this._context.yaod20_history.length
-            );
-            for (let i = 0; i < lookback_periods; i++) {
-              const index = this._context.yaod20_history.length - 1 - i;
-              if (index >= 0 && this._context.yaod20_history[index] === 1) {
-                count_yaod20++;
-              }
+            for (let i = 0; i < 13; i++) {
+              if (yaod20.get(i) === 1) count_yaod20++;
             }
 
             const cdbb_signal = count_yaod20 >= 1 && yaod19 ? c.get(0) : NaN;
-
-            // 更新bar_count
-            this._context.bar_count++;
 
             return [cdbb_signal];
           };

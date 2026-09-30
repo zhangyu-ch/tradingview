@@ -141,23 +141,6 @@ var TvIdxRSX = (function () {
           },
         },
         constructor: function () {
-          this.init = function (context, inputCallback) {
-            // 初始化DMA状态变量
-            context.f28_prev = NaN;
-            context.f30_prev = NaN;
-            context.f38_prev = NaN;
-            context.f40_prev = NaN;
-            context.f48_prev = NaN;
-            context.f50_prev = NaN;
-            context.f58_prev = NaN;
-            context.f60_prev = NaN;
-            context.f68_prev = NaN;
-            context.f70_prev = NaN;
-            context.f78_prev = NaN;
-            context.f80_prev = NaN;
-            // 趋势线EMA
-            context.trend_ema_prev = NaN;
-          };
           this.main = function (context, inputCallback) {
             this._context = context;
             this._input = inputCallback;
@@ -192,75 +175,67 @@ var TvIdxRSX = (function () {
             const v8 = this._context.new_var(f8.get(0) - f10.get(0));
 
             // DMA函数: DMA(X, A) = A*X + (1-A)*REF(DMA(X,A),1)
-            function dma(value, alpha, prevValue) {
-              if (isNaN(prevValue)) {
-                return value;
-              }
-              return alpha * value + (1 - alpha) * prevValue;
+            function dma(value, alpha) {
+              // 固定顺序分配序列；同一根K线重算时始终读取上一根已完成值。
+              const state = context.new_var();
+              const prevValue = state.get(1);
+              const nextValue = isNaN(prevValue)
+                ? value
+                : alpha * value + (1 - alpha) * prevValue;
+              state.set(nextValue);
+              return nextValue;
             }
 
             // F28 := DMA(V8, F18);
-            const f28 = dma(v8.get(0), f18, this._context.f28_prev);
-            this._context.f28_prev = f28;
+            const f28 = dma(v8.get(0), f18);
 
             // F30 := DMA(F28, F18);
-            const f30 = dma(f28, f18, this._context.f30_prev);
-            this._context.f30_prev = f30;
+            const f30 = dma(f28, f18);
 
             // VC := F28 * 1.5 - F30 * 0.5;
             const vc = f28 * 1.5 - f30 * 0.5;
 
             // F38 := DMA(VC, F18);
-            const f38 = dma(vc, f18, this._context.f38_prev);
-            this._context.f38_prev = f38;
+            const f38 = dma(vc, f18);
 
             // F40 := DMA(F38, F18);
-            const f40 = dma(f38, f18, this._context.f40_prev);
-            this._context.f40_prev = f40;
+            const f40 = dma(f38, f18);
 
             // V10 := F38 * 1.5 - F40 * 0.5;
             const v10 = f38 * 1.5 - f40 * 0.5;
 
             // F48 := DMA(V10, F18);
-            const f48 = dma(v10, f18, this._context.f48_prev);
-            this._context.f48_prev = f48;
+            const f48 = dma(v10, f18);
 
             // F50 := DMA(F48, F18);
-            const f50 = dma(f48, f18, this._context.f50_prev);
-            this._context.f50_prev = f50;
+            const f50 = dma(f48, f18);
 
             // V14 := F48 * 1.5 - F50 * 0.5;
             const v14 = f48 * 1.5 - f50 * 0.5;
 
             // F58 := DMA(ABS(V8), F18);
-            const f58 = dma(Math.abs(v8.get(0)), f18, this._context.f58_prev);
-            this._context.f58_prev = f58;
+            const f58 = dma(Math.abs(v8.get(0)), f18);
 
             // F60 := DMA(F58, F18);
-            const f60 = dma(f58, f18, this._context.f60_prev);
-            this._context.f60_prev = f60;
+            const f60 = dma(f58, f18);
 
             // V18 := F58 * 1.5 - F60 * 0.5;
             const v18 = f58 * 1.5 - f60 * 0.5;
 
             // F68 := DMA(V18, F18);
-            const f68 = dma(v18, f18, this._context.f68_prev);
-            this._context.f68_prev = f68;
+            const f68 = dma(v18, f18);
 
             // F70 := DMA(F68, F18);
-            const f70 = dma(f68, f18, this._context.f70_prev);
-            this._context.f70_prev = f70;
+            const f70 = dma(f68, f18);
 
             // V1C := F68 * 1.5 - F70 * 0.5;
             const v1c = f68 * 1.5 - f70 * 0.5;
 
             // F78 := DMA(V1C, F18);
-            const f78 = dma(v1c, f18, this._context.f78_prev);
-            this._context.f78_prev = f78;
+            const f78 = dma(v1c, f18);
 
             // F80 := DMA(F78, F18);
-            const f80 = dma(f78, f18, this._context.f80_prev);
-            this._context.f80_prev = f80;
+            const f80 = dma(f78, f18);
 
             // V20 := F78 * 1.5 - F80 * 0.5;
             const v20 = f78 * 1.5 - f80 * 0.5;
@@ -275,8 +250,7 @@ var TvIdxRSX = (function () {
 
             // ===== 趋势线 EMA(RSX, EMA_PERIOD) =====
             const emaAlpha = 2.0 / (EMA_PERIOD + 1);
-            const trend = dma(rsx_, emaAlpha, this._context.trend_ema_prev);
-            this._context.trend_ema_prev = trend;
+            const trend = dma(rsx_, emaAlpha);
 
             // ===== 填充区域 =====
             const ob_fill = rsx_ > OBLEVEL ? rsx_ : NaN;

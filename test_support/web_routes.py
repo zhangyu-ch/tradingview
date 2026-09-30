@@ -41,8 +41,6 @@ SERVICE_ATTRIBUTE_NAMES = {
     "fun": "fun",
     "zixuan_factory": "ZiXuan",
     "stocks_bkgn_factory": "StocksBKGN",
-    "secret_store_factory": "ManagedSecretStore",
-    "get_data_path": "get_data_path",
     "web_host": "web_host",
 }
 

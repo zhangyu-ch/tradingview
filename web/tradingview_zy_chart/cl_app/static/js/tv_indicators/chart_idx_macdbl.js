@@ -346,91 +346,6 @@ var TvIdxMACDBL = (function () {
             return result;
           };
 
-          /**
-           * 背离检测管理器
-           * 用于记录和管理枢轴点，检测背离
-           */
-          this.divergenceManager = {
-            // 记录顶部的枢轴点
-            tops: [],
-            // 记录底部的枢轴点
-            bottoms: [],
-
-            /**
-             * 添加顶部枢轴点
-             * @param {number} price - 价格
-             * @param {number} hist - MACD值
-             */
-            addTop: function (price, hist) {
-              this.tops.push({
-                price: price,
-                hist: hist,
-              });
-
-              // 只保留最近的几个顶部点，避免内存占用过多
-              if (this.tops.length > 10) {
-                this.tops.shift();
-              }
-            },
-
-            /**
-             * 添加底部枢轴点
-             * @param {number} price - 价格
-             * @param {number} hist - MACD值
-             */
-            addBottom: function (price, hist) {
-              this.bottoms.push({
-                price: price,
-                hist: hist,
-              });
-
-              // 只保留最近的几个底部点，避免内存占用过多
-              if (this.bottoms.length > 10) {
-                this.bottoms.shift();
-              }
-            },
-
-            /**
-             * 检测顶背离
-             * @param {number} currentPrice - 当前价格
-             * @param {number} currentHist - 当前HIST值
-             * @returns {boolean} 是否存在顶背离
-             */
-            checkBearishDivergence: function (currentPrice, currentHist) {
-              if (this.tops.length < 2) return false;
-
-              const lastTop = this.tops[this.tops.length - 2];
-
-              // 价格创新高但MACD不创新高
-              const priceHigher = currentPrice > lastTop.price;
-              const histLower = currentHist < lastTop.hist;
-
-              return priceHigher && histLower;
-            },
-
-            /**
-             * 检测底背离
-             * @param {number} currentPrice - 当前价格
-             * @param {number} currentHist - 当前HIST值
-             * @returns {boolean} 是否存在底背离
-             */
-            checkBullishDivergence: function (currentPrice, currentHist) {
-              if (this.bottoms.length < 2) return false;
-
-              const lastBottom = this.bottoms[this.bottoms.length - 2];
-
-              // 价格创新低但MACD不创新低
-              const priceLower = currentPrice < lastBottom.price;
-              const histHigher = currentHist > lastBottom.hist;
-
-              return priceLower && histHigher;
-            },
-          };
-
-          this.init = function (context, inputCallback) {
-            // 初始化
-          };
-
           this.main = function (context, inputCallback) {
             this._context = context;
             this._input = inputCallback;
@@ -484,51 +399,50 @@ var TvIdxMACDBL = (function () {
               this._context
             );
 
+            // 每根K线保存最近一个枢轴；同bar重算只与上一根已完成K线比较。
+            const bottomPrice = this._context.new_var();
+            const bottomHist = this._context.new_var();
+            const topPrice = this._context.new_var();
+            const topHist = this._context.new_var();
+            const previousBottomPrice = bottomPrice.get(1);
+            const previousBottomHist = bottomHist.get(1);
+            const previousTopPrice = topPrice.get(1);
+            const previousTopHist = topHist.get(1);
             let bullShape = NaN; // 底背离标识
             let bearShape = NaN; // 顶背离标识
 
-            // 检测并记录枢轴低点
             if (pivotResult.hasBottom) {
               const bottomInfo = pivotResult.bottomInfo;
-
-              // 记录底部枢轴点
-              this.divergenceManager.addBottom(
-                bottomInfo.price,
-                bottomInfo.hist
-              );
-
-              // 检测底背离
               if (
                 plotBull &&
-                this.divergenceManager.checkBullishDivergence(
-                  bottomInfo.price,
-                  bottomInfo.hist
-                )
+                bottomInfo.price < previousBottomPrice &&
+                bottomInfo.hist > previousBottomHist
               ) {
-                // 在MACD不创新低的位置标记底背离
                 bullShape = bottomInfo.hist;
               }
             }
-
-            // 检测并记录枢轴高点
             if (pivotResult.hasTop) {
               const topInfo = pivotResult.topInfo;
-
-              // 记录顶部枢轴点
-              this.divergenceManager.addTop(topInfo.price, topInfo.hist);
-
-              // 检测顶背离
               if (
                 plotBear &&
-                this.divergenceManager.checkBearishDivergence(
-                  topInfo.price,
-                  topInfo.hist
-                )
+                topInfo.price > previousTopPrice &&
+                topInfo.hist < previousTopHist
               ) {
-                // 在MACD不创新高的位置标记顶背离
                 bearShape = topInfo.hist;
               }
             }
+            bottomPrice.set(
+              pivotResult.hasBottom ? pivotResult.bottomInfo.price : previousBottomPrice
+            );
+            bottomHist.set(
+              pivotResult.hasBottom ? pivotResult.bottomInfo.hist : previousBottomHist
+            );
+            topPrice.set(
+              pivotResult.hasTop ? pivotResult.topInfo.price : previousTopPrice
+            );
+            topHist.set(
+              pivotResult.hasTop ? pivotResult.topInfo.hist : previousTopHist
+            );
 
             // 返回所有指标值
             return [

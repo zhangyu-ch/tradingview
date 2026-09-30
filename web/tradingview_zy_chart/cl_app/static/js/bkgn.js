@@ -108,11 +108,11 @@ var BKGN = (function () {
       const code = data.code;
       change_chart_ticker(Utils.get_market(), code);
       $("#ai_code").val(code);
-      table.setRowChecked("bkgn_table", {
+      layui.table.setRowChecked("bkgn_table", {
         index: "all", // 所有行
         checked: false,
       });
-      table.setRowChecked("bkgn_table", {
+      layui.table.setRowChecked("bkgn_table", {
         index: obj.index, // 选中行的下标。 0 表示第一行
       });
     });

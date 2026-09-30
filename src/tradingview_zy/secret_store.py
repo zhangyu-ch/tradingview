@@ -94,13 +94,7 @@ CONFIG_SECRET_POLICIES: Mapping[str, SecretPolicy] = MappingProxyType(
         "OPENROUTER_AI_KEYS": SecretPolicy(SecretClass.AI, RotationMode.EXTERNAL),
     }
 )
-MANAGED_SECRET_POLICIES: Mapping[str, SecretPolicy] = MappingProxyType(
-    {
-        "feishu.web.app_secret": SecretPolicy(
-            SecretClass.MESSAGING, RotationMode.MANAGED_VERSIONED
-        )
-    }
-)
+MANAGED_SECRET_POLICIES: Mapping[str, SecretPolicy] = MappingProxyType({})
 
 
 def secret_policy_for_attribute(attribute: str) -> SecretPolicy:

@@ -130,7 +130,6 @@ def test_long_strategy_config_and_memo_round_trip_through_dedicated_text_columns
         strategy_config=config_text,
         strategy_memo=memo,
         is_run=1,
-        is_send_msg=1,
     )
     row = module.db.task_query(market="a")[0]
     assert row.strategy_config == config_text
@@ -151,7 +150,6 @@ def test_long_strategy_config_and_memo_round_trip_through_dedicated_text_columns
         strategy_config=updated,
         strategy_memo="更新" * 250,
         is_run=0,
-        is_send_msg=0,
     )
     current = module.db.task_query(id=row.id)[0]
     assert current.strategy_config == updated
@@ -179,7 +177,6 @@ def test_save_detects_database_side_truncation(tmp_path) -> None:
                 strategy_config=build_strategy_config("demo", {"value": "x" * 200}),
                 strategy_memo="memo",
                 is_run=1,
-                is_send_msg=1,
             )
     finally:
         event.remove(module.db.Session, "before_flush", truncate_before_flush)

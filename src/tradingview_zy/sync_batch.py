@@ -411,6 +411,10 @@ def sync_incremental_series(
             frequency,
         )
         effective_start = last_datetime if last_datetime is not None else start_date
+        from tradingview_zy.crypto_time import as_utc, is_crypto
+
+        if effective_start is not None and is_crypto(getattr(destination, "market", None)):
+            effective_start = as_utc(effective_start).isoformat()
         kwargs: dict[str, Any] = {"args": dict(query_args or {})}
         if effective_start is not None:
             kwargs["start_date"] = effective_start
@@ -786,8 +790,15 @@ def run_configured_sync(
     resume: bool = True,
 ) -> BatchRunResult:
     config = load_sync_config(config_path)
-    digest = _canonical_digest(config)
+    from tradingview_zy.crypto_time import CRYPTO_TIME_VERSION, artifact_path, is_crypto
+
     market = str(config["market"]).strip()
+    if is_crypto(market):
+        # Keep old checkpoint files intact and never trust their completed items.
+        checkpoint_path = Path(artifact_path(checkpoint_path))
+        digest = _canonical_digest({**config, "crypto_time_version": CRYPTO_TIME_VERSION})
+    else:
+        digest = _canonical_digest(config)
     deadline = BatchDeadline(batch_deadline_seconds)
     caller = DeadlineCaller(max_concurrent=2)
     source: Any | None = None

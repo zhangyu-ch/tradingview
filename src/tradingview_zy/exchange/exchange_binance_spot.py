@@ -1,11 +1,12 @@
 import datetime
+import time
+from threading import RLock
 from typing import Dict, List, Union
 
 import ccxt
 import pandas as pd
 import pytz
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
-from tzlocal import get_localzone
+from tradingview_zy.crypto_time import as_utc
 
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
@@ -15,12 +16,13 @@ from tradingview_zy.exchange.binance_pagination import (
     paginate_ohlcv,
 )
 from tradingview_zy.exchange.exchange_db import ExchangeDB
+from tradingview_zy.exchange.binance_reliability import fetch_ohlcv_with_retry
+from tradingview_zy.domain import InvalidRequestError
 from tradingview_zy.utils import config_get_proxy
 from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.trading_calendar import is_market_open
 
 
-@fun.singleton
 class ExchangeBinanceSpot(Exchange):
     """
     数字货币交易所接口(现货交易)
@@ -29,7 +31,8 @@ class ExchangeBinanceSpot(Exchange):
     g_all_stocks = []
 
     def __init__(self):
-        params = {}
+        params = {"timeout": 4000, "maxRetriesOnFailure": 0}
+        self._ohlcv_lock = RLock()
 
         proxy = config_get_proxy()
         # print(proxy)
@@ -58,7 +61,7 @@ class ExchangeBinanceSpot(Exchange):
 
         # 设置时区
         # self.tz = pytz.timezone("Asia/Shanghai")
-        self.tz = pytz.timezone(str(get_localzone()))
+        self.tz = pytz.UTC
 
     def default_code(self):
         return "BTC/USDT"
@@ -113,11 +116,6 @@ class ExchangeBinanceSpot(Exchange):
         self.g_all_stocks = __all_stocks
         return self.g_all_stocks
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_random(min=1, max=5),
-        retry=retry_if_result(lambda _r: _r is None),
-    )
     def klines(
         self,
         code: str,
@@ -138,36 +136,29 @@ class ExchangeBinanceSpot(Exchange):
             # 个别情况需要直接调用交易所结果，不需要通过数据库
             return self.online_klines(code, frequency, start_date, end_date, args)
 
-        try:
-            # 查询数据库，如果数据库为0，api查询并插入数据库
-            db_klines = self.db_exchange.klines(code, frequency, args={"limit": 10000})
-            if len(db_klines) == 0:
-                online_klines = self.increment_klines_by_online(
-                    code, frequency, start_date=None
-                )
-                if online_klines is not None and len(online_klines) > 0:
-                    self.db_exchange.insert_klines(code, frequency, online_klines)
-                return online_klines
+        # 查询数据库，如果数据库为0，api查询并插入数据库
+        db_klines = self.db_exchange.klines(code, frequency, args={"limit": 10000})
+        if len(db_klines) == 0:
+            online_klines = self.increment_klines_by_online(
+                code, frequency, start_date=None
+            )
+            if online_klines is not None and len(online_klines) > 0:
+                self.db_exchange.insert_klines(code, frequency, online_klines)
+            return online_klines
+        else:
+            # 根据数据库中的最后时间，调用api进行返回数据
+            last_datetime = latest_cached_datetime(db_klines)
+            online_klines = self.increment_klines_by_online(
+                code, frequency, start_date=last_datetime
+            )
+            if online_klines is not None and len(online_klines) > 0:
+                self.db_exchange.insert_klines(code, frequency, online_klines)
             else:
-                # 根据数据库中的最后时间，调用api进行返回数据
-                last_datetime = latest_cached_datetime(db_klines)
-                online_klines = self.increment_klines_by_online(
-                    code, frequency, start_date=last_datetime
-                )
-                if online_klines is not None and len(online_klines) > 0:
-                    self.db_exchange.insert_klines(code, frequency, online_klines)
-                else:
-                    return db_klines[-10000::]
-            klines = pd.concat([db_klines, online_klines], ignore_index=True)
-            klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
-            klines = klines.sort_values(by="date", ascending=True)
-            return klines[-10000::]
-        except Exception as e:
-            print(f"{code} - {frequency} Error : {e}")
-            # print(traceback.format_exc())
-            # exit()
-
-        return None
+                return db_klines[-10000::]
+        klines = pd.concat([db_klines, online_klines], ignore_index=True)
+        klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
+        klines = klines.sort_values(by="date", ascending=True)
+        return klines[-10000::]
 
     def increment_klines_by_online(
         self,
@@ -197,19 +188,17 @@ class ExchangeBinanceSpot(Exchange):
             "1m": "1m",
         }
         if frequency not in frequency_map:
-            raise ValueError(f"不支持的周期: {frequency}")
+            raise InvalidRequestError(f"不支持的周期: {frequency}")
 
         start_timestamp = None
         if start_date is not None:
-            start_timestamp = int(
-                datetime.datetime.strptime(
-                    start_date, "%Y-%m-%d %H:%M:%S"
-                ).timestamp()
-                * 1000
-            )
+            start_timestamp = int(as_utc(start_date).timestamp() * 1000)
+
+        deadline = time.monotonic() + 12.0
 
         def fetch_page(params):
-            return self.exchange.fetch_ohlcv(
+            return fetch_ohlcv_with_retry(
+                self.exchange, self._ohlcv_lock, deadline=deadline,
                 symbol=code,
                 timeframe=frequency_map[frequency],
                 limit=1000,
@@ -224,16 +213,14 @@ class ExchangeBinanceSpot(Exchange):
             max_pages=int(args.get("max_pages", 100)),
         )
         if not all_klines:
-            return None
+            return pd.DataFrame([])
 
         kline_pd = pd.DataFrame(
             all_klines, columns=["date", "open", "high", "low", "close", "volume"]
         )
         kline_pd["code"] = code
         kline_pd["date"] = kline_pd["date"].apply(
-            lambda value: datetime.datetime.fromtimestamp(value / 1e3).astimezone(
-                self.tz
-            )
+            lambda value: datetime.datetime.fromtimestamp(value / 1e3, datetime.timezone.utc)
         )
         kline_pd = kline_pd[
             ["code", "date", "open", "close", "high", "low", "volume"]
@@ -277,33 +264,20 @@ class ExchangeBinanceSpot(Exchange):
             "1m": "1m",
         }
         if frequency not in frequency_map.keys():
-            raise Exception(f"不支持的周期: {frequency}")
+            raise InvalidRequestError(f"不支持的周期: {frequency}")
 
         if start_date is not None:
-            start_date = (
-                int(
-                    datetime.datetime.timestamp(
-                        datetime.datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
-                    )
-                )
-                * 1000
-            )
+            start_date = int(as_utc(start_date).timestamp() * 1000)
         if end_date is not None:
-            end_date = (
-                int(
-                    datetime.datetime.timestamp(
-                        datetime.datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
-                    )
-                )
-                * 1000
-            )
+            end_date = int(as_utc(end_date).timestamp() * 1000)
         params = {}
         if start_date is not None:
             params["startTime"] = start_date
         if end_date is not None:
             params["endTime"] = end_date
 
-        kline = self.exchange.fetch_ohlcv(
+        kline = fetch_ohlcv_with_retry(
+            self.exchange, self._ohlcv_lock, deadline=time.monotonic() + 12.0,
             symbol=code,
             timeframe=frequency_map[frequency],
             limit=1000,
@@ -316,7 +290,7 @@ class ExchangeBinanceSpot(Exchange):
         # kline_pd.loc[:, 'date'] = kline_pd['date'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1e3))
         kline_pd["code"] = code
         kline_pd["date"] = kline_pd["date"].apply(
-            lambda x: datetime.datetime.fromtimestamp(x / 1e3).astimezone(self.tz)
+            lambda x: datetime.datetime.fromtimestamp(x / 1e3, datetime.timezone.utc)
         )
         kline_pd = kline_pd[["code", "date", "open", "close", "high", "low", "volume"]]
         # 自定义级别，需要进行转换

@@ -175,18 +175,6 @@ var Alert = (function () {
                 },
               },
               {
-                field: "is_send_msg",
-                title: "发送消息",
-                sort: true,
-                templet: function (d) {
-                  if (d.is_send_msg === 1) {
-                    return "发送";
-                  } else {
-                    return "不发";
-                  }
-                },
-              },
-              {
                 field: "is_run",
                 title: "启用",
                 sort: true,

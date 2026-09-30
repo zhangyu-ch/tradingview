@@ -74,6 +74,8 @@ class POSITION:
         self.open_records: List[dict] = []
         # 平仓记录信息
         self.close_records: List[dict] = []
+        # 按 close_uid 记录的平仓收益
+        self.close_uid_profit: Dict[str, dict] = {}
 
     def __close_records_by_uids(self, uids: List[str] = None):
         """

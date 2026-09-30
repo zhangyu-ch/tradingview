@@ -119,11 +119,11 @@ jobs:
         run: uv sync --locked
       - name: Install Chromium
         run: uv run playwright install --with-deps chromium
-      - name: Verify rendered settings DOM does not expose stored secrets
+      - name: Verify browser CSRF, chart storage and settings DOM
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           RUN_BROWSER_TESTS: "1"
-        run: uv run pytest -q -W error tests/test_me29_browser_dom.py
+        run: uv run pytest -q -W error tests/test_me29_browser_dom.py tests/test_cleanup_csrf_browser.py
 
   windows-contracts:
     runs-on: windows-latest

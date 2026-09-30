@@ -1,8 +1,8 @@
 """Versioned futures margin and fee parameter loading.
 
-The bundled data was migrated verbatim from the historical module-level mapping.
-A backtest must name an immutable version and prove that the requested date range
-and instruments are covered before any market data is loaded.
+The original snapshot remains loadable for historical results. New backtests
+must select a corrected version, or explicitly opt into a static approximation;
+coverage and instruments are checked before any market data is loaded.
 """
 from __future__ import annotations
 
@@ -10,12 +10,16 @@ import copy
 import datetime as _dt
 import hashlib
 import json
+import logging
 import math
 import re
 from importlib import resources
 from typing import Any, Iterable, Mapping
 
 _DATA_FILE = "futures_parameters.json"
+# Keep old record bytes/hashes intact for loading saved results, not new runs.
+_RETIRED_VERSIONS = {"2024-12-13": "2024-12-13-r2"}
+_LOG = logging.getLogger(__name__)
 _REQUIRED_FIELDS = (
     "symbol_size",
     "margin_rate_long",
@@ -187,7 +191,11 @@ def _load_dataset() -> dict[str, Any]:
 
 
 def available_futures_parameter_versions() -> tuple[str, ...]:
-    return tuple(item["version"] for item in _load_dataset()["versions"])
+    """Versions available for new runs; retired records remain loadable."""
+    return tuple(
+        item["version"] for item in _load_dataset()["versions"]
+        if item["version"] not in _RETIRED_VERSIONS
+    )
 
 
 def build_futures_parameter_manifest(
@@ -218,6 +226,12 @@ def build_futures_parameter_manifest(
             f"unknown futures parameter version {version!r}; "
             f"available={available_futures_parameter_versions()}"
         )
+    replacement = _RETIRED_VERSIONS.get(selected["version"])
+    if replacement:
+        raise FuturesParameterError(
+            f"version {selected['version']} is load-only due to incorrect multipliers; "
+            f"select {replacement!r}, or 'legacy-static-r2' for a static approximation"
+        )
     effective_from = _dt.date.fromisoformat(selected["effective_from"])
     effective_to = (
         _dt.date.fromisoformat(selected["effective_to"])
@@ -233,6 +247,11 @@ def build_futures_parameter_manifest(
     if missing:
         raise FuturesParameterError(
             f"version {selected['version']} does not define contracts: {missing}"
+        )
+    if selected["provenance"].get("usage") == "static-approximation":
+        _LOG.warning(
+            "Futures parameters %s use a static approximation, not historical "
+            "fee/margin schedules (%s..%s)", selected["version"], start_date, end_date
         )
     manifest: dict[str, Any] = {
         "schema_version": 1,

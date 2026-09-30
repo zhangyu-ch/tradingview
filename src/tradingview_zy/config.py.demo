@@ -61,6 +61,13 @@ SCHEDULER_RECONCILE_SECONDS = 30
 # 项目数据保存路径，如果以 . 开头，则保存到 home 目录，否则按照设置目录来。
 DATA_PATH = ".quant_zy"
 
+# 数字货币旧库的实际存储时区确认（按市场分别登记，首次绑定后不可改）。
+# 保持 {}：全新空市场首次使用绑定 UTC；有未登记旧数据则报错，不猜测上海。
+# 仅在停写、备份并核实整个市场来源一致后填写，例如：
+# CRYPTO_STORAGE_TIMEZONES = {"currency": "Asia/Shanghai", "currency_spot": "UTC"}
+# 混合/未知来源或 DST 歧义数据不能靠配置修复，详见 docs/currency-timezone-options.md。
+CRYPTO_STORAGE_TIMEZONES = {}
+
 # 代理服务器配置
 PROXY_HOST = '127.0.0.1'
 PROXY_PORT = 7890
@@ -127,55 +134,6 @@ AI_MODEL = "Pro/deepseek-ai/DeepSeek-R1"
 
 OPENROUTER_AI_KEYS = 'env://TRADINGVIEW_ZY_OPENROUTER_API_KEY'
 OPENROUTER_AI_MODEL = "google/gemini-2.5-pro-preview"
-
-# 飞书消息配置 (项目中新的消息推送使用飞书，user_id 是唯一的，不同的市场可以配置不同的机器人，没有设置则使用 default 的机器人)
-# 配置获取方法，在 web 页面的系统设置中有教程
-# 每次 HTTP 请求的总超时（秒）；SDK 的 connect/read 均受该上限约束。
-FEISHU_REQUEST_TIMEOUT_SECONDS = 5.0
-# 仅在同一 delivery UUID 下进行有限重试，避免重复消息。
-FEISHU_MAX_ATTEMPTS = 3
-FEISHU_RETRY_BACKOFF_SECONDS = 0.2
-FEISHU_MAX_RETRY_BACKOFF_SECONDS = 1.0
-FEISHU_KEYS = {
-    "default": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_DEFAULT_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_DEFAULT_APP_SECRET",
-    },
-    "a": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_A_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_A_APP_SECRET",
-    },
-    "us": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_US_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_US_APP_SECRET",
-    },
-    "hk": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_HK_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_HK_APP_SECRET",
-    },
-    "fx": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_FX_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_FX_APP_SECRET",
-    },
-    "futures": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_FUTURES_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_FUTURES_APP_SECRET",
-    },
-    "ny_futures": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_NY_FUTURES_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_NY_FUTURES_APP_SECRET",
-    },
-    "currency_spot": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_SPOT_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_SPOT_APP_SECRET",
-    },
-    "currency": {
-        "app_id": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_APP_ID",
-        "app_secret": "env://TRADINGVIEW_ZY_FEISHU_CURRENCY_APP_SECRET",
-    },
-    "user_id": "env://TRADINGVIEW_ZY_FEISHU_USER_ID",
-    "enable_img": False,
-}
 
 # 自定义监控策略注册表。Web 页面只能选择这里登记的策略，不再接受任意 Python 导入路径。
 # strategy_kwargs 是默认参数；allowed_kwargs 是页面允许覆盖的参数名；

@@ -24,9 +24,7 @@ def validate(app_source: str, template_source: str) -> list[str]:
         template_source,
         re.IGNORECASE | re.DOTALL,
     )
-    if not secret_input:
-        errors.append("setting template has no fs_app_secret input")
-    else:
+    if secret_input:
         tag = secret_input.group(0)
         if not re.search(r"\btype=[\"']password[\"']", tag, re.IGNORECASE):
             errors.append("fs_app_secret input must use type=password")
@@ -48,8 +46,6 @@ def validate(app_source: str, template_source: str) -> list[str]:
     else:
         if re.search(r'["\']fs_app_secret["\']\s*:', get_block):
             errors.append("setting GET route returns fs_app_secret")
-        if "fs_app_secret_configured" not in get_block:
-            errors.append("setting GET route must expose only configured/not-configured state")
         normalized_get_block = get_block.replace("'", '"')
         if '"Cache-Control": "no-store"' not in normalized_get_block:
             errors.append("setting GET response must be non-cacheable")

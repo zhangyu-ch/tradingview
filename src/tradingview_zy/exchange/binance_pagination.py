@@ -4,6 +4,8 @@ import datetime as dt
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from tradingview_zy.crypto_time import as_utc
+
 
 class PaginationStalledError(RuntimeError):
     """The upstream API did not advance the requested time cursor."""
@@ -22,7 +24,7 @@ def latest_cached_datetime(frame: Any) -> str | None:
         value = value.to_pydatetime()
     if not isinstance(value, dt.datetime):
         raise ValueError(f"unsupported cached date value: {value!r}")
-    return value.strftime("%Y-%m-%d %H:%M:%S")
+    return as_utc(value).isoformat()
 
 
 def _validated_page(page: Sequence[Sequence[Any]] | None) -> list[list[Any]]:

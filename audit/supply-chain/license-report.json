@@ -1,5 +1,5 @@
 {
-  "component_count": 155,
+  "component_count": 153,
   "components": [
     {
       "license": null,
@@ -838,19 +838,6 @@
       "license_classifiers": [],
       "license_expression": null,
       "license_files": [],
-      "name": "lark-oapi",
-      "normalized_name": "lark-oapi",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "1.7.2"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
       "name": "lxml",
       "normalized_name": "lxml",
       "review": "metadata-unavailable-offline",
@@ -1514,19 +1501,6 @@
       "license_classifiers": [],
       "license_expression": null,
       "license_files": [],
-      "name": "requests-toolbelt",
-      "normalized_name": "requests-toolbelt",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "1.0.0"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
       "name": "scikit-learn",
       "normalized_name": "scikit-learn",
       "review": "metadata-unavailable-offline",
@@ -2029,5 +2003,5 @@
   ],
   "schema_version": 1,
   "source": "uv.lock + local wheel evidence",
-  "uv_lock_sha256": "8740beffc2c884d480aae1ee345b77dec9b70cf6ee8a8c503a9136a79a3de1ef"
+  "uv_lock_sha256": "b35ce087785474d16eefb4d691561c3f8b6de5494abedf7c2d77f8a200f87773"
 }

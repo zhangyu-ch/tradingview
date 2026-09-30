@@ -16,10 +16,11 @@ def test_legacy_dingding_helpers_and_config_contract_are_removed() -> None:
     assert offenders == []
 
 
-def test_feishu_channel_remains_available() -> None:
+def test_retired_feishu_channel_is_not_part_of_shared_utilities() -> None:
     source = (ROOT / "src/tradingview_zy/utils.py").read_text(encoding="utf-8")
-    assert "def send_fs_msg(" in source
-    assert "def config_get_feishu_keys(" in source
+    assert "send_fs_msg" not in source
+    assert "config_get_feishu_keys" not in source
+    assert "def config_get_proxy(" in source
 
 
 def test_channel_documentation_sets_reintroduction_requirements() -> None:

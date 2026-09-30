@@ -167,9 +167,10 @@ def test_web_routes_and_browser_clients_enforce_the_csrf_contract() -> None:
     assert "js/csrf.js" in dark_template
     assert 'name="_csrf_token"' in login_template
 
-    # Cover every browser request mechanism used by this legacy front-end.
-    assert "ajaxPrefilter" in csrf_source
-    assert "window.fetch" in csrf_source
-    assert "XMLHttpRequest.prototype.send" in csrf_source
+    # jQuery uses the patched XHR; a second prefilter would duplicate the header.
+    assert "ajaxPrefilter" not in csrf_source
+    assert "win.fetch" in csrf_source
+    assert "prototype.send" in csrf_source
+    assert "TRADINGVIEW_ZY_CSRF = { install: install }" in csrf_source
     assert 'input[name="_csrf_token"]' in csrf_source
     assert "X-CSRF-Token" in csrf_source

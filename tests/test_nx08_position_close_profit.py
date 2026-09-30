@@ -67,3 +67,10 @@ def test_missing_requested_and_clear_records_raise_without_mutation() -> None:
         position.get_close_profit(requested)
 
     assert requested == ["missing"]
+
+
+def test_new_position_reports_missing_close_record_instead_of_attribute_error() -> None:
+    position = POSITION("SH.000001", "breakout")
+
+    with pytest.raises(Exception, match="没有找到对应的平仓记录"):
+        position.get_close_profit(["partial"])

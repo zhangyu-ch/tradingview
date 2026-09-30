@@ -24,20 +24,31 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.mysql import MEDIUMTEXT, insert
 from sqlalchemy.engine import URL
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool
+from sqlalchemy.schema import CreateColumn
 
 from tradingview_zy import config, fun
+from tradingview_zy.crypto_time import (
+    from_storage, is_crypto, migrate_crypto_storage_timezone, storage_frequency, storage_timezone, to_storage,
+)
 from tradingview_zy.alert_strategy_storage import (
     normalize_strategy_config,
     normalize_strategy_memo,
 )
+from tradingview_zy.alert_task_validation import DuplicateAlertTaskError
 from tradingview_zy.base import Market
 from tradingview_zy.config import get_data_path
 from tradingview_zy.database_catalog import list_market_kline_codes
 from tradingview_zy.domain import Frequency, parse_frequency
 from tradingview_zy.market_registry import kline_table_name, parse_market
 from tradingview_zy.secret_store import resolve_config_secret
+from tradingview_zy.schema_migrations import (
+    SchemaMigrationError,
+    initialize_schema,
+    migration_connection,
+)
 from tradingview_zy.monitoring_events import (
     MonitoringEventType,
     legacy_action,
@@ -78,9 +89,6 @@ class TableByCache(Base):
 class TableByZxGroup(Base):
     # 自选组列表
     __tablename__ = "cl_zixuan_groups"
-    __table_args__ = (
-        UniqueConstraint("market", "zx_group", name="table_market_group_unique"),
-    )
     market = Column(String(20), primary_key=True, comment="市场")
     zx_group = Column(String(20), primary_key=True, comment="自选组名称")
     add_dt = Column(DateTime, comment="添加时间")
@@ -107,9 +115,6 @@ class TableByZixuan(Base):
 class TableByAlertTask(Base):
     # 提醒任务
     __tablename__ = "cl_alert_task"
-    __table_args__ = (
-        UniqueConstraint("market", "task_name", name="table_market_task_name_unique"),
-    )
     id = Column(Integer, primary_key=True, autoincrement=True)
     market = Column(String(20), comment="市场")  # 市场
     task_name = Column(String(100), comment="任务名称")  # 任务名称
@@ -131,10 +136,12 @@ class TableByAlertTask(Base):
         "strategy_memo", Text, nullable=True, comment="策略备注"
     )
     is_run = Column(Integer, comment="是否运行")  # 是否运行
-    is_send_msg = Column(Integer, comment="是否发送消息")  # 是否发送消息
     dt = Column(DateTime, comment="任务添加、修改时间")  # 任务添加、修改时间
-    # 添加配置设置编码
-    __table_args__ = {"mysql_collate": "utf8mb4_general_ci"}
+    # 同市场任务名也是告警记录的分组键，不能重名。
+    __table_args__ = (
+        Index("table_market_task_name_unique", "market", "task_name", unique=True),
+        {"mysql_collate": "utf8mb4_general_ci"},
+    )
 
     @property
     def strategy_config(self):
@@ -430,6 +437,34 @@ def normalize_watchlist_snapshot(stocks) -> list[dict[str, str]]:
     return [by_code[code] for code in order]
 
 
+def migrate_alert_task_uniqueness(engine) -> None:
+    """Refuse ambiguous legacy task names; never silently rename/delete tasks."""
+    inspector = inspect(engine)
+    if not inspector.has_table(TableByAlertTask.__tablename__):
+        return
+    with migration_connection(engine) as connection:
+        conflicts = connection.execute(
+            text(
+                "SELECT market, task_name, COUNT(*) AS copies FROM cl_alert_task "
+                "GROUP BY market, task_name HAVING COUNT(*) > 1 LIMIT 20"
+            )
+        ).mappings().all()
+        if conflicts:
+            details = "; ".join(
+                f"market={row['market']!r}, task_name={row['task_name']!r}, count={row['copies']}"
+                for row in conflicts
+            )
+            raise SchemaMigrationError(
+                "监控任务存在同市场重名，未删除或重命名任何任务。请先备份数据库，"
+                "按 cl_alert_task.id 手工更名并核对 cl_alert_record 的任务归属后重启；"
+                f"冲突（最多20组）：{details}"
+            )
+        for index in TableByAlertTask.__table__.indexes:
+            if index.name == "table_market_task_name_unique":
+                index.create(bind=connection, checkfirst=True)
+                break
+
+
 def migrate_alert_strategy_storage(engine) -> None:
     """Add dedicated TEXT columns to an existing alert table, idempotently."""
     inspector = inspect(engine)
@@ -441,7 +476,7 @@ def migrate_alert_strategy_storage(engine) -> None:
         statements.append("ALTER TABLE cl_alert_task ADD COLUMN strategy_config TEXT")
     if "strategy_memo" not in columns:
         statements.append("ALTER TABLE cl_alert_task ADD COLUMN strategy_memo TEXT")
-    with engine.begin() as connection:
+    with migration_connection(engine) as connection:
         for statement in statements:
             connection.execute(text(statement))
         connection.execute(
@@ -484,36 +519,44 @@ def migrate_alert_event_storage(engine) -> None:
             f"ALTER TABLE cl_alert_record ADD COLUMN score {score_type}"
         )
 
-    with engine.begin() as connection:
+    with migration_connection(engine) as connection:
         for statement in statements:
             connection.execute(text(statement))
 
-        rows = connection.execute(
-            text(
-                "SELECT id, event_type, action, score, line_type, bi_is_done, bi_is_td "
-                "FROM cl_alert_record"
-            )
-        ).mappings().all()
-        for row in rows:
-            updates: dict[str, object] = {}
-            if not row["event_type"]:
-                event_type = legacy_event_type(row["line_type"])
-                if event_type is not None:
-                    updates["event_type"] = event_type.value
-            if not row["action"]:
-                action = legacy_action(row["bi_is_done"])
-                if action is not None:
-                    updates["action"] = action.value
-            if row["score"] is None:
-                score = legacy_score(row["bi_is_td"])
-                if score is not None:
-                    updates["score"] = score
-            if updates:
-                assignments = ", ".join(f"{name} = :{name}" for name in updates)
-                connection.execute(
-                    text(f"UPDATE cl_alert_record SET {assignments} WHERE id = :row_id"),
-                    {**updates, "row_id": row["id"]},
-                )
+        last_id = -1
+        while True:
+            rows = connection.execute(
+                text(
+                    "SELECT id, event_type, action, score, line_type, bi_is_done, bi_is_td "
+                    "FROM cl_alert_record WHERE id > :last_id AND "
+                    "(event_type IS NULL OR event_type = '' OR action IS NULL "
+                    "OR action = '' OR score IS NULL) ORDER BY id LIMIT 1000"
+                ),
+                {"last_id": last_id},
+            ).mappings().all()
+            if not rows:
+                break
+            for row in rows:
+                updates: dict[str, object] = {}
+                if not row["event_type"]:
+                    event_type = legacy_event_type(row["line_type"])
+                    if event_type is not None:
+                        updates["event_type"] = event_type.value
+                if not row["action"]:
+                    action = legacy_action(row["bi_is_done"])
+                    if action is not None:
+                        updates["action"] = action.value
+                if row["score"] is None:
+                    score = legacy_score(row["bi_is_td"])
+                    if score is not None:
+                        updates["score"] = score
+                if updates:
+                    assignments = ", ".join(f"{name} = :{name}" for name in updates)
+                    connection.execute(
+                        text(f"UPDATE cl_alert_record SET {assignments} WHERE id = :row_id"),
+                        {**updates, "row_id": row["id"]},
+                    )
+            last_id = rows[-1]["id"]
 
     for index in TableByAlertRecord.__table__.indexes:
         if index.name == "table_alert_record_event_lookup_idx":
@@ -521,11 +564,40 @@ def migrate_alert_event_storage(engine) -> None:
             break
 
 
+def _mysql_tv_column_changes(engine, table, column_names) -> list[str]:
+    """Only widen/convert legacy types; retain comments and null/default rules."""
+    reflected = {
+        column["name"]: column for column in inspect(engine).get_columns(table.name)
+    }
+    changes = []
+    for name in column_names:
+        current = reflected[name]
+        model_column = table.c[name]
+        target_type = model_column.type.dialect_impl(engine.dialect)
+        current_type = str(current["type"].compile(dialect=engine.dialect)).upper()
+        desired_type = str(target_type.compile(dialect=engine.dialect)).upper()
+        if current_type == desired_type:
+            continue
+        if desired_type == "MEDIUMTEXT" and current_type == "LONGTEXT":
+            continue
+        definition = Column(
+            name,
+            target_type,
+            nullable=current.get("nullable", True),
+            server_default=text(current["default"]) if current.get("default") is not None else None,
+            comment=current.get("comment") or model_column.comment,
+        )
+        changes.append(
+            "MODIFY COLUMN " + str(CreateColumn(definition).compile(dialect=engine.dialect))
+        )
+    return changes
+
+
 def migrate_tv_storage_schema(engine) -> None:
     """Upgrade legacy TradingView tables before quota-protected writes are allowed."""
     inspector = inspect(engine)
     if inspector.has_table(TableByTVCharts.__tablename__):
-        with engine.begin() as connection:
+        with migration_connection(engine) as connection:
             rows = connection.execute(
                 text(
                     "SELECT id, chart_type, client_id, user_id, name, timestamp "
@@ -551,12 +623,11 @@ def migrate_tv_storage_schema(engine) -> None:
                     {"id": duplicate_id},
                 )
             if engine.dialect.name == "mysql":
-                connection.execute(
-                    text("ALTER TABLE cl_tv_charts MODIFY COLUMN user_id VARCHAR(50)")
+                changes = _mysql_tv_column_changes(
+                    connection, TableByTVCharts.__table__, ("user_id", "content")
                 )
-                connection.execute(
-                    text("ALTER TABLE cl_tv_charts MODIFY COLUMN content MEDIUMTEXT")
-                )
+                if changes:
+                    connection.execute(text("ALTER TABLE cl_tv_charts " + ", ".join(changes)))
 
         inspector = inspect(engine)
         index_names = {item["name"] for item in inspector.get_indexes("cl_tv_charts")}
@@ -564,7 +635,7 @@ def migrate_tv_storage_schema(engine) -> None:
             item.get("name")
             for item in inspector.get_unique_constraints("cl_tv_charts")
         }
-        with engine.begin() as connection:
+        with migration_connection(engine) as connection:
             if "table_tv_charts_owner_name_unique" not in index_names | unique_names:
                 connection.execute(
                     text(
@@ -583,14 +654,16 @@ def migrate_tv_storage_schema(engine) -> None:
     inspector = inspect(engine)
     if inspector.has_table(TableByTVDrawings.__tablename__):
         if engine.dialect.name == "mysql":
-            with engine.begin() as connection:
-                connection.execute(
-                    text("ALTER TABLE cl_tv_drawings MODIFY COLUMN state MEDIUMTEXT")
+            with migration_connection(engine) as connection:
+                changes = _mysql_tv_column_changes(
+                    connection, TableByTVDrawings.__table__, ("state",)
                 )
+                if changes:
+                    connection.execute(text("ALTER TABLE cl_tv_drawings " + ", ".join(changes)))
         inspector = inspect(engine)
         index_names = {item["name"] for item in inspector.get_indexes("cl_tv_drawings")}
         if "table_tv_drawings_owner_idx" not in index_names:
-            with engine.begin() as connection:
+            with migration_connection(engine) as connection:
                 connection.execute(
                     text(
                         "CREATE INDEX table_tv_drawings_owner_idx "
@@ -748,7 +821,7 @@ class DB(object):
         if config.DB_TYPE == "sqlite":
             db_path = get_data_path() / "db"
             if db_path.is_dir() is False:
-                db_path.mkdir(parents=True)
+                db_path.mkdir(parents=True, exist_ok=True)
             self.engine = create_engine(
                 f"sqlite:///{str(db_path / f'{config.DB_DATABASE}.sqlite')}",
                 echo=False,
@@ -781,13 +854,26 @@ class DB(object):
 
         self.Session = sessionmaker(bind=self.engine)
 
-        Base.metadata.create_all(self.engine)
-        migrate_alert_strategy_storage(self.engine)
-        migrate_alert_event_storage(self.engine)
-        migrate_tv_storage_schema(self.engine)
+        initialize_schema(
+            self.engine,
+            Base.metadata,
+            (
+                migrate_alert_task_uniqueness,
+                migrate_alert_strategy_storage,
+                migrate_alert_event_storage,
+                migrate_tv_storage_schema,
+                migrate_crypto_storage_timezone,
+            ),
+        )
         self.tv_storage_policy = TVStoragePolicy.from_config(config)
 
         self.__cache_tables = {}
+
+    def crypto_storage_timezone(self, market):
+        configured = getattr(config, "CRYPTO_STORAGE_TIMEZONES", {})
+        return storage_timezone(
+            self.engine, market, configured.get(getattr(market, "value", market))
+        )
 
     def klines_tables(self, market: Market | str, stock_code: str):
         market_code = parse_market(market)
@@ -799,9 +885,6 @@ class DB(object):
         class TableByKlines(Base):
             # 表名
             __tablename__ = table_name
-            __table_args__ = (
-                UniqueConstraint("code", "dt", "f", name="table_code_dt_f_unique"),
-            )
             # 表结构
             code = Column(String(20), primary_key=True, comment="标的代码")
             dt = Column(DateTime, primary_key=True, comment="日期")
@@ -851,14 +934,15 @@ class DB(object):
         """
         market_code = parse_market(market)
         frequency_code = parse_frequency(frequency)
+        storage_tz = self.crypto_storage_timezone(market_code) if is_crypto(market_code) else None
         with self.Session() as session:
             table = self.klines_tables(market_code, code)
             # 查询数据库
-            filter = (table.code == code, table.f == frequency_code.value)
+            filter = (table.code == code, table.f == storage_frequency(market_code, frequency_code.value))
             if start_date is not None:
-                filter += (table.dt >= start_date,)
+                filter += (table.dt >= (to_storage(start_date, storage_tz) if storage_tz else start_date),)
             if end_date is not None:
-                filter += (table.dt <= end_date,)
+                filter += (table.dt <= (to_storage(end_date, storage_tz) if storage_tz else end_date),)
             query = session.query(table).filter(*filter)
             if order == "desc":
                 query = query.order_by(table.dt.desc())
@@ -866,7 +950,13 @@ class DB(object):
                 query = query.order_by(table.dt.asc())
             if limit is not None:
                 query = query.limit(limit)
-            return query.all()
+            rows = query.all()
+            if storage_tz:
+                for row in rows:
+                    session.expunge(row)
+                    row.dt = from_storage(row.dt, storage_tz)
+                    row.f = frequency_code.value
+            return rows
 
     def klines_last_datetime(self, market, code, frequency):
         """
@@ -878,17 +968,20 @@ class DB(object):
         """
         market_code = parse_market(market)
         frequency_code = parse_frequency(frequency)
+        storage_tz = self.crypto_storage_timezone(market_code) if is_crypto(market_code) else None
         with self.Session() as session:
             table = self.klines_tables(market_code, code)
             last_date = (
                 session.query(table.dt)
                 .filter(table.code == code)
-                .filter(table.f == frequency_code.value)
+                .filter(table.f == storage_frequency(market_code, frequency_code.value))
                 .order_by(table.dt.desc())
                 .first()
             )
             if last_date is None:
                 return None
+            if storage_tz:
+                return from_storage(last_date[0], storage_tz).isoformat()
             if market_code is Market.A:
                 return last_date[0].strftime("%Y-%m-%d")
             else:
@@ -907,6 +1000,7 @@ class DB(object):
         """
         market_code = parse_market(market)
         frequency_code = parse_frequency(frequency)
+        storage_tz = self.crypto_storage_timezone(market_code) if is_crypto(market_code) else None
         with self.Session() as session:
             table = self.klines_tables(market_code, code)
 
@@ -915,8 +1009,8 @@ class DB(object):
                 for _, _k in klines.iterrows():
                     _in_k = {
                         "code": code,
-                        "f": frequency_code.value,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
+                        "f": storage_frequency(market_code, frequency_code.value),
+                        "dt": to_storage(_k["date"], storage_tz) if storage_tz else _k["date"].replace(tzinfo=None),
                         "o": _k["open"],
                         "c": _k["close"],
                         "h": _k["high"],
@@ -929,7 +1023,7 @@ class DB(object):
                         session.query(table)
                         .filter(
                             table.code == code,
-                            table.f == frequency_code.value,
+                            table.f == storage_frequency(market_code, frequency_code.value),
                             table.dt == _in_k["dt"],
                         )
                         .first()
@@ -939,7 +1033,7 @@ class DB(object):
                     else:
                         session.query(table).filter(
                             table.code == code,
-                            table.f == frequency_code.value,
+                            table.f == storage_frequency(market_code, frequency_code.value),
                             table.dt == _in_k["dt"],
                         ).update(_in_k)
                 session.commit()
@@ -956,8 +1050,8 @@ class DB(object):
                 for _, _k in g_klines.iterrows():
                     _insert_k = {
                         "code": code,
-                        "dt": _k["date"].replace(tzinfo=None),  # 去除时区信息
-                        "f": frequency_code.value,
+                        "dt": to_storage(_k["date"], storage_tz) if storage_tz else _k["date"].replace(tzinfo=None),
+                        "f": storage_frequency(market_code, frequency_code.value),
                         "o": _k["open"],
                         "c": _k["close"],
                         "h": _k["high"],
@@ -999,11 +1093,14 @@ class DB(object):
         frequency_code: Frequency | None = (
             parse_frequency(frequency) if frequency is not None else None
         )
+        storage_tz = self.crypto_storage_timezone(market_code) if is_crypto(market_code) else None
+        if dt is not None and storage_tz:
+            dt = to_storage(dt, storage_tz)
         with self.Session() as session:
             table = self.klines_tables(market_code, code)
             q = session.query(table).filter(table.code == code)
             if frequency_code is not None:
-                q = q.filter(table.f == frequency_code.value)
+                q = q.filter(table.f == storage_frequency(market_code, frequency_code.value))
             if dt is not None:
                 q = q.filter(table.dt == dt)
             q.delete()
@@ -1316,6 +1413,29 @@ class DB(object):
 
         return True
 
+    @contextmanager
+    def _task_write_session(self, market, task_name, task_id=None):
+        try:
+            with self.Session.begin() as session:
+                query = session.query(TableByAlertTask.id).filter(
+                    TableByAlertTask.market == market,
+                    TableByAlertTask.task_name == task_name,
+                )
+                if task_id is not None:
+                    query = query.filter(TableByAlertTask.id != task_id)
+                if query.first() is not None:
+                    raise DuplicateAlertTaskError()
+                yield session
+        except IntegrityError as error:
+            # A concurrent writer can win after the friendly pre-check.
+            detail = str(error.orig)
+            if (
+                "table_market_task_name_unique" in detail
+                or "UNIQUE constraint failed: cl_alert_task.market, cl_alert_task.task_name" in detail
+            ):
+                raise DuplicateAlertTaskError() from error
+            raise
+
     def task_save(
         self,
         market: str,
@@ -1332,9 +1452,10 @@ class DB(object):
         check_idx_ma_info: str,
         check_idx_macd_info: str,
         is_run: int,
-        is_send_msg: int,
     ):
-        with self.Session() as session:
+        market = _watchlist_text(market, field="market", max_length=20)
+        task_name = _watchlist_text(task_name, field="task_name", max_length=100)
+        with self._task_write_session(market, task_name) as session:
             # 保存任务
             session.add(
                 TableByAlertTask(
@@ -1352,11 +1473,9 @@ class DB(object):
                     check_idx_ma_info=check_idx_ma_info,
                     check_idx_macd_info=check_idx_macd_info,
                     is_run=is_run,
-                    is_send_msg=is_send_msg,
                     dt=datetime.datetime.now(),
                 )
             )
-            session.commit()
 
         return True
 
@@ -1370,11 +1489,12 @@ class DB(object):
         strategy_config: str,
         strategy_memo: str,
         is_run: int,
-        is_send_msg: int,
     ):
+        market = _watchlist_text(market, field="market", max_length=20)
+        task_name = _watchlist_text(task_name, field="task_name", max_length=100)
         normalized_config = normalize_strategy_config(strategy_config)
         normalized_memo = normalize_strategy_memo(strategy_memo)
-        with self.Session.begin() as session:
+        with self._task_write_session(market, task_name) as session:
             task = TableByAlertTask(
                 market=market,
                 task_name=task_name,
@@ -1390,7 +1510,6 @@ class DB(object):
                 strategy_config_text=normalized_config,
                 strategy_memo_text=normalized_memo,
                 is_run=is_run,
-                is_send_msg=is_send_msg,
                 dt=datetime.datetime.now(),
             )
             session.add(task)
@@ -1438,9 +1557,10 @@ class DB(object):
         check_idx_ma_info: str,
         check_idx_macd_info: str,
         is_run: int,
-        is_send_msg: int,
     ):
-        with self.Session() as session:
+        market = _watchlist_text(market, field="market", max_length=20)
+        task_name = _watchlist_text(task_name, field="task_name", max_length=100)
+        with self._task_write_session(market, task_name, id) as session:
             session.query(TableByAlertTask).filter(
                 TableByAlertTask.market == market,
                 TableByAlertTask.id == id,
@@ -1459,11 +1579,9 @@ class DB(object):
                     TableByAlertTask.check_idx_ma_info: check_idx_ma_info,
                     TableByAlertTask.check_idx_macd_info: check_idx_macd_info,
                     TableByAlertTask.is_run: is_run,
-                    TableByAlertTask.is_send_msg: is_send_msg,
                     TableByAlertTask.dt: datetime.datetime.now(),
                 }
             )
-            session.commit()
         return True
 
     def task_update_strategy(
@@ -1477,11 +1595,12 @@ class DB(object):
         strategy_config: str,
         strategy_memo: str,
         is_run: int,
-        is_send_msg: int,
     ):
+        market = _watchlist_text(market, field="market", max_length=20)
+        task_name = _watchlist_text(task_name, field="task_name", max_length=100)
         normalized_config = normalize_strategy_config(strategy_config)
         normalized_memo = normalize_strategy_memo(strategy_memo)
-        with self.Session.begin() as session:
+        with self._task_write_session(market, task_name, id) as session:
             task = (
                 session.query(TableByAlertTask)
                 .filter(
@@ -1499,7 +1618,6 @@ class DB(object):
             task.strategy_config_text = normalized_config
             task.strategy_memo_text = normalized_memo
             task.is_run = is_run
-            task.is_send_msg = is_send_msg
             task.dt = datetime.datetime.now()
             session.flush()
             session.refresh(task)

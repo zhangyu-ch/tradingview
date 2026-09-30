@@ -45,8 +45,6 @@ class WebAppServices:
     fun: Any
     zixuan_factory: Callable[..., Any]
     stocks_bkgn_factory: Callable[..., Any]
-    secret_store_factory: Callable[..., Any]
-    get_data_path: Callable[[], Any]
 
     @classmethod
     def create(cls, **values: Any) -> "WebAppServices":

@@ -115,15 +115,6 @@
             </div>
         </div>
         <div class="layui-form-item">
-            <label class="layui-form-label">发送消息</label>
-            <div class="layui-input-block" title="启用">
-                <input type="radio" name="is_send_msg" value="1" title="发送" {% if is_send_msg==1 %} checked {% endif %}
-                    lay-filter="alert_config" />
-                <input type="radio" name="is_send_msg" value="0" title="不发送" {% if is_send_msg==0 %} checked {% endif %}
-                    lay-filter="alert_config" />
-            </div>
-        </div>
-        <div class="layui-form-item">
             <label class="layui-form-label">启用</label>
             <div class="layui-input-block" title="启用">
                 <input type="radio" name="is_run" value="1" title="启用" {% if is_run==1 %} checked {% endif %}

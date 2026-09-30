@@ -34,20 +34,19 @@ def test_rendered_settings_dom_never_contains_existing_secret() -> None:
         proxy_port="7890",
     )
     # Avoid external requests and unrelated JavaScript execution in this DOM-only gate.
-    html = re.sub(r"<script[^>]+src=[^>]+></script>", "", html, flags=re.I)
+    html = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html, flags=re.I)
 
     assert sentinel not in html
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        executable = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+        browser = playwright.chromium.launch(headless=True, executable_path=executable)
         try:
             page = browser.new_page()
             page.set_content(html, wait_until="domcontentloaded")
             field = page.locator('input[name="fs_app_secret"]')
-            assert field.count() == 1
-            assert field.get_attribute("type") == "password"
-            assert field.get_attribute("value") == ""
-            assert field.get_attribute("autocomplete") == "new-password"
-            assert "留空保持不变" in (field.get_attribute("placeholder") or "")
+            assert field.count() == 0
+            assert page.locator('input[name="proxy_host"]').input_value() == "127.0.0.1"
+            assert page.locator('input[name="proxy_port"]').input_value() == "7890"
             assert sentinel not in page.content()
         finally:
             browser.close()

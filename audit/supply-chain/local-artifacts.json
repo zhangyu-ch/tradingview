@@ -231,7 +231,7 @@
       }
     }
   ],
-  "lock_sha256": "8740beffc2c884d480aae1ee345b77dec9b70cf6ee8a8c503a9136a79a3de1ef",
+  "lock_sha256": "b35ce087785474d16eefb4d691561c3f8b6de5494abedf7c2d77f8a200f87773",
   "policy": "Every file in package/ must be referenced by [tool.uv.sources], locked by SHA-256, and listed here. Unknown provenance remains explicit.",
   "schema_version": 1
 }

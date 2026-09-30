@@ -1,3 +1,4 @@
+import time
 import copy
 import datetime
 import traceback
@@ -8,23 +9,26 @@ import pandas as pd
 import pytz
 from pytdx.errors import TdxConnectionError
 from pytdx.hq import TdxHq_API
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 
 from tradingview_zy import fun
 from tradingview_zy.base import Market
+from tradingview_zy.domain import InvalidRequestError
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_stock_kline_frequency
 from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
-from tradingview_zy.exchange.tdx_reliability import call_with_bounded_retry
+from tradingview_zy.exchange.tdx_cache import refresh_tdx_window, tdx_cache_key
+from tradingview_zy.exchange.tdx_reliability import (
+    call_with_bounded_retry, remaining_request_seconds, tdx_kline_connection,
+)
 from tradingview_zy.exchange.stocks_bkgn import StocksBKGN
 from tradingview_zy.exchange.tdx_a_codes import tdx_codes_by_bj, tdx_codes_by_error
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.tools import tdx_best_ip as best_ip
+from tradingview_zy.tools.tdx_node_selector import NodeSelectionError
 from tradingview_zy.trading_calendar import is_market_open
 
 
-@fun.singleton
 class ExchangeTDX(Exchange):
     """
     通达信行情接口
@@ -55,11 +59,12 @@ class ExchangeTDX(Exchange):
         # 设置时区
         self.tz = pytz.timezone("Asia/Shanghai")
 
-    def reset_tdx_ip(self):
+    def reset_tdx_ip(self, *, deadline_seconds=None):
         """
         重新选择tdx最优ip，并返回
         """
-        connect_info = best_ip.select_best_ip("stock")
+        options = {} if deadline_seconds is None else {"deadline_seconds": deadline_seconds}
+        connect_info = best_ip.select_best_ip("stock", **options)
         connect_info = {"ip": connect_info["ip"], "port": int(connect_info["port"])}
         db.cache_set(
             "tdx_connect_ip",
@@ -193,11 +198,6 @@ class ExchangeTDX(Exchange):
             _type = stock[0]["type"] if stock else None
         return market, code[-6:], _type
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_random(min=1, max=5),
-        retry=retry_if_result(lambda _r: _r is None),
-    )
     def klines(
         self,
         code: str,
@@ -205,20 +205,22 @@ class ExchangeTDX(Exchange):
         start_date: str = None,
         end_date: str = None,
         args=None,
-    ) -> Union[pd.DataFrame, None]:
+    ) -> pd.DataFrame:
         """
         通达信，不支持按照时间查找
         """
-        if args is None:
-            args = {}
+        deadline = time.monotonic() + 12.0
+        args = dict(args or {})
         if "fq" not in args.keys():
             args["fq"] = "qfq"
         if "use_cache" not in args.keys():
             args["use_cache"] = True
-        if "pages" not in args.keys():
-            args["pages"] = 8
-        else:
-            args["pages"] = int(args["pages"])
+        try:
+            args["pages"] = int(args.get("pages", 8))
+        except (TypeError, ValueError) as error:
+            raise InvalidRequestError("TDX pages 必须是正整数") from error
+        if args["pages"] < 1:
+            raise InvalidRequestError("TDX pages 必须是正整数")
 
         frequency_map = {
             "y": 11,
@@ -238,114 +240,99 @@ class ExchangeTDX(Exchange):
         if frequency == "w":
             args["pages"] = 12
 
+        if frequency not in frequency_map:
+            raise InvalidRequestError(f"TDX 不支持周期 {frequency!r}")
+        if start_date is not None or end_date is not None:
+            raise InvalidRequestError("TDX 不支持按起止时间查询")
+        if not isinstance(code, str) or not code.strip():
+            raise InvalidRequestError("TDX 代码不能为空")
         market, tdx_code, _type = self.to_tdx_code(code)
         if market is None or _type is None:
-            return None
+            return pd.DataFrame([])
 
-        try:
-            client = TdxHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
+        cache_key = tdx_cache_key(Market.A.value, code, frequency)
+
+        def fetch_klines(remaining_seconds):
+            client = TdxHq_API(raise_exception=True, auto_retry=False)
+            with tdx_kline_connection(client, self.connect_info, remaining_seconds):
                 if "index" in _type:
                     get_bars = client.get_index_bars
                 else:
                     get_bars = client.get_security_bars
 
-                ks: pd.DataFrame = self.fdb.get_tdx_klines(
-                    Market.A.value, code, frequency
+                cached = self.fdb.get_tdx_klines(
+                    Market.A.value, cache_key, frequency
                 )
-                if ks is None or len(ks) == 0:
-                    # 获取 8*700 = 5600 条数据
-                    ks = pd.concat(
-                        [
-                            client.to_df(
-                                get_bars(
-                                    frequency_map[frequency],
-                                    market,
-                                    tdx_code,
-                                    (i - 1) * 700,
-                                    700,
-                                )
-                            )
-                            for i in range(1, args["pages"] + 1)
-                        ],
-                        axis=0,
-                        sort=False,
-                    )
-                    if len(ks) == 0:
-                        return pd.DataFrame([])
-                    ks.loc[:, "date"] = pd.to_datetime(ks["datetime"])
-                    ks.sort_values("date", inplace=True)
-                else:
-                    for i in range(1, args["pages"] + 1):
-                        # print(f'{code} 使用缓存，更新获取第 {i} 页')
-                        _ks = client.to_df(
-                            get_bars(
-                                frequency_map[frequency],
-                                market,
-                                tdx_code,
-                                (i - 1) * 700,
-                                700,
-                            )
+
+                def normalize_page(page):
+                    page["date"] = pd.to_datetime(page["datetime"])
+                    return page
+
+                return refresh_tdx_window(
+                    cached,
+                    lambda page_index: client.to_df(
+                        get_bars(
+                            frequency_map[frequency], market, tdx_code,
+                            page_index * 700, 700,
                         )
-                        if len(_ks) == 0:
-                            break
-                        _ks.loc[:, "date"] = pd.to_datetime(_ks["datetime"])
-                        _ks.sort_values("date", inplace=True)
-                        new_start_dt = _ks.iloc[0]["date"]
-                        old_end_dt = ks.iloc[-1]["date"]
-                        ks = pd.concat([ks, _ks], ignore_index=True)
-                        # 如果请求的第一个时间大于缓存的最后一个时间，退出
-                        if old_end_dt >= new_start_dt:
-                            break
-            # TODO 如果是分钟数据，当天的数据会有问题，在 13:00，应该是 11:00
-            if len(frequency) >= 2 and frequency.endswith("m"):
-                # 将 13:00 修改为 11:30
-                def dt_1300_to_1130(_d: datetime.datetime):
-                    if _d.hour == 13 and _d.minute == 0:
-                        return _d.replace(hour=11, minute=30)
-                    return _d
+                    ),
+                    normalize_page,
+                    args["pages"],
+                )
 
-                ks["date"] = ks["date"].apply(dt_1300_to_1130)
-
-            # 删除重复数据
-            ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
-
-            self.fdb.save_tdx_klines(Market.A.value, code, frequency, ks)
-
-            ks.loc[:, "code"] = code
-            ks.loc[:, "volume"] = ks["vol"]
-
-            # 转换时区
-            ks["date"] = ks["date"].dt.tz_localize(self.tz)
-            if frequency in ["d", "w", "m", "q", "y"]:
-                # 将时间转换成 15:00:00
-                ks["date"] = ks["date"].apply(lambda _d: _d.replace(hour=15, minute=0))
-
-            if frequency == "m":  # 月设置为每月的一号
-                ks["date"] = ks["date"].apply(lambda _d: _d.replace(day=1))
-            if frequency == "y":  # 年设置为一月一号
-                ks["date"] = ks["date"].apply(lambda _d: _d.replace(month=1, day=1))
-            ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
-
-            if args["fq"] in ["qfq", "hfq"]:
-                ks = self.klines_fq(ks, self.xdxr(market, code, tdx_code), args["fq"])
-
-            ks.reset_index(inplace=True)
-            if frequency in ["w", "120m", "10m", "2m"]:
-                ks = convert_stock_kline_frequency(ks, frequency)
-
-            ks = ks[["code", "date", "open", "close", "high", "low", "volume"]]
+        ks = call_with_bounded_retry(
+            fetch_klines,
+            recover=lambda: self.reset_tdx_ip(
+                deadline_seconds=min(3.0, remaining_request_seconds(deadline)),
+            ),
+            retry_on=(TdxConnectionError, OSError, NodeSelectionError),
+            max_attempts=3,
+            deadline_seconds=remaining_request_seconds(deadline),
+            description="exchange_tdx klines",
+        )
+        if ks.empty:
             return ks
-        except TdxConnectionError:
-            print("连接失败，重新选择最优服务器")
-            self.reset_tdx_ip()
-        except Exception as e:
-            print(f"获取行情异常 {code} Exception ：{str(e)}")
-            print(traceback.format_exc())
-        finally:
-            pass
-            # print(f'请求行情用时：{time.time() - _s_time}')
-        return None
+
+        # 原始缓存保留 SDK 日期，盘中修正仅应用于返回结果。
+        self.fdb.save_tdx_klines(Market.A.value, cache_key, frequency, ks)
+
+        # TODO 如果是分钟数据，当天的数据会有问题，在 13:00，应该是 11:00
+        if len(frequency) >= 2 and frequency.endswith("m"):
+            # 将 13:00 修改为 11:30
+            def dt_1300_to_1130(_d: datetime.datetime):
+                if _d.hour == 13 and _d.minute == 0:
+                    return _d.replace(hour=11, minute=30)
+                return _d
+
+            ks["date"] = ks["date"].apply(dt_1300_to_1130)
+
+        # 删除重复数据
+        ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
+
+        ks.loc[:, "code"] = code
+        ks.loc[:, "volume"] = ks["vol"]
+
+        # 转换时区
+        ks["date"] = ks["date"].dt.tz_localize(self.tz)
+        if frequency in ["d", "w", "m", "q", "y"]:
+            # 将时间转换成 15:00:00
+            ks["date"] = ks["date"].apply(lambda _d: _d.replace(hour=15, minute=0))
+
+        if frequency == "m":  # 月设置为每月的一号
+            ks["date"] = ks["date"].apply(lambda _d: _d.replace(day=1))
+        if frequency == "y":  # 年设置为一月一号
+            ks["date"] = ks["date"].apply(lambda _d: _d.replace(month=1, day=1))
+        ks = ks.drop_duplicates(["date"], keep="last").sort_values("date")
+
+        if args["fq"] in ["qfq", "hfq"]:
+            ks = self.klines_fq(ks, self.xdxr(market, code, tdx_code), args["fq"])
+
+        ks.reset_index(inplace=True)
+        if frequency in ["w", "120m", "10m", "2m"]:
+            ks = convert_stock_kline_frequency(ks, frequency)
+
+        ks = ks[["code", "date", "open", "close", "high", "low", "volume"]]
+        return ks
 
     @staticmethod
     def get_monday(date):
@@ -605,9 +592,18 @@ class ExchangeTDX(Exchange):
         ):
             need_update = True
         if need_update:
-            client = TdxHq_API(raise_exception=True, auto_retry=True)
-            with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-                data = client.to_df(client.get_xdxr_info(market, code))
+            def fetch_xdxr(remaining_seconds):
+                client = TdxHq_API(raise_exception=True, auto_retry=False)
+                with tdx_kline_connection(client, self.connect_info, remaining_seconds):
+                    return client.to_df(client.get_xdxr_info(market, code))
+
+            data = call_with_bounded_retry(
+                fetch_xdxr,
+                retry_on=(TdxConnectionError, OSError),
+                max_attempts=3,
+                deadline_seconds=12.0,
+                description="exchange_tdx adjustment factors",
+            )
             if len(data) == 0:
                 data = pd.DataFrame(columns=["date"])
             else:

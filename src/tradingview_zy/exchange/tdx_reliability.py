@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterable, Mapping
+from contextlib import contextmanager, suppress
 from typing import Any, TypeVar
 
 
@@ -87,6 +88,81 @@ def call_with_bounded_retry(
     raise ProviderUnavailableError(message) from last_error
 
 
+def remaining_request_seconds(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("market-data request deadline exceeded")
+    return remaining
+
+
+class _DeadlineSocket:
+    """Keep SDK handshake, partial reads and all pages within one budget."""
+
+    def __init__(self, sock, deadline: float, clock: Callable[[], float]):
+        self._socket = sock
+        self._deadline = deadline
+        self._clock = clock
+
+    def _set_timeout(self):
+        remaining = self._deadline - self._clock()
+        if remaining <= 0:
+            raise TimeoutError("TDX kline request deadline exceeded")
+        self._socket.settimeout(min(remaining, 4.0))
+
+    def send(self, data, *args, **kwargs):
+        self._set_timeout()
+        sent = self._socket.send(data, *args, **kwargs)
+        if sent != len(data):
+            raise ConnectionError("TDX socket did not send the complete request")
+        return sent
+
+    def recv(self, *args, **kwargs):
+        self._set_timeout()
+        data = self._socket.recv(*args, **kwargs)
+        if not data:
+            raise ConnectionError("TDX socket closed before the response completed")
+        return data
+
+    def __getattr__(self, name):
+        return getattr(self._socket, name)
+
+
+@contextmanager
+def tdx_kline_connection(client, connect_info, remaining_seconds, *, clock=time.monotonic):
+    """Connect without hidden retries, enforcing a deadline on every socket I/O.
+
+    pytdx wraps RPC exceptions in TdxFunctionCallError.original_exception. Unwrap
+    it here so only transport errors are retried, never parsing/programming bugs.
+    """
+    deadline = clock() + remaining_seconds
+    needs_setup = client.need_setup
+    client.need_setup = False
+    client.auto_retry = False
+    try:
+        client.connect(
+            connect_info["ip"],
+            connect_info["port"],
+            time_out=min(remaining_seconds, 4.0),
+        )
+        client.need_setup = needs_setup
+        client.client = _DeadlineSocket(client.client, deadline, clock)
+        if needs_setup:
+            client.setup()
+        yield client
+        if clock() > deadline:
+            raise TimeoutError("TDX kline request deadline exceeded")
+    except Exception as error:
+        original = getattr(error, "original_exception", None)
+        if isinstance(original, Exception):
+            raise original from error
+        raise
+    finally:
+        client.need_setup = needs_setup
+        # A cleanup failure must not replace the original request exception.
+        with suppress(Exception):
+            client.disconnect()
+
+
 class TdxExHqLifecycleMixin:
     """Shared, dependency-injected lifecycle for TDX ExHq adapters.
 
@@ -130,7 +206,7 @@ class TdxExHqLifecycleMixin:
         self._tdx_client_kwargs = {
             **dict(client_kwargs or {}),
             "raise_exception": True,
-            "auto_retry": True,
+            "auto_retry": False,
         }
         self._tdx_retry_options = dict(retry_options or {})
         self._tdx_market_category = market_category
@@ -175,9 +251,10 @@ class TdxExHqLifecycleMixin:
             raise ValueError("TDX node port is outside 1..65535")
         return {"ip": ip.strip(), "port": port}
 
-    def reset_tdx_ip(self) -> dict[str, Any]:
+    def reset_tdx_ip(self, *, deadline_seconds: float | None = None) -> dict[str, Any]:
         """Select, validate and cache one ExHq node with a finite TTL."""
-        selected = self._tdx_selector.select_best_ip("future")
+        options = {} if deadline_seconds is None else {"deadline_seconds": deadline_seconds}
+        selected = self._tdx_selector.select_best_ip("future", **options)
         connect_info = self._normalize_connect_info(selected)
         expiry = int(self._tdx_selector.cache_expiry_epoch())
         if expiry <= 0:

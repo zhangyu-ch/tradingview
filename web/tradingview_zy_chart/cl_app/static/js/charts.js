@@ -127,6 +127,12 @@ class ChartManager {
     });
 
     this.widget.onChartReady(() => {
+      const container = document.getElementById("tv_chart_container_" + this.id);
+      const iframe = container && container.querySelector("iframe");
+      if (!iframe || !window.TRADINGVIEW_ZY_CSRF.install(iframe.contentWindow)) {
+        console.error("Failed to install chart CSRF protection");
+        return;
+      }
       this.chart = this.widget.activeChart();
       if (!this.chart) {
         console.error("Failed to get active chart");

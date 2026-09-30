@@ -280,40 +280,15 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
     if len(klines) == 0:
         return klines
 
+    # Provider bars are anchored at UTC midnight, independent of display/host TZ.
+    klines = klines.copy()
+    klines["date"] = pd.to_datetime(klines["date"], utc=True)
+    klines.sort_values("date", inplace=True)
     code = klines.iloc[0]["code"]
 
-    if to_f == "d":
-        # 日期的特殊处理
-        mask = (klines["date"].dt.time >= pd.to_datetime("08:00:00").time()) | (
-            klines["date"].dt.time < pd.to_datetime("08:00:00").time()
-        )
-        klines = klines.assign(
-            trade_day=lambda x: pd.to_datetime(x["date"].dt.date)
-            - pd.to_timedelta((x["date"].dt.hour < 8).astype(int), unit="D")
-        )
-        grouped = klines[mask].groupby("trade_day")
-        period_klines = pd.DataFrame(
-            {
-                "date": grouped["trade_day"]
-                .first()
-                .apply(lambda x: x.replace(hour=8, minute=0, second=0, tzinfo=__tz)),
-                "frequency": to_f,
-                "code": grouped["code"].first(),
-                "open": grouped["open"].first(),
-                "close": grouped["close"].last(),
-                "high": grouped["high"].max(),
-                "low": grouped["low"].min(),
-                "volume": grouped["volume"].sum(),
-            }
-        )
-        period_klines = period_klines.reset_index(drop=True)
-        # period_klines["date"] = period_klines["date"].dt.tz_convert(__tz)
-        return period_klines[
-            ["date", "frequency", "code", "high", "low", "open", "close", "volume"]
-        ]
-
-    # 删除 volume 列为 0 的行
-    klines = klines[klines["volume"] != 0]
+    # Retain zero-volume daily bars; preserve the intraday filtering convention.
+    if to_f != "d":
+        klines = klines[klines["volume"] != 0].copy()
 
     klines.insert(0, column="date_index", value=klines["date"])
     klines.set_index("date_index", inplace=True)
@@ -328,12 +303,11 @@ def convert_currency_kline_frequency(klines: pd.DataFrame, to_f: str) -> pd.Data
         "volume": "sum",
     }
 
-    period_klines = klines.resample(period_type, label="right", closed="left").agg(
+    period_klines = klines.resample(period_type, label="left", closed="left", origin="start_day").agg(
         agg_dict
     )
 
     period_klines.loc[:, "date"] = period_klines.index
-    period_klines["date"] = period_klines["date"] - pd.to_timedelta(period_maps[to_f])
     period_klines.loc[:, "code"] = code
     period_klines.loc[:, "frequency"] = to_f
 

@@ -152,3 +152,73 @@ def test_backtest_result_accepts_unknown_signal_key():
     result = bt.result(is_print=False)
 
     assert "breakout" in result["mmd_infos"].get_string()
+
+
+def test_trade_result_annualizes_by_market_trading_days():
+    import pandas as pd
+    import pytest
+
+    def annual_return(market):
+        bt = BackTest()
+        bt.mode = "trade"
+        bt.market = market
+        bt.base_code = "BASE"
+        bt.frequencys = ["d"]
+        bt.start_datetime = "2024-01-02 00:00:00"
+        bt.end_datetime = "2024-01-04 23:59:59"
+        bt.init_balance = 100000
+        bt.datas = type(
+            "Datas",
+            (),
+            {
+                "ex": type(
+                    "Ex",
+                    (),
+                    {"klines": lambda self, *a, **k: pd.DataFrame({"open": [1.0], "close": [1.0]})},
+                )()
+            },
+        )()
+        bt.trader = BackTestTrader("test", mode="trade", market="a")
+        bt.trader.balance_history = {
+            "2024-01-02 15:00:00": 100000,
+            "2024-01-03 15:00:00": 90000,
+            "2024-01-04 15:00:00": 110000,
+        }
+        return bt.result(is_print=False)["annual_return"]
+
+    for market in ("a", "us", "hk", "futures"):
+        assert annual_return(market) == pytest.approx(10 / 3 * 240)
+    assert annual_return("currency") == pytest.approx(10 / 3 * 365)
+
+
+def test_run_optimization_returns_results_sorted_by_end_balance(monkeypatch, tmp_path):
+    class InlineExecutor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def map(self, fn, items):
+            return [fn(item) for item in items]
+
+    # 其他测试会重新导入 backtest 模块，这里直接替换 BackTest 实际使用的全局名
+    monkeypatch.setitem(
+        BackTest.run_optimization.__globals__, "ProcessPoolExecutor", InlineExecutor
+    )
+    bt = BackTest()
+    bt.run_params = lambda setting: {
+        "end_balance": setting["x"],
+        "params": setting,
+        "save_file": str(tmp_path / f"missing_{setting['x']}.pkl"),
+    }
+    setting = type(
+        "Setting", (), {"generate_settings": lambda self: [{"x": 1}, {"x": 3}, {"x": 2}]}
+    )()
+
+    results = bt.run_optimization(setting, max_workers=1)
+
+    assert [r["end_balance"] for r in results] == [3, 2, 1]

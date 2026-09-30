@@ -24,7 +24,7 @@ from futu import (
     TrdMarket,
 )
 
-from tradingview_zy import config, fun
+from tradingview_zy import config
 from tradingview_zy.exchange.exchange import (
     Exchange,
     Tick,
@@ -52,7 +52,6 @@ def _expect_sdk_success(result: Any, operation: str, *, values: int = 1) -> tupl
     return tuple(result[1 : values + 1])
 
 
-@fun.singleton
 class ExchangeFutu(Exchange):
     """Futu provider with explicit quote/trade context ownership."""
 

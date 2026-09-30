@@ -14,7 +14,6 @@ from tradingview_zy.market_metadata import (
     market_frequencies,
 )
 from tradingview_zy.scheduler_status import SchedulerStatusStore
-from tradingview_zy.secret_store import ManagedSecretStore
 from tradingview_zy.tick_request import BoundedProviderCaller, SlidingWindowLimiter
 from tradingview_zy.tv_storage import (
     normalize_legacy_owner_ids,
@@ -285,8 +284,6 @@ def create_app(test_config=None):
         fun=fun,
         zixuan_factory=ZiXuan,
         stocks_bkgn_factory=StocksBKGN,
-        secret_store_factory=ManagedSecretStore,
-        get_data_path=get_data_path,
     )
     install_web_services(app, services)
     register_blueprints(app)

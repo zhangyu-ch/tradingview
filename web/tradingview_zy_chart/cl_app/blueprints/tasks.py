@@ -33,7 +33,7 @@ def alert_list(market):
         payload.update({'code': 1, 'count': 0, 'data': []})
         return payload, 503
     al = alert_tasks.task_list(market)
-    al = [{'id': _l.id, 'market': _l.market, 'task_name': _l.task_name, 'zx_group': _l.zx_group, 'interval_minutes': _l.interval_minutes, 'frequency': _l.frequency, 'strategy_config': _l.strategy_config, 'strategy_memo': _l.strategy_memo, 'is_send_msg': _l.is_send_msg, 'is_run': _l.is_run} for _l in al]
+    al = [{'id': _l.id, 'market': _l.market, 'task_name': _l.task_name, 'zx_group': _l.zx_group, 'interval_minutes': _l.interval_minutes, 'frequency': _l.frequency, 'strategy_config': _l.strategy_config, 'strategy_memo': _l.strategy_memo, 'is_run': _l.is_run} for _l in al]
     return {'code': 0, 'msg': '', 'count': len(al), 'data': al}
 
 @tasks_bp.route('/alert_edit/<market>/<id>')
@@ -49,7 +49,7 @@ def alert_edit(market, id):
     except (StrategyRegistryError, ValueError, TypeError) as error:
         return {'ok': False, 'msg': f'ALERT_STRATEGIES 配置错误：{error}'}
     default_strategy_id = alert_strategies[0].strategy_id if alert_strategies else ''
-    alert_config = {'id': '', 'market': market, 'task_name': '', 'zx_group': '我的关注', 'interval_minutes': 5, 'frequency': '5m', 'strategy_id': default_strategy_id, 'strategy_kwargs': '{}', 'strategy_memo': '', 'legacy_strategy_path': '', 'unavailable_strategy_id': '', 'is_send_msg': 1, 'is_run': 1}
+    alert_config = {'id': '', 'market': market, 'task_name': '', 'zx_group': '我的关注', 'interval_minutes': 5, 'frequency': '5m', 'strategy_id': default_strategy_id, 'strategy_kwargs': '{}', 'strategy_memo': '', 'legacy_strategy_path': '', 'unavailable_strategy_id': '', 'is_run': 1}
     if id != '0':
         _alert_config = alert_tasks.alert_get(id)
         if _alert_config is not None:
@@ -65,7 +65,7 @@ def alert_edit(market, id):
                 strategy_id = ''
             if not strategy_id and legacy_strategy_path:
                 strategy_id = find_registered_strategy_id_by_path(strategy_registry, legacy_strategy_path) or ''
-            alert_config = {'id': _alert_config.id, 'market': _alert_config.market, 'task_name': _alert_config.task_name, 'zx_group': _alert_config.zx_group, 'interval_minutes': _alert_config.interval_minutes, 'frequency': _alert_config.frequency, 'strategy_id': strategy_id, 'strategy_kwargs': json.dumps(parameters.kwargs, ensure_ascii=False), 'strategy_memo': _alert_config.strategy_memo, 'legacy_strategy_path': legacy_strategy_path if not strategy_id else '', 'unavailable_strategy_id': unavailable_strategy_id, 'is_send_msg': _alert_config.is_send_msg, 'is_run': _alert_config.is_run}
+            alert_config = {'id': _alert_config.id, 'market': _alert_config.market, 'task_name': _alert_config.task_name, 'zx_group': _alert_config.zx_group, 'interval_minutes': _alert_config.interval_minutes, 'frequency': _alert_config.frequency, 'strategy_id': strategy_id, 'strategy_kwargs': json.dumps(parameters.kwargs, ensure_ascii=False), 'strategy_memo': _alert_config.strategy_memo, 'legacy_strategy_path': legacy_strategy_path if not strategy_id else '', 'unavailable_strategy_id': unavailable_strategy_id, 'is_run': _alert_config.is_run}
     zx = services.zixuan_factory(market)
     zixuan_groups = zx.zixuan_list
     frequencys = services.get_exchange(Market(market)).support_frequencys()
@@ -92,7 +92,6 @@ def alert_save():
         return {'ok': False, 'msg': f'策略配置无效：{error}'}
     try:
         interval_minutes = int(request.form.get('interval_minutes', '5'))
-        is_send_msg = int(request.form.get('is_send_msg', '1'))
         is_run = int(request.form.get('is_run', '1'))
     except ValueError as error:
         return {'ok': False, 'msg': f'数值字段格式错误：{error}'}
@@ -101,8 +100,11 @@ def alert_save():
         strategy_memo = normalize_strategy_memo(request.form.get('strategy_memo', ''))
     except StrategyStorageValidationError as error:
         return {'ok': False, 'msg': str(error)}
-    alert_config = {'id': request.form.get('id', ''), 'market': request.form.get('market', ''), 'task_name': request.form.get('task_name', ''), 'interval_minutes': interval_minutes, 'zx_group': request.form.get('zx_group', ''), 'frequency': request.form.get('frequency', ''), 'strategy_config': strategy_config, 'strategy_memo': strategy_memo, 'is_send_msg': is_send_msg, 'is_run': is_run}
-    alert_tasks.alert_save(alert_config)
+    alert_config = {'id': request.form.get('id', ''), 'market': request.form.get('market', ''), 'task_name': request.form.get('task_name', ''), 'interval_minutes': interval_minutes, 'zx_group': request.form.get('zx_group', ''), 'frequency': request.form.get('frequency', ''), 'strategy_config': strategy_config, 'strategy_memo': strategy_memo, 'is_run': is_run}
+    try:
+        alert_tasks.alert_save(alert_config)
+    except ValueError as error:
+        return {'ok': False, 'msg': str(error)}
     return {'ok': True}
 
 @tasks_bp.route('/alert_del/<id>', methods=['POST'])

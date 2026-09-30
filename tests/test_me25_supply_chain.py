@@ -41,7 +41,7 @@ def test_current_repository_supply_chain_contract_and_generation_are_determinist
     first = artifact_bytes(ROOT)
     second = artifact_bytes(ROOT)
     assert first == second
-    assert len(load_json(ROOT / "audit/supply-chain/sbom.cdx.json")["components"]) == 155
+    assert len(load_json(ROOT / "audit/supply-chain/sbom.cdx.json")["components"]) == 153
 
 
 @pytest.mark.parametrize(

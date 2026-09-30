@@ -58,7 +58,7 @@ def backtest_module(monkeypatch):
 
 def _manifest(*, codes=("DCE.m2501",), start="2025-01-01 09:00:00"):
     return futures_contracts.build_futures_parameter_manifest(
-        version="2024-12-13",
+        version="2024-12-13-r2",
         start_datetime=start,
         end_datetime="2025-01-31 15:00:00",
         codes=codes,
@@ -79,7 +79,7 @@ def _config(tmp_path: Path, **overrides):
         "max_pos": 5,
         "strategy": None,
         "save_file": str(tmp_path / "result.pkl"),
-        "futures_parameter_version": "2024-12-13",
+        "futures_parameter_version": "2024-12-13-r2",
     }
     config.update(overrides)
     return config
@@ -122,7 +122,7 @@ def test_manifest_round_trip_and_trader_use_injected_snapshot():
         init_balance=100_000,
         futures_parameter_manifest=manifest,
     )
-    assert trader.futures_parameter_version == "2024-12-13"
+    assert trader.futures_parameter_version == "2024-12-13-r2"
     assert trader.futures_contracts["DCE.M"]["symbol_size"] == 10
     assert trader.cal_fee("DCE.m2501", 3000.0, 6000.0, 2.0) == pytest.approx(3.02)
 
@@ -144,7 +144,7 @@ def test_unknown_version_is_rejected():
 def test_date_outside_effective_range_is_rejected():
     with pytest.raises(futures_contracts.FuturesParameterError, match="does not cover"):
         futures_contracts.build_futures_parameter_manifest(
-            version="2024-12-13",
+            version="2024-12-13-r2",
             start_datetime="2024-12-12",
             end_datetime="2024-12-13",
             codes=["DCE.M"],
@@ -154,7 +154,7 @@ def test_date_outside_effective_range_is_rejected():
 def test_missing_contract_is_rejected():
     with pytest.raises(futures_contracts.FuturesParameterError, match="does not define"):
         futures_contracts.build_futures_parameter_manifest(
-            version="2024-12-13",
+            version="2024-12-13-r2",
             start_datetime="2025-01-01",
             end_datetime="2025-01-02",
             codes=["CFFEX.IF2501"],
@@ -177,7 +177,7 @@ def test_backtest_validates_before_data_load_and_detects_tampering(
 
     bt = BackTest(_config(tmp_path))
     assert FakeBackTestKlines.created == 1
-    assert bt.trader.futures_parameter_manifest["version"] == "2024-12-13"
+    assert bt.trader.futures_parameter_manifest["version"] == "2024-12-13-r2"
     bt.save()
 
     restored = BackTest()
@@ -196,3 +196,26 @@ def test_backtest_validates_before_data_load_and_detects_tampering(
         pickle.dump(stored, fh)
     with pytest.raises(futures_contracts.FuturesParameterError, match="hash mismatch"):
         BackTest().load(str(tampered))
+
+
+def test_short_position_record_uses_short_margin_rate():
+    from tradingview_zy.backtesting.base import POSITION
+
+    trader = BackTestTrader(
+        "test",
+        mode="trade",
+        market="futures",
+        init_balance=100_000,
+        futures_parameter_manifest=_manifest(),
+    )
+    trader.futures_contracts["DCE.M"]["margin_rate_long"] = 0.1
+    trader.futures_contracts["DCE.M"]["margin_rate_short"] = 0.2
+    trader.datas = types.SimpleNamespace(
+        last_k_info=lambda code: {"high": 3300.0, "low": 2700.0, "close": 3000.0}
+    )
+    pos = POSITION("DCE.m2501", "breakout", type="做空", price=3000.0, amount=1)
+
+    trader.position_record(pos)
+
+    assert pos.max_profit_rate == pytest.approx(50.0)
+    assert pos.max_loss_rate == pytest.approx(-50.0)

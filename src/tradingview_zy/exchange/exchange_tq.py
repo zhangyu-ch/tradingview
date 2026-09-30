@@ -10,10 +10,10 @@ from typing import Dict, List, Union
 import pandas as pd
 import pytz
 import tqsdk
-from tenacity import retry, retry_if_result, stop_after_attempt, wait_random
 from tqsdk.objs import Account, Position
 
 from tradingview_zy import config
+from tradingview_zy.domain import InvalidRequestError, ProviderUnavailableError
 from tradingview_zy.exchange.exchange import Exchange, Tick
 from tradingview_zy.exchange.worker_lifecycle import ManagedWorker
 from tradingview_zy.trading_calendar import is_market_open
@@ -309,11 +309,6 @@ class ExchangeTq(Exchange):
         self.g_all_stocks = __all_stocks
         return self.g_all_stocks
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_random(min=1, max=5),
-        retry=retry_if_result(lambda _r: _r is None),
-    )
     def klines(
         self,
         code: str,
@@ -350,8 +345,10 @@ class ExchangeTq(Exchange):
             "30s": 30,
             "10s": 10,
         }
-        if start_date is not None and end_date is not None:
-            raise Exception("期货行情不支持历史数据查询，因为账号不是专业版，没权限")
+        if start_date is not None or end_date is not None:
+            raise InvalidRequestError("天勤普通账号不支持按起止时间查询", provider="tq")
+        if frequency not in frequency_maps:
+            raise InvalidRequestError(f"天勤不支持周期 {frequency!r}", provider="tq")
 
         # 添加命令，并在有界等待中读取由工作线程复制的快照。
         duration = frequency_maps[frequency]
@@ -359,7 +356,9 @@ class ExchangeTq(Exchange):
         self._put_command(f"kline:{code}:{duration}")
         klines = self._wait_for_cache(self.res_klines, kline_key, timeout=5.0)
         if klines is None:
-            return None
+            raise ProviderUnavailableError("天勤 K 线快照等待超时", provider="tq")
+        if klines.empty:
+            return klines
         klines.loc[:, "date"] = klines["datetime"].apply(
             lambda x: datetime.datetime.fromtimestamp(x / 1e9)
         )

@@ -112,9 +112,6 @@ var TvIdxAMA = (function () {
           format: {},
         },
         constructor: function () {
-          this.init = function (context, inputCallback) {
-            context.amas = [];
-          };
           this.main = function (context, inputCallback) {
             this._context = context;
             this._input = inputCallback;
@@ -138,29 +135,22 @@ var TvIdxAMA = (function () {
             const l = this._context.new_var(PineJS.Std.low(this._context));
             const c = this._context.new_var(PineJS.Std.close(this._context));
 
-            // 原始的计算公式
-            let direction = NaN;
-            let volatility = NaN;
-            if (cal_type === 0) {
-              // direction = math.abs(close - close[n])
-              // volatility = math.sum(math.abs(close - close[1]), n)
-              direction = PineJS.Std.abs(c - c.get(N));
-              const close_diff = this._context.new_var(
-                PineJS.Std.abs(c - c.get(1))
-              );
-              volatility = PineJS.Std.sum(close_diff, N, this._context);
-            } else {
-              // 改进后的计算公式
-              // direction = 周期内的最高价 - 最低价
-              // volatility = 周期内的 TR 的和
-              direction =
-                PineJS.Std.highest(h, N, this._context) -
-                PineJS.Std.lowest(l, N, this._context);
-              const trs = this._context.new_var(
-                PineJS.Std.tr(true, this._context)
-              );
-              volatility = PineJS.Std.sum(trs, N, this._context);
-            }
+            // 两套公式都按固定顺序计算序列，只在数值选择时分支。
+            const close_ref_n = c.get(N);
+            const close_diff = this._context.new_var(
+              PineJS.Std.abs(c - c.get(1))
+            );
+            const close_volatility = PineJS.Std.sum(close_diff, N, this._context);
+            const highest = PineJS.Std.highest(h, N, this._context);
+            const lowest = PineJS.Std.lowest(l, N, this._context);
+            const trs = this._context.new_var(
+              PineJS.Std.tr(true, this._context)
+            );
+            const tr_volatility = PineJS.Std.sum(trs, N, this._context);
+            const direction = cal_type === 0
+              ? PineJS.Std.abs(c - close_ref_n)
+              : highest - lowest;
+            const volatility = cal_type === 0 ? close_volatility : tr_volatility;
 
             // ER = direction / volatility
             const er = direction / volatility;
@@ -170,31 +160,18 @@ var TvIdxAMA = (function () {
               2
             );
 
-            if (PineJS.Std.na(sc)) {
-              this._context.amas.push(c.get(0));
-            } else {
-              // ama.get(1) + sc * (c.get(0) - ama.get(1)));
-              this._context.amas.push(
-                this._context.amas[this._context.amas.length - 1] +
-                  sc *
-                    (c.get(0) -
-                      this._context.amas[this._context.amas.length - 1])
-              );
-            }
+            const ama = this._context.new_var();
+            const previous_ama = ama.get(1);
+            // N=1 的 TR 公式首 bar 即有 sc；无前值时用收盘价播种，避免 NaN 永久传播。
+            const current_ama = PineJS.Std.na(sc) ||
+              (N === 1 && cal_type === 1 && PineJS.Std.na(previous_ama))
+              ? c.get(0)
+              : previous_ama + sc * (c.get(0) - previous_ama);
+            ama.set(current_ama);
 
             // 颜色设置
-            const colorIndex =
-              this._context.amas.length >= 2 &&
-              this._context.amas[this._context.amas.length - 1] >
-                this._context.amas[this._context.amas.length - 2]
-                ? 0
-                : 1;
-
-            // 返回 this._context.amas 数组最后一个
-            return [
-              this._context.amas[this._context.amas.length - 1],
-              colorIndex,
-            ];
+            const colorIndex = current_ama > previous_ama ? 0 : 1;
+            return [current_ama, colorIndex];
           };
         },
       };

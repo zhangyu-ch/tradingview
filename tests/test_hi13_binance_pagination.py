@@ -28,8 +28,17 @@ def test_cache_resume_is_safe_for_zero_one_and_many_rows() -> None:
         ]
     )
     assert pagination.latest_cached_datetime(empty) is None
-    assert pagination.latest_cached_datetime(one) == "2026-01-01 00:00:00"
-    assert pagination.latest_cached_datetime(many) == "2026-01-01 00:01:00"
+    assert pagination.latest_cached_datetime(one) == "2026-01-01T00:00:00+00:00"
+    assert pagination.latest_cached_datetime(many) == "2026-01-01T00:01:00+00:00"
+
+
+@pytest.mark.parametrize("timezone", ["UTC", "Asia/Shanghai", "America/New_York"])
+def test_cache_cursor_preserves_absolute_time(timezone) -> None:
+    instant = pd.Timestamp("2026-01-01T00:01:00Z")
+    frame = pd.DataFrame({"date": [instant.tz_convert(timezone)]})
+    cursor = pagination.latest_cached_datetime(frame)
+    assert cursor == "2026-01-01T00:01:00+00:00"
+    assert pd.Timestamp(cursor).timestamp() == instant.timestamp()
 
 
 def test_forward_cursor_skips_inclusive_boundary_and_deduplicates() -> None:

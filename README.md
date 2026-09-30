@@ -118,7 +118,7 @@ uv run --locked python script/remediation/generate_supply_chain_artifacts.py --c
 
 数据库、行情、券商和消息平台的业务凭据不得直接写入 Python 配置。
 配置项只保存 `env://`、`managed://`、`file://` 或 `keyring://` 引用；
-引用格式、平台权限边界、飞书轮换和旧配置迁移见
+引用格式、平台权限边界与旧配置迁移见
 [`docs/secrets.md`](docs/secrets.md)。Secret inventory 暂时保留旧 AI 字段以约束私有配置迁移，
 这不表示当前提供 AI 分析功能。
 

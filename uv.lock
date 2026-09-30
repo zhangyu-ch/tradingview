@@ -942,22 +942,6 @@ wheels = [
 ]
 
 [[package]]
-name = "lark-oapi"
-version = "1.7.2"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pycryptodome" },
-    { name = "requests" },
-    { name = "requests-toolbelt" },
-    { name = "websockets" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/63/02/9992aa997e7085507237554ba5b49b998d77a6f8971e05ce105b04fbc324/lark_oapi-1.7.2.tar.gz", hash = "sha256:deee5ed90f6b54448e00af6749af90a1ac72f212050c24a6c619f5a12c542774" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/8b/34/151efd46acca34d086a2db86d1820ec2452a72d1a8281bb73d5991f03505/lark_oapi-1.7.2-py3-none-any.whl", hash = "sha256:d73cbcac28d8e7cd75efe64a8c350da50b1a45be046c5e5b8382701ea8bb764c" },
-]
-
-[[package]]
 name = "lxml"
 version = "6.1.1"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -1712,18 +1696,6 @@ wheels = [
 ]
 
 [[package]]
-name = "requests-toolbelt"
-version = "1.0.0"
-source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "requests" },
-]
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/f3/61/d7545dafb7ac2230c70d38d31cbfe4cc64f7144dc41f6e4e4b78ecd9f5bb/requests-toolbelt-1.0.0.tar.gz", hash = "sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6" }
-wheels = [
-    { url = "https://mirrors.aliyun.com/pypi/packages/3f/51/d4db610ef29373b879047326cbf6fa98b6c1969d6f6dc423279de2b1be2c/requests_toolbelt-1.0.0-py2.py3-none-any.whl", hash = "sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06" },
-]
-
-[[package]]
 name = "scikit-learn"
 version = "1.9.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -2172,7 +2144,6 @@ dependencies = [
     { name = "gevent" },
     { name = "ib-insync" },
     { name = "ipywidgets" },
-    { name = "lark-oapi" },
     { name = "matplotlib" },
     { name = "mytt" },
     { name = "numpy" },
@@ -2222,7 +2193,6 @@ requires-dist = [
     { name = "gevent", specifier = ">=25.5.1" },
     { name = "ib-insync", specifier = ">=0.9.86" },
     { name = "ipywidgets", specifier = ">=8.1.7" },
-    { name = "lark-oapi", specifier = ">=1.4.17" },
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "mytt", specifier = ">=2.9.3" },
     { name = "numpy", specifier = "==1.26.4" },

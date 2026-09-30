@@ -244,7 +244,6 @@ def test_alert_save_uses_generic_task_methods(monkeypatch):
         "frequency": "d",
         "strategy_config": '{"strategy_path": "unused"}',
         "strategy_memo": "memo",
-        "is_send_msg": 1,
         "is_run": 1,
     }
 
@@ -259,7 +258,6 @@ def test_alert_save_uses_generic_task_methods(monkeypatch):
             "frequency": "d",
             "strategy_config": '{"strategy_path": "unused"}',
             "strategy_memo": "memo",
-            "is_send_msg": 1,
             "is_run": 1,
         },
     )

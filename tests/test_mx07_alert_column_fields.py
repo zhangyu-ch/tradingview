@@ -27,7 +27,6 @@ def test_alert_task_columns_use_layui_field_key() -> None:
         "strategy_config",
         "strategy_kwargs",
         "strategy_memo",
-        "is_send_msg",
         "is_run",
     }
     fields = re.findall(r'\bfield:\s*"([^"]+)"', columns)
@@ -37,7 +36,7 @@ def test_alert_task_columns_use_layui_field_key() -> None:
 
 def test_sortable_columns_have_their_own_field_binding() -> None:
     columns = _task_columns_source()
-    for field in ("interval_minutes", "is_send_msg", "is_run"):
+    for field in ("interval_minutes", "is_run"):
         pattern = rf'\{{\s*field:\s*"{field}"[\s\S]*?sort:\s*true[\s\S]*?\}}'
         assert re.search(pattern, columns), field
 

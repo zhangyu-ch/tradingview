@@ -205,8 +205,6 @@ def _service_values(service_type) -> dict:
         get_exchange=lambda market: market,
         zixuan_factory=lambda market: market,
         stocks_bkgn_factory=lambda market: market,
-        secret_store_factory=lambda root: root,
-        get_data_path=lambda: ROOT,
     )
     return values
 
