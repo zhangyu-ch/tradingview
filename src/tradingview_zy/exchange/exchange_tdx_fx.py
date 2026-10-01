@@ -10,7 +10,7 @@ from tradingview_zy.base import Market
 from tradingview_zy.domain import InvalidRequestError
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick
-from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
+from tradingview_zy.exchange.tdx_quotes import fetch_exhq_ticks
 from tradingview_zy.exchange.tdx_cache import refresh_tdx_window, tdx_cache_key
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.exchange.tdx_reliability import (
@@ -200,9 +200,6 @@ class ExchangeTDXFX(TdxExHqLifecycleMixin, Exchange):
         if klines.empty:
             return klines
 
-
-        # 删除重复数据
-        klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
         self.fdb.save_tdx_klines(Market.FX.value, cache_key, frequency, klines)
 
         klines.loc[:, "code"] = code
@@ -227,35 +224,9 @@ class ExchangeTDXFX(TdxExHqLifecycleMixin, Exchange):
         return {"code": stock[0]["code"], "name": stock[0]["name"]}
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        如果可以使用 富途 的接口，就用 富途的，否则就用 日线的 K线计算
-        使用 富途 的接口会很快，日线则很慢
-        获取日线的k线，并返回最后一根k线的数据
-        """
-        ticks = {}
-        client = self._new_tdx_client()
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-            for _code in codes:
-                _market, _tdx_code = self.to_tdx_code(_code)
-                if _market is None:
-                    continue
-                _quote = client.get_instrument_quote(_market, _tdx_code)
-                if len(_quote) > 0:
-                    _quote = _quote[0]
-                    ticks[_code] = Tick(
-                        code=_code,
-                        last=_quote["price"],
-                        buy1=_quote["bid1"],
-                        sell1=_quote["ask1"],
-                        low=_quote["low"],
-                        high=_quote["high"],
-                        volume=_quote["zongliang"],
-                        open=_quote["open"],
-                        rate=(
-                            calculate_change_rate(_quote["price"], _quote["pre_close"])
-                        ),
-                    )
-        return ticks
+        return fetch_exhq_ticks(
+            self._new_tdx_client(), self.connect_info, self.to_tdx_code, codes
+        )
 
     def now_trading(self, code: str | None = None, at=None) -> bool:
         """Return a strict instrument-aware state from the shared calendar."""

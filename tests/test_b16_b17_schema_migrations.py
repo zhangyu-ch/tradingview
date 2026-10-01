@@ -160,8 +160,10 @@ def test_task_route_reports_duplicate_through_existing_json_error_contract():
     service = SimpleNamespace(alert_save=fail_save)
     route = compile_route("alert_save", {
         "request": request,
-        "_alert_tasks": SimpleNamespace(resolve=lambda: (service, None)),
-        "config": SimpleNamespace(ALERT_STRATEGIES={"demo": object()}),
+        "get_web_services": lambda: SimpleNamespace(
+            alert_tasks=SimpleNamespace(resolve=lambda: (service, None)),
+            config=SimpleNamespace(ALERT_STRATEGIES={"demo": object()}),
+        ),
         "parse_strategy_kwargs": parse_strategy_kwargs,
         "StrategyStorageValidationError": StrategyStorageValidationError,
         "validate_registered_strategy": lambda *args: None,

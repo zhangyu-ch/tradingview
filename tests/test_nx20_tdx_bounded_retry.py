@@ -93,8 +93,20 @@ def test_retry_can_recover_without_unbounded_loop() -> None:
 
 def test_exhq_constructors_delegate_to_the_shared_bounded_lifecycle() -> None:
     for path in TARGETS:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
         class_node = next(node for node in tree.body if isinstance(node, ast.ClassDef))
+        assert not any(
+            isinstance(node, ast.FunctionDef) and node.name == "reset_tdx_ip"
+            for node in class_node.body
+        ), path
+        assert not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "TdxExHq_API"
+            for node in ast.walk(tree)
+        ), path
+        assert "self._new_tdx_client()" in source, path
         assert "TdxExHqLifecycleMixin" in {
             ast.unparse(base) for base in class_node.bases
         }, path

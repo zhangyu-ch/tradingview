@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import builtins
 import datetime as dt
 import importlib
+import io
+import json
 import os
 import pickle
 import stat
@@ -94,6 +97,87 @@ def test_kline_metadata_makes_incomplete_bar_explicit(cache) -> None:
         "a", "SH.600000", "1m", frame, last_row_complete=True
     )
     assert len(cache.get_tdx_klines("a", "SH.600000", "1m")) == 2
+
+
+@pytest.mark.parametrize("complete,include_incomplete,rows", [
+    (False, False, 1), (False, True, 2), (True, False, 2), (True, True, 2),
+])
+def test_kline_csv_is_opened_only_once(cache, monkeypatch, complete, include_incomplete, rows):
+    cache.save_tdx_klines("a", "SH.600000", "1m", _frame(), last_row_complete=complete)
+    path = cache._kline_path("a", "SH.600000", "1m")
+    reads = []
+
+    def track_open(original):
+        def tracked(file, mode="r", *args, **kwargs):
+            if not isinstance(file, int) and Path(file) == path and "r" in mode:
+                reads.append(mode)
+            return original(file, mode, *args, **kwargs)
+        return tracked
+
+    monkeypatch.setattr(io, "open", track_open(io.open))
+    monkeypatch.setattr(builtins, "open", track_open(builtins.open))
+    result = cache.get_tdx_klines("a", "SH.600000", "1m", include_incomplete=include_incomplete)
+    pd.testing.assert_frame_equal(result, _frame().iloc[:rows])
+    assert len(reads) == 1
+
+
+def test_csv_parser_and_checksum_use_the_same_read_snapshot(cache, monkeypatch):
+    original = _frame()
+    cache.save_tdx_klines("a", "SH.600000", "1m", original, last_row_complete=True)
+    path = cache._kline_path("a", "SH.600000", "1m")
+    meta_path = cache._meta_path(path)
+    changed = original.assign(close=[99.0, 100.0])
+    read_bytes = Path.read_bytes
+
+    def replace_after_read(candidate):
+        snapshot = read_bytes(candidate)
+        if candidate == path:
+            # Simulate the CSV being replaced before its metadata is published.
+            cache.atomic_write_dataframe_csv(path, changed)
+        return snapshot
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "read_bytes", replace_after_read)
+        result = cache.get_tdx_klines("a", "SH.600000", "1m")
+    pd.testing.assert_frame_equal(result, original)
+    assert meta_path.exists()
+    # The next reader detects stale metadata and conservatively omits the tail.
+    result = cache.get_tdx_klines("a", "SH.600000", "1m")
+    pd.testing.assert_frame_equal(result, changed.iloc[:-1])
+    assert path.exists() and not meta_path.exists()
+    assert len(list(path.parent.glob(f"{meta_path.name}.corrupt.*"))) == 1
+
+
+@pytest.mark.parametrize("key,value", [
+    ("csv_sha256", "wrong"), ("row_count", 9), ("schema", "wrong"),
+    ("version", -1), ("last_row_complete", "true"), ("unexpected", 1),
+])
+def test_invalid_kline_metadata_keeps_valid_csv_and_uses_legacy_tail_rule(cache, key, value):
+    cache.save_tdx_klines("a", "SH.600000", "1m", _frame(), last_row_complete=True)
+    path = cache._kline_path("a", "SH.600000", "1m")
+    meta_path = cache._meta_path(path)
+    metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+    metadata[key] = value
+    cache.atomic_write_json(meta_path, metadata)
+    pd.testing.assert_frame_equal(cache.get_tdx_klines("a", "SH.600000", "1m"), _frame().iloc[:-1])
+    assert path.exists() and not meta_path.exists()
+    assert len(list(path.parent.glob(f"{meta_path.name}.corrupt.*"))) == 1
+    pd.testing.assert_frame_equal(
+        cache.get_tdx_klines("a", "SH.600000", "1m", include_incomplete=True), _frame(),
+    )
+
+
+@pytest.mark.parametrize("payload", [b"", b'date,close\n"unfinished,1\n', b"date,close\ninvalid,1\n", b"\xff\xfe"])
+def test_invalid_csv_quarantines_both_data_and_metadata(cache, payload):
+    cache.save_tdx_klines("a", "SH.600000", "1m", _frame(), last_row_complete=True)
+    path = cache._kline_path("a", "SH.600000", "1m")
+    meta_path = cache._meta_path(path)
+    path.write_bytes(payload)
+    with pytest.raises(cache_module.SafeCacheCorruptionError):
+        cache.get_tdx_klines("a", "SH.600000", "1m")
+    assert not path.exists() and not meta_path.exists()
+    assert len(list(path.parent.glob(f"{path.name}.corrupt.*"))) == 1
+    assert len(list(path.parent.glob(f"{meta_path.name}.corrupt.*"))) == 1
 
 
 def test_corrupt_csv_is_quarantined_instead_of_deleted(cache) -> None:

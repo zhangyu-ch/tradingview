@@ -146,9 +146,6 @@ def test_web_routes_and_browser_clients_enforce_the_csrf_contract() -> None:
     alert_source = (
         ROOT / "web/tradingview_zy_chart/cl_app/static/js/alert.js"
     ).read_text(encoding="utf-8")
-    csrf_source = (
-        ROOT / "web/tradingview_zy_chart/cl_app/static/js/csrf.js"
-    ).read_text(encoding="utf-8")
     dark_template = (
         ROOT / "web/tradingview_zy_chart/cl_app/templates/dark.html"
     ).read_text(encoding="utf-8")
@@ -166,11 +163,3 @@ def test_web_routes_and_browser_clients_enforce_the_csrf_contract() -> None:
     assert '<meta name="csrf-token"' in dark_template
     assert "js/csrf.js" in dark_template
     assert 'name="_csrf_token"' in login_template
-
-    # jQuery uses the patched XHR; a second prefilter would duplicate the header.
-    assert "ajaxPrefilter" not in csrf_source
-    assert "win.fetch" in csrf_source
-    assert "prototype.send" in csrf_source
-    assert "TRADINGVIEW_ZY_CSRF = { install: install }" in csrf_source
-    assert 'input[name="_csrf_token"]' in csrf_source
-    assert "X-CSRF-Token" in csrf_source

@@ -68,7 +68,7 @@ def test_all_three_real_routes_bind_database_calls_to_current_user() -> None:
         {
             "request": _request(args={"client": "client-a", "user": "forged"}),
             "current_user": principal,
-            "db": chart_db,
+            "get_web_services": lambda: SimpleNamespace(database=chart_db),
             "resolve_storage_owner": resolve_storage_owner,
             "TVStorageError": Exception,
         },
@@ -84,7 +84,7 @@ def test_all_three_real_routes_bind_database_calls_to_current_user() -> None:
         {
             "request": _request(args={"client": "client-b", "user": "another"}),
             "current_user": principal,
-            "db": template_db,
+            "get_web_services": lambda: SimpleNamespace(database=template_db),
             "resolve_storage_owner": resolve_storage_owner,
             "TVStorageError": Exception,
         },
@@ -108,7 +108,7 @@ def test_all_three_real_routes_bind_database_calls_to_current_user() -> None:
                 }
             ),
             "current_user": principal,
-            "db": drawing_db,
+            "get_web_services": lambda: SimpleNamespace(database=drawing_db),
             "resolve_storage_owner": resolve_storage_owner,
             "TVStorageError": Exception,
         },

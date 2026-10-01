@@ -205,7 +205,9 @@ def test_task_routes_return_structured_503_from_generic_health_error() -> None:
         def resolve():
             return None, error
 
-    route = compile_route("alert_list", {"_alert_tasks": Proxy()})
+    route = compile_route("alert_list", {
+        "get_web_services": lambda: SimpleNamespace(alert_tasks=Proxy()),
+    })
     payload, status = route("a")
     assert status == 503
     assert payload["code"] == 1

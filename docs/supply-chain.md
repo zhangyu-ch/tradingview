@@ -10,6 +10,12 @@ uv sync --locked
 
 仓库不再提供 `requirements.txt`、`setup.py`、Pipfile 或其他可绕过锁文件的安装入口。Tests workflow 的六个 job 都通过 `uv sync --locked` 安装；其中 `supply-chain-contracts` 还会先执行 `uv lock --check`。只读的 repository-hygiene workflow 不安装依赖，直接运行标准库治理脚本。`UV_PYTHON_DOWNLOADS=never` 防止 setup-python 已提供 3.11 后又静默下载其他解释器。
 
+## 默认依赖精简
+
+2026-10-01 移除无活跃仓库调用的 `dbutils`、`dtaidistance`、`gevent`、`mytt` 和 `openai`。锁图同时裁去仅由它们引入的传递依赖，其余包的版本、来源和制品哈希保持不变。旧 AI 配置字段仍用于配置迁移兼容，不再意味着默认安装 OpenAI SDK。
+
+私有策略若使用这些包，应在其扩展项目中显式声明并锁定依赖，不能依赖主项目偶然安装的包。默认运行与测试需在全新 `uv sync --locked` 环境验证，不能只在残留旧依赖的开发环境运行。
+
 ## 本地 wheel
 
 `audit/supply-chain/local-artifacts.json` 是 `package/` 的完整许可清单。每一项记录：

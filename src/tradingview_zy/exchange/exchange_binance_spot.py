@@ -1,29 +1,20 @@
-import datetime
-import time
 from threading import RLock
 from typing import Dict, List, Union
 
 import ccxt
-import pandas as pd
 import pytz
-from tradingview_zy.crypto_time import as_utc
 
 from tradingview_zy import config, fun
 from tradingview_zy.base import Market
-from tradingview_zy.exchange.exchange import Exchange, Tick, convert_currency_kline_frequency
-from tradingview_zy.exchange.binance_pagination import (
-    latest_cached_datetime,
-    paginate_ohlcv,
-)
+from tradingview_zy.exchange.exchange import Exchange, Tick
+from tradingview_zy.exchange.binance_history import BinanceKlinesMixin
 from tradingview_zy.exchange.exchange_db import ExchangeDB
-from tradingview_zy.exchange.binance_reliability import fetch_ohlcv_with_retry
-from tradingview_zy.domain import InvalidRequestError
 from tradingview_zy.utils import config_get_proxy
 from tradingview_zy.secret_store import resolve_config_secret
 from tradingview_zy.trading_calendar import is_market_open
 
 
-class ExchangeBinanceSpot(Exchange):
+class ExchangeBinanceSpot(BinanceKlinesMixin, Exchange):
     """
     数字货币交易所接口(现货交易)
     """
@@ -115,188 +106,6 @@ class ExchangeBinanceSpot(Exchange):
                 )
         self.g_all_stocks = __all_stocks
         return self.g_all_stocks
-
-    def klines(
-        self,
-        code: str,
-        frequency: str,
-        start_date: str = None,
-        end_date: str = None,
-        args=None,
-    ) -> Union[pd.DataFrame, None]:
-        """
-        返回 k 线数据
-        优先从数据库中获取，在进行 api 请求，合并数据，并更新数据库，之后返回k线行情
-        可以减少网络请求，优化 vpn 使用流量
-        """
-        if args is None:
-            args = {}
-
-        if "use_online" in args.keys() and args["use_online"]:
-            # 个别情况需要直接调用交易所结果，不需要通过数据库
-            return self.online_klines(code, frequency, start_date, end_date, args)
-
-        # 查询数据库，如果数据库为0，api查询并插入数据库
-        db_klines = self.db_exchange.klines(code, frequency, args={"limit": 10000})
-        if len(db_klines) == 0:
-            online_klines = self.increment_klines_by_online(
-                code, frequency, start_date=None
-            )
-            if online_klines is not None and len(online_klines) > 0:
-                self.db_exchange.insert_klines(code, frequency, online_klines)
-            return online_klines
-        else:
-            # 根据数据库中的最后时间，调用api进行返回数据
-            last_datetime = latest_cached_datetime(db_klines)
-            online_klines = self.increment_klines_by_online(
-                code, frequency, start_date=last_datetime
-            )
-            if online_klines is not None and len(online_klines) > 0:
-                self.db_exchange.insert_klines(code, frequency, online_klines)
-            else:
-                return db_klines[-10000::]
-        klines = pd.concat([db_klines, online_klines], ignore_index=True)
-        klines.drop_duplicates(subset=["date"], keep="last", inplace=True)
-        klines = klines.sort_values(by="date", ascending=True)
-        return klines[-10000::]
-
-    def increment_klines_by_online(
-        self,
-        code: str,
-        frequency: str,
-        start_date: str = None,
-        args=None,
-    ) -> Union[pd.DataFrame, None]:
-        """Fetch incremental OHLCV data with a strictly advancing cursor."""
-        if args is None:
-            args = {}
-        frequency_map = {
-            "w": "1w",
-            "d": "1d",
-            "12h": "12h",
-            "8h": "8h",
-            "6h": "6h",
-            "4h": "4h",
-            "3h": "1h",
-            "60m": "1h",
-            "30m": "30m",
-            "15m": "15m",
-            "10m": "5m",
-            "5m": "5m",
-            "3m": "3m",
-            "2m": "1m",
-            "1m": "1m",
-        }
-        if frequency not in frequency_map:
-            raise InvalidRequestError(f"不支持的周期: {frequency}")
-
-        start_timestamp = None
-        if start_date is not None:
-            start_timestamp = int(as_utc(start_date).timestamp() * 1000)
-
-        deadline = time.monotonic() + 12.0
-
-        def fetch_page(params):
-            return fetch_ohlcv_with_retry(
-                self.exchange, self._ohlcv_lock, deadline=deadline,
-                symbol=code,
-                timeframe=frequency_map[frequency],
-                limit=1000,
-                params=params,
-            )
-
-        all_klines = paginate_ohlcv(
-            fetch_page,
-            start_ms=start_timestamp,
-            page_limit=1000,
-            target_count=10000,
-            max_pages=int(args.get("max_pages", 100)),
-        )
-        if not all_klines:
-            return pd.DataFrame([])
-
-        kline_pd = pd.DataFrame(
-            all_klines, columns=["date", "open", "high", "low", "close", "volume"]
-        )
-        kline_pd["code"] = code
-        kline_pd["date"] = kline_pd["date"].apply(
-            lambda value: datetime.datetime.fromtimestamp(value / 1e3, datetime.timezone.utc)
-        )
-        kline_pd = kline_pd[
-            ["code", "date", "open", "close", "high", "low", "volume"]
-        ]
-        kline_pd.drop_duplicates(subset=["date"], keep="last", inplace=True)
-        kline_pd.sort_values(by="date", inplace=True)
-
-        if frequency in ["10m", "2m", "3h"] and len(kline_pd) > 0:
-            kline_pd = convert_currency_kline_frequency(kline_pd, frequency)
-        return kline_pd
-
-    def online_klines(
-        self,
-        code: str,
-        frequency: str,
-        start_date: str = None,
-        end_date: str = None,
-        args=None,
-    ) -> Union[pd.DataFrame, None]:
-        """
-        api 接口请求行情数据
-        """
-        # 1m  3m  5m  15m  30m  1h  2h  4h  6h  8h  12h  1d  3d  1w  1M
-        if args is None:
-            args = {}
-        frequency_map = {
-            "w": "1w",
-            "d": "1d",
-            "12h": "12h",
-            "8h": "8h",
-            "6h": "6h",
-            "4h": "4h",
-            "3h": "1h",
-            "60m": "1h",
-            "30m": "30m",
-            "15m": "15m",
-            "10m": "5m",
-            "5m": "5m",
-            "3m": "3m",
-            "2m": "1m",
-            "1m": "1m",
-        }
-        if frequency not in frequency_map.keys():
-            raise InvalidRequestError(f"不支持的周期: {frequency}")
-
-        if start_date is not None:
-            start_date = int(as_utc(start_date).timestamp() * 1000)
-        if end_date is not None:
-            end_date = int(as_utc(end_date).timestamp() * 1000)
-        params = {}
-        if start_date is not None:
-            params["startTime"] = start_date
-        if end_date is not None:
-            params["endTime"] = end_date
-
-        kline = fetch_ohlcv_with_retry(
-            self.exchange, self._ohlcv_lock, deadline=time.monotonic() + 12.0,
-            symbol=code,
-            timeframe=frequency_map[frequency],
-            limit=1000,
-            params=params,
-        )
-        kline_pd = pd.DataFrame(
-            kline, columns=["date", "open", "high", "low", "close", "volume"]
-        )
-        # kline_pd.loc[:, 'code'] = code
-        # kline_pd.loc[:, 'date'] = kline_pd['date'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1e3))
-        kline_pd["code"] = code
-        kline_pd["date"] = kline_pd["date"].apply(
-            lambda x: datetime.datetime.fromtimestamp(x / 1e3, datetime.timezone.utc)
-        )
-        kline_pd = kline_pd[["code", "date", "open", "close", "high", "low", "volume"]]
-        # 自定义级别，需要进行转换
-        if frequency in ["10m", "2m", "3h"] and len(kline_pd) > 0:
-            kline_pd = convert_currency_kline_frequency(kline_pd, frequency)
-        return kline_pd
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
         res_ticks = {}

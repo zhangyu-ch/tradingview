@@ -6,8 +6,6 @@ from flask_login import current_user, login_required
 
 from tradingview_zy.tv_storage import (
     TVStorageError,
-    normalize_chart_payload,
-    normalize_drawing_payload,
     resolve_storage_owner,
 )
 from tradingview_zy.web_api_validation import (
@@ -56,7 +54,7 @@ def tv_charts(version):
         except WebParameterError as exc:
             return ({'status': 'error', 'error': 'invalid_chart_id', 'message': str(exc)}, 422)
     try:
-        payload = normalize_chart_payload(services.database.tv_storage_policy, chart_type='chart', client_id=client_id, user_id=user_id, name=request.form.get('name'), content=request.form.get('content'), symbol=request.form.get('symbol'), resolution=request.form.get('resolution'))
+        payload = dict(chart_type='chart', client_id=client_id, user_id=user_id, name=request.form.get('name'), content=request.form.get('content'), symbol=request.form.get('symbol'), resolution=request.form.get('resolution'))
         if chart_id is None:
             saved_id = services.database.tv_chart_save(**payload)
             return {'status': 'ok', 'id': saved_id}
@@ -97,8 +95,7 @@ def tv_study_templates(version):
         services.database.tv_chart_del_by_name('template', name, client_id, user_id)
         return {'status': 'ok'}
     try:
-        payload = normalize_chart_payload(services.database.tv_storage_policy, chart_type='template', client_id=client_id, user_id=user_id, name=request.form.get('name'), content=request.form.get('content'), symbol='', resolution='')
-        saved_id = services.database.tv_chart_save(**payload)
+        saved_id = services.database.tv_chart_save(chart_type='template', client_id=client_id, user_id=user_id, name=request.form.get('name'), content=request.form.get('content'), symbol='', resolution='')
     except TVStorageError as error:
         return ({'status': 'error', 'error': error.code, 'message': str(error)}, 422)
     return {'status': 'ok', 'id': saved_id}
@@ -137,12 +134,11 @@ def tv_drawings(version):
         return ({'status': 'error', 'error': 'invalid_drawing_request', 'message': 'client, user, chart, layout and state are required'}, 422)
     try:
         client_id, user_id = resolve_storage_owner(protocol_client_id, protocol_user_id, current_user.get_id())
-        payload = normalize_drawing_payload(services.database.tv_storage_policy, client_id=client_id, user_id=user_id, layout_id=layout_id, chart_id=chart_id, symbol=symbol, state=state)
     except TVStorageError as error:
         return ({'status': 'error', 'error': error.code, 'message': str(error)}, 422)
     request_id = uuid.uuid4().hex
     try:
-        saved = services.database.tv_drawing_save_or_update(**payload)
+        saved = services.database.tv_drawing_save_or_update(client_id=client_id, user_id=user_id, layout_id=layout_id, chart_id=chart_id, symbol=symbol, state=state)
     except TVStorageError as error:
         return ({'status': 'error', 'error': error.code, 'message': str(error)}, 422)
     except Exception:

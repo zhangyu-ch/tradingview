@@ -5,12 +5,12 @@ import importlib.util
 import inspect
 import sys
 import types
-from datetime import timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from test_support.sqlite_db import sqlite_db as sqlite_db
 from test_support.web_routes import route_source
 
 from tradingview_zy.strategies.base import (
@@ -22,27 +22,6 @@ from tradingview_zy.strategies.base import (
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 XUANGU_TASKS_PATH = ROOT / "web/tradingview_zy_chart/cl_app/xuangu_tasks.py"
-
-
-def _load_db(tmp_path):
-    for name in ["tradingview_zy.db", "tradingview_zy.fun", "tradingview_zy.config"]:
-        sys.modules.pop(name, None)
-    tzlocal = types.ModuleType("tzlocal")
-    tzlocal.get_localzone = lambda: timezone.utc
-    sys.modules["tzlocal"] = tzlocal
-
-    config = types.ModuleType("tradingview_zy.config")
-    config.DB_TYPE = "sqlite"
-    config.DB_DATABASE = "me19"
-    config.DB_HOST = "127.0.0.1"
-    config.DB_PORT = 3306
-    config.DB_USER = "user"
-    config.DB_PWD = "password"
-    config.get_data_path = lambda: tmp_path
-    sys.modules["tradingview_zy.config"] = config
-    package = importlib.import_module("tradingview_zy")
-    package.config = config
-    return importlib.import_module("tradingview_zy.db")
 
 
 def _rows(module, market: str, group: str = "target"):
@@ -100,8 +79,8 @@ def _event(code: str, *, name: str | None = None, message: str = "hit"):
     return SimpleNamespace(code=code, name=name or code, message=message)
 
 
-def test_atomic_replace_rolls_back_delete_and_partial_inserts(tmp_path) -> None:
-    module = _load_db(tmp_path)
+def test_atomic_replace_rolls_back_delete_and_partial_inserts(sqlite_db) -> None:
+    module = sqlite_db()
     module.db.zx_add_group_stock("a", "target", "OLD1", "Old 1")
     module.db.zx_add_group_stock("a", "target", "OLD2", "Old 2")
     module.db.zx_add_group_stock("hk", "target", "HK1", "HK 1")
@@ -133,8 +112,8 @@ def test_atomic_replace_rolls_back_delete_and_partial_inserts(tmp_path) -> None:
     assert _rows(module, "hk") == before_hk
 
 
-def test_successful_replace_deduplicates_by_first_position_and_last_content(tmp_path) -> None:
-    module = _load_db(tmp_path)
+def test_successful_replace_deduplicates_by_first_position_and_last_content(sqlite_db) -> None:
+    module = sqlite_db()
     module.db.zx_add_group_stock("hk", "target", "HK1", "HK 1")
     hk_before = _rows(module, "hk")
 
@@ -155,8 +134,8 @@ def test_successful_replace_deduplicates_by_first_position_and_last_content(tmp_
     assert _rows(module, "hk") == hk_before
 
 
-def test_snapshot_validation_happens_before_the_old_group_is_deleted(tmp_path) -> None:
-    module = _load_db(tmp_path)
+def test_snapshot_validation_happens_before_the_old_group_is_deleted(sqlite_db) -> None:
+    module = sqlite_db()
     module.db.zx_add_group_stock("a", "target", "KEEP", "Keep")
     before = _rows(module, "a")
 

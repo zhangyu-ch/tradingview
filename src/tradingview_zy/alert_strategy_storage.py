@@ -108,14 +108,18 @@ def parse_strategy_parameters(
         raise StrategyStorageValidationError(str(error)) from error
 
 
-def normalize_strategy_config(value: str | Mapping[str, Any]) -> str:
-    """Return canonical JSON emitted by the immutable strategy group contract."""
-    canonical = parse_strategy_parameters(value).to_json()
+def _serialize_strategy_parameters(parameters: StrategyParameters) -> str:
+    canonical = parameters.to_json()
     if _utf8_length(canonical, field="strategy_config") > STRATEGY_CONFIG_MAX_BYTES:
         raise StrategyStorageValidationError(
             f"strategy_config 超过 {STRATEGY_CONFIG_MAX_BYTES} UTF-8 字节"
         )
     return canonical
+
+
+def normalize_strategy_config(value: str | Mapping[str, Any]) -> str:
+    """Return canonical JSON emitted by the immutable strategy group contract."""
+    return _serialize_strategy_parameters(parse_strategy_parameters(value))
 
 
 def build_strategy_config(strategy_id: str, strategy_kwargs: Mapping[str, Any]) -> str:
@@ -127,7 +131,7 @@ def build_strategy_config(strategy_id: str, strategy_kwargs: Mapping[str, Any]) 
         )
     except (DataContractError, TypeError, ValueError) as error:
         raise StrategyStorageValidationError(str(error)) from error
-    return normalize_strategy_config(parameters.to_mapping())
+    return _serialize_strategy_parameters(parameters)
 
 
 def normalize_strategy_memo(value: str | None) -> str:

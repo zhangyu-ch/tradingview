@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import importlib
 import sys
 import types
 from pathlib import Path
@@ -24,9 +23,25 @@ from tradingview_zy.market_registry import MARKET_REGISTRY, ProviderSpec
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _provider_class(path: Path, class_name: str) -> ast.ClassDef:
+def _provider_methods(path: Path, class_name: str) -> dict[str, ast.FunctionDef]:
+    """Include concrete project mixins without importing optional SDKs."""
+    if path.name == "exchange.py" and class_name == "Exchange":
+        return {}  # Generic unsupported/abstract methods do not provide capabilities.
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    return next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name)
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name)
+    methods = {node.name: node for node in cls.body if isinstance(node, ast.FunctionDef)}
+    imports = {
+        alias.asname or alias.name: (ROOT / "src" / Path(node.module.replace(".", "/") + ".py"), alias.name)
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module
+        and node.module.startswith("tradingview_zy.exchange.") and node.level == 0
+        for alias in node.names
+    }
+    for base in cls.bases:
+        if isinstance(base, ast.Name) and base.id in imports:
+            for name, method in _provider_methods(*imports[base.id]).items():
+                methods.setdefault(name, method)
+    return methods
 
 
 def _method_is_stub(node: ast.FunctionDef) -> bool:
@@ -61,12 +76,7 @@ def test_every_declared_capability_has_a_non_stub_provider_method() -> None:
     for spec in MARKET_REGISTRY.values():
         for provider in spec.providers.values():
             path = ROOT / "src" / Path(provider.module.replace(".", "/") + ".py")
-            cls = _provider_class(path, provider.attribute)
-            methods = {
-                node.name: node
-                for node in cls.body
-                if isinstance(node, ast.FunctionDef)
-            }
+            methods = _provider_methods(path, provider.attribute)
             for capability in provider.capabilities:
                 for method_name in CAPABILITY_METHODS[capability]:
                     assert method_name in methods, (provider.attribute, capability, method_name)

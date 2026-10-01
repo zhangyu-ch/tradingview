@@ -167,16 +167,34 @@ def klines_to_tv_history(
     status: str = "ok",
     *,
     market: str = "utc",
+    expected_code: str | None = None,
+    expected_frequency: str | None = None,
+    timestamp_range: tuple[int, int] | None = None,
 ) -> dict:
-    normalized = prepare_klines_for_market(klines, market)
+    """Validate all provider rows before producing a columnar history response.
+
+    With a request range, updates keep only the inclusive window; backfills
+    return all available bars unless the request ends before the first bar.
+    """
+    normalized = prepare_klines_for_market(
+        klines, market, expected_code=expected_code, expected_frequency=expected_frequency
+    )
     if normalized is None or len(normalized) == 0:
         return {"s": "no_data"}
+    timestamps = normalized["date"].map(datetime_to_timestamp_seconds)
+    if timestamp_range is not None:
+        start_ts, end_ts = timestamp_range
+        if end_ts < timestamps.iloc[0]:
+            return {"s": "no_data"}
+        if update:
+            mask = (timestamps >= start_ts) & (timestamps <= end_ts)
+            normalized = normalized.loc[mask]
+            timestamps = timestamps.loc[mask]
+            if len(normalized) == 0:
+                return {"s": "no_data"}
     return {
         "s": status,
-        "t": [
-            datetime_to_timestamp_seconds(row["date"])
-            for _, row in normalized.iterrows()
-        ],
+        "t": timestamps.tolist(),
         "o": normalized["open"].tolist(),
         "c": normalized["close"].tolist(),
         "h": normalized["high"].tolist(),

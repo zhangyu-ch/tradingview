@@ -151,7 +151,6 @@ var ZiXuan = (function () {
           const data = obj.data; // 获取当前行数据
           const code = data.code;
           change_chart_ticker(Utils.get_market(), code);
-          $("#ai_code").val(code);
           table.setRowChecked("table_zixuan_list", {
             index: "all", // 所有行
             checked: false,

@@ -6,7 +6,6 @@ import json
 import sys
 import threading
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -130,8 +129,9 @@ def test_universes_and_frequency_contracts_are_externalized() -> None:
     assert len(us["universe"]["codes"]) == 495
     assert currency["universe"] == {"type": "provider_all_stocks"}
     assert configs["currency_spot"]["universe"]["codes"] == ["BTC/USDT"]
-    assert configs["hk"]["universe"]["allow_empty"] is True
+    assert configs["hk"]["universe"] == {"type": "list", "codes": [], "allow_empty": True}
     assert configs["futures"]["universe"]["include_contains"] == ["KQ.m@"]
+    assert configs["futures"]["universe"]["max_codes"] == 200
     assert "2022" not in json.dumps(configs["futures"])
     assert set(a["frequencies"]) == {"m", "w", "d", "30m", "5m"}
     assert us["frequencies"]["d"]["args"]["timeout"] == 45

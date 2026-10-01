@@ -4,7 +4,7 @@ import copy
 import datetime as dt
 import json
 import math
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
@@ -509,6 +509,38 @@ def failure_result(
     )
 
 
+def run_strategy_batch(
+    exchange: Any,
+    strategy: Any,
+    market: str,
+    stocks: Iterable[dict],
+    frequency: str,
+    *,
+    purpose: StrategyPurpose,
+    now: dt.datetime | None = None,
+) -> BatchRunResult:
+    """Validate each target once, preserving order and per-target failures."""
+    batch = BatchRunResult()
+    try:
+        iterator = iter(stocks)
+    except Exception as error:
+        return failure_result(placeholder_target(market, stocks, frequency), "target", error)
+
+    for stock in iterator:
+        try:
+            target = strategy_target_from_stock(market, stock, frequency)
+        except Exception as error:
+            target = placeholder_target(market, stock, frequency)
+            batch.extend(failure_result(target, "target", error))
+            continue
+        batch.extend(
+            _run_validated_strategy_target(
+                exchange, strategy, target, purpose=purpose, now=now
+            )
+        )
+    return batch
+
+
 def run_strategy_target(
     exchange: Any,
     strategy: Any,
@@ -525,7 +557,19 @@ def run_strategy_target(
         )
     except Exception as error:
         return failure_result(target, "target", error)
+    return _run_validated_strategy_target(
+        exchange, strategy, target, purpose=purpose, now=now
+    )
 
+
+def _run_validated_strategy_target(
+    exchange: Any,
+    strategy: Any,
+    target: StrategyRunTarget,
+    *,
+    purpose: StrategyPurpose,
+    now: dt.datetime | None = None,
+) -> BatchRunResult:
     try:
         klines = exchange.klines(target.code, target.frequency)
     except Exception as error:

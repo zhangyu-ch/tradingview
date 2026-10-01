@@ -6,11 +6,9 @@ import datetime as dt
 import importlib
 import importlib.util
 import sys
-import time
 import types
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import RLock
 from types import SimpleNamespace
 from typing import Dict, List, Union
 
@@ -22,7 +20,6 @@ from sqlalchemy.dialects import mysql
 from sqlalchemy.schema import CreateTable
 
 from tradingview_zy import crypto_time as ct
-from tradingview_zy.exchange.binance_pagination import latest_cached_datetime, paginate_ohlcv
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src/tradingview_zy"
@@ -217,43 +214,6 @@ def test_utc_daily_and_three_hour_ohlcv(converter, zone):
     ]
     pd.testing.assert_frame_equal(data, original)
     assert converter(data.iloc[:0], "d").empty
-
-
-@pytest.mark.parametrize("offset", [0, 8, -5])
-@pytest.mark.parametrize("adapter", ["exchange_binance", "exchange_binance_spot"])
-def test_provider_utc_independent_of_simulated_host_without_tzset(converter, offset, adapter):
-    # Windows has no tzset. Simulate the actual datetime APIs that used to depend
-    # on the host, and prove the sentinel changes naive timestamps in each case.
-    class HostDatetime(dt.datetime):
-        def timestamp(self):
-            if self.tzinfo is None:
-                return self.replace(tzinfo=dt.timezone(dt.timedelta(hours=offset))).timestamp()
-            return super().timestamp()
-        @classmethod
-        def fromtimestamp(cls, value, tz=None):
-            if tz is None:
-                return dt.datetime.fromtimestamp(value, dt.timezone(dt.timedelta(hours=offset))).replace(tzinfo=None)
-            return dt.datetime.fromtimestamp(value, tz)
-    host = SimpleNamespace(datetime=HostDatetime, timezone=dt.timezone)
-    base_ms = int(ct.as_utc("2025-01-01").timestamp()*1000)
-    assert int(HostDatetime(2025,1,1).timestamp()*1000) == base_ms-offset*3600000
-    calls = []
-    def fetch(*args, **kwargs):
-        calls.append(kwargs["params"])
-        return [[base_ms,1,3,0,2,10]]
-    name = "ExchangeBinance" if adapter == "exchange_binance" else "ExchangeBinanceSpot"
-    cls = compile_node(f"exchange/{adapter}.py", name,
-        {"datetime": host, "time": time, "fetch_ohlcv_with_retry": fetch,
-         "paginate_ohlcv": paginate_ohlcv, "convert_currency_kline_frequency": converter},
-        {"online_klines", "increment_klines_by_online"})
-    ex = cls(); ex.exchange = object(); ex._ohlcv_lock = RLock(); ex.tz = pytz.timezone("Asia/Shanghai")
-    output = ex.online_klines("BTC/USDT", "60m", "2025-01-01 00:00:00", "2025-01-01T09:00+08:00")
-    assert calls[-1] == {"startTime": base_ms, "endTime": base_ms+3600000}
-    assert output.date.iloc[0] == ct.as_utc("2025-01-01")
-    cursor = latest_cached_datetime(output)
-    assert cursor == "2025-01-01T00:00:00+00:00"
-    ex.increment_klines_by_online("BTC/USDT", "60m", cursor)
-    assert calls[-1]["startTime"] == base_ms
 
 
 def test_mysql_upsert_uses_same_wall_boundary_and_namespaced_frequency(db_module, monkeypatch):

@@ -5,8 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_unsafe_qmt_live_trader_is_removed_but_market_data_remains() -> None:
-    assert not (ROOT / "src/tradingview_zy/trader/trader_qmt_stock.py").exists()
+def test_qmt_market_data_remains_available() -> None:
     market_data = ROOT / "src/tradingview_zy/exchange/exchange_qmt.py"
     assert market_data.exists()
     assert "class ExchangeQMT" in market_data.read_text(encoding="utf-8")

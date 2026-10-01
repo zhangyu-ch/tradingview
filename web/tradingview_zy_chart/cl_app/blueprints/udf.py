@@ -31,11 +31,8 @@ from tradingview_zy.web_api_validation import (
 )
 from tradingview_zy.web_payloads import (
     KlinePayloadError,
-    datetime_to_timestamp_seconds,
-    filter_klines_by_timestamp_range,
     klines_to_tv_history,
     market_timezone as resolve_market_timezone,
-    prepare_klines_for_market,
 )
 from tradingview_zy.history_request_tracker import history_request_key
 
@@ -143,14 +140,11 @@ def tv_history():
     if klines is None or len(klines) == 0:
         return {'s': 'no_data'}
     try:
-        klines = prepare_klines_for_market(klines, market, expected_code=code, expected_frequency=frequency)
-        if to_timestamp < datetime_to_timestamp_seconds(klines.iloc[0]['date']):
-            return {'s': 'no_data'}
-        if not first_data_request:
-            klines = filter_klines_by_timestamp_range(klines, from_timestamp, to_timestamp, market=market)
-            if klines is None or len(klines) == 0:
-                return {'s': 'no_data'}
-        return klines_to_tv_history(klines, update=not first_data_request, status=status, market=market)
+        return klines_to_tv_history(
+            klines, update=not first_data_request, status=status, market=market,
+            expected_code=code, expected_frequency=frequency,
+            timestamp_range=(from_timestamp, to_timestamp),
+        )
     except KlinePayloadError:
         return {'s': 'error', 'errmsg': 'invalid_kline_payload'}
 

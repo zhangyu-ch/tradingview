@@ -107,7 +107,6 @@ var BKGN = (function () {
       const data = obj.data; // 获取当前行数据
       const code = data.code;
       change_chart_ticker(Utils.get_market(), code);
-      $("#ai_code").val(code);
       layui.table.setRowChecked("bkgn_table", {
         index: "all", // 所有行
         checked: false,

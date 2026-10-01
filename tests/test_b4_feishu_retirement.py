@@ -94,7 +94,9 @@ def test_proxy_settings_keep_legacy_notification_data_private_and_untouched():
     )
     app.jinja_env.globals["csrf_token"] = lambda: "test-csrf"
     namespace = {
-        "db": SimpleNamespace(cache_get=cache_get, cache_set=cache_set),
+        "get_web_services": lambda: SimpleNamespace(
+            database=SimpleNamespace(cache_get=cache_get, cache_set=cache_set),
+        ),
         "request": request,
         "render_template": render_template,
     }

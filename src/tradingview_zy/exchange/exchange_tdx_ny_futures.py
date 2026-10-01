@@ -11,7 +11,7 @@ from tradingview_zy.base import Market
 from tradingview_zy.domain import InvalidRequestError
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick
-from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
+from tradingview_zy.exchange.tdx_quotes import calculate_change_rate, fetch_exhq_ticks
 from tradingview_zy.exchange.tdx_cache import refresh_tdx_window, tdx_cache_key
 from tradingview_zy.file_db import FileCacheDB
 from tradingview_zy.exchange.tdx_reliability import (
@@ -205,9 +205,6 @@ class ExchangeTDXNYFutures(TdxExHqLifecycleMixin, Exchange):
         if klines.empty:
             return klines
 
-
-        # 删除重复数据
-        klines = klines.drop_duplicates(["date"], keep="last").sort_values("date")
         self.fdb.save_tdx_klines(Market.NY_FUTURES.value, cache_key, frequency, klines)
 
         klines.loc[:, "code"] = code
@@ -245,42 +242,9 @@ class ExchangeTDXNYFutures(TdxExHqLifecycleMixin, Exchange):
         return {"code": stock[0]["code"], "name": stock[0]["name"]}
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        如果可以使用 富途 的接口，就用 富途的，否则就用 日线的 K线计算
-        使用 富途 的接口会很快，日线则很慢
-        获取日线的k线，并返回最后一根k线的数据
-        """
-        ticks = {}
-        client = self._new_tdx_client()
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-            for _code in codes:
-                _market, _tdx_code = self.to_tdx_code(_code)
-                if _market is None:
-                    continue
-                _quote = client.get_instrument_quote(_market, _tdx_code)
-                # [OrderedDict([('market', 1), ('code', 'FG2305'), ('pre_close', 1546.0), ('open', 1548.0),
-                # ('high', 1558.0), ('low', 1536.0), ('price', 1543.0), ('kaicang', 341886), ('zongliang', 367292),
-                # ('xianliang', 1), ('neipan', 192905), ('waipan', 174387), ('chicang', 993096), ('bid1', 1543.0),
-                # ('bid2', 0.0), ('bid3', 0.0), ('bid4', 0.0), ('bid5', 0.0), ('bid_vol1', 903), ('bid_vol2', 0),
-                # ('bid_vol3', 0), ('bid_vol4', 0), ('bid_vol5', 0), ('ask1', 1544.0), ('ask2', 0.0), ('ask3', 0.0),
-                # ('ask4', 0.0), ('ask5', 0.0), ('ask_vol1', 512), ('ask_vol2', 0), ('ask_vol3', 0), ('ask_vol4', 0),
-                # ('ask_vol5', 0)])]
-                if len(_quote) > 0:
-                    _quote = _quote[0]
-                    ticks[_code] = Tick(
-                        code=_code,
-                        last=_quote["price"],
-                        buy1=_quote["bid1"],
-                        sell1=_quote["ask1"],
-                        low=_quote["low"],
-                        high=_quote["high"],
-                        volume=_quote["zongliang"],
-                        open=_quote["open"],
-                        rate=(
-                            calculate_change_rate(_quote["price"], _quote["pre_close"])
-                        ),
-                    )
-        return ticks
+        return fetch_exhq_ticks(
+            self._new_tdx_client(), self.connect_info, self.to_tdx_code, codes
+        )
 
     def all_ticks(self) -> Dict[str, Tick]:
         ticks = {}

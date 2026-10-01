@@ -1,5 +1,5 @@
 {
-  "component_count": 153,
+  "component_count": 139,
   "components": [
     {
       "license": null,
@@ -104,19 +104,6 @@
         "registry"
       ],
       "version": "0.8.0"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "anyio",
-      "normalized_name": "anyio",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "4.14.2"
     },
     {
       "license": null,
@@ -383,19 +370,6 @@
       "license_classifiers": [],
       "license_expression": null,
       "license_files": [],
-      "name": "dbutils",
-      "normalized_name": "dbutils",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "3.1.2"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
       "name": "decorator",
       "normalized_name": "decorator",
       "review": "metadata-unavailable-offline",
@@ -403,32 +377,6 @@
         "registry"
       ],
       "version": "5.3.1"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "distro",
-      "normalized_name": "distro",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "1.9.0"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "dtaidistance",
-      "normalized_name": "dtaidistance",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "2.4.0"
     },
     {
       "license": null,
@@ -565,19 +513,6 @@
       "license_classifiers": [],
       "license_expression": null,
       "license_files": [],
-      "name": "gevent",
-      "normalized_name": "gevent",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "26.7.0"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
       "name": "graphql-core",
       "normalized_name": "graphql-core",
       "review": "metadata-unavailable-offline",
@@ -604,19 +539,6 @@
       "license_classifiers": [],
       "license_expression": null,
       "license_files": [],
-      "name": "h11",
-      "normalized_name": "h11",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "0.16.0"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
       "name": "html5lib",
       "normalized_name": "html5lib",
       "review": "metadata-unavailable-offline",
@@ -624,32 +546,6 @@
         "registry"
       ],
       "version": "1.1"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "httpcore",
-      "normalized_name": "httpcore",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "1.0.9"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "httpx",
-      "normalized_name": "httpx",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "0.28.1"
     },
     {
       "license": null,
@@ -767,19 +663,6 @@
         "registry"
       ],
       "version": "3.1.6"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "jiter",
-      "normalized_name": "jiter",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "0.16.0"
     },
     {
       "license": null,
@@ -929,19 +812,6 @@
       "license_classifiers": [],
       "license_expression": null,
       "license_files": [],
-      "name": "mytt",
-      "normalized_name": "mytt",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "2.9.3"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
       "name": "narwhals",
       "normalized_name": "narwhals",
       "review": "metadata-unavailable-offline",
@@ -975,19 +845,6 @@
         "registry"
       ],
       "version": "1.26.4"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "openai",
-      "normalized_name": "openai",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "2.53.0"
     },
     {
       "license": null,
@@ -1605,19 +1462,6 @@
       "license_classifiers": [],
       "license_expression": null,
       "license_files": [],
-      "name": "sniffio",
-      "normalized_name": "sniffio",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "1.3.1"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
       "name": "soupsieve",
       "normalized_name": "soupsieve",
       "review": "metadata-unavailable-offline",
@@ -1969,32 +1813,6 @@
         "registry"
       ],
       "version": "1.24.5"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "zope-event",
-      "normalized_name": "zope-event",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "6.2"
-    },
-    {
-      "license": null,
-      "license_classifiers": [],
-      "license_expression": null,
-      "license_files": [],
-      "name": "zope-interface",
-      "normalized_name": "zope-interface",
-      "review": "metadata-unavailable-offline",
-      "source_kinds": [
-        "registry"
-      ],
-      "version": "8.5"
     }
   ],
   "limitations": [
@@ -2003,5 +1821,5 @@
   ],
   "schema_version": 1,
   "source": "uv.lock + local wheel evidence",
-  "uv_lock_sha256": "b35ce087785474d16eefb4d691561c3f8b6de5494abedf7c2d77f8a200f87773"
+  "uv_lock_sha256": "91b27300b79ea35b1f5a009632ad061a4a434ccccd7712b964ba742c75dd9c95"
 }

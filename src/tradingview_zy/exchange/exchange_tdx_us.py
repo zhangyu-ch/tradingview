@@ -1,4 +1,3 @@
-import datetime
 import time
 from typing import Dict, List, Union
 
@@ -14,7 +13,7 @@ from tradingview_zy.domain import InvalidRequestError, ProviderUnavailableError
 from tradingview_zy.config import get_data_path
 from tradingview_zy.db import db
 from tradingview_zy.exchange.exchange import Exchange, Tick, convert_us_tdx_kline_frequency
-from tradingview_zy.exchange.tdx_quotes import calculate_change_rate
+from tradingview_zy.exchange.tdx_quotes import fetch_exhq_ticks
 from tradingview_zy.exchange.tdx_cache import refresh_tdx_window, tdx_cache_key
 from tradingview_zy.exchange.tdx_us_payloads import normalize_tdx_us_bars
 from tradingview_zy.exchange.tdx_reliability import (
@@ -224,43 +223,9 @@ class ExchangeTDXUS(TdxExHqLifecycleMixin, Exchange):
         return {"code": stock[0]["code"], "name": stock[0]["name"]}
 
     def ticks(self, codes: List[str]) -> Dict[str, Tick]:
-        """
-        如果可以使用 富途 的接口，就用 富途的，否则就用 日线的 K线计算
-        使用 富途 的接口会很快，日线则很慢
-        获取日线的k线，并返回最后一根k线的数据
-        """
-        ticks = {}
-        client = self._new_tdx_client()
-        with client.connect(self.connect_info["ip"], self.connect_info["port"]):
-            for _code in codes:
-                _market, _tdx_code = self.to_tdx_code(_code)
-                if _market is None:
-                    continue
-                _quote = client.get_instrument_quote(_market, _tdx_code)
-                # OrderedDict(
-                #     [('market', 1), ('code', '00700'), ('pre_close', 362.8000183105469), ('open', 372.20001220703125),
-                #      ('high', 374.8000183105469), ('low', 364.4000244140625), ('price', 367.6000061035156),
-                #      ('kaicang', 0), ('zongliang', 17784504), ('xianliang', 1189500), ('neipan', 8892299),
-                #      ('waipan', 8892205), ('chicang', 0), ('bid1', 0.0), ('bid2', 0.0), ('bid3', 0.0), ('bid4', 0.0),
-                #      ('bid5', 0.0), ('bid_vol1', 0), ('bid_vol2', 0), ('bid_vol3', 0), ('bid_vol4', 0), ('bid_vol5', 0),
-                #      ('ask1', 0.0), ('ask2', 0.0), ('ask3', 0.0), ('ask4', 0.0), ('ask5', 0.0), ('ask_vol1', 0),
-                #      ('ask_vol2', 0), ('ask_vol3', 0), ('ask_vol4', 0), ('ask_vol5', 0)])
-                if len(_quote) > 0:
-                    _quote = _quote[0]
-                    ticks[_code] = Tick(
-                        code=_code,
-                        last=_quote["price"],
-                        buy1=_quote["bid1"],
-                        sell1=_quote["ask1"],
-                        low=_quote["low"],
-                        high=_quote["high"],
-                        volume=_quote["zongliang"],
-                        open=_quote["open"],
-                        rate=(
-                            calculate_change_rate(_quote["price"], _quote["pre_close"])
-                        ),
-                    )
-        return ticks
+        return fetch_exhq_ticks(
+            self._new_tdx_client(), self.connect_info, self.to_tdx_code, codes
+        )
 
     def now_trading(self, code: str | None = None, at=None) -> bool:
         """Return a strict instrument-aware state from the shared calendar."""

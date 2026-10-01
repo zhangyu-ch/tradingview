@@ -12,7 +12,6 @@ from tradingview_zy.monitoring import MonitoringRunner
 from tradingview_zy.monitoring_events import MonitoringEventType
 from tradingview_zy.strategies.base import BatchRunResult
 from tradingview_zy.strategies.loader import (
-    StrategyRegistryError,
     find_registered_strategy_id_by_path,
     load_registered_strategy,
 )
@@ -162,29 +161,13 @@ class AlertTasks(object):
             return False
 
         runner = MonitoringRunner(exchange=ex, strategy=strategy)
-        if callable(getattr(runner, "run", None)):
-            batch = self._batch_result(
-                runner.run(
-                    alert_config.market,
-                    stocks,
-                    alert_config.frequency,
-                )
+        batch = self._batch_result(
+            runner.run(
+                alert_config.market,
+                stocks,
+                alert_config.frequency,
             )
-        else:
-            # Temporary compatibility for trusted custom runners that have not yet
-            # implemented the batch method. Each result is still aggregated explicitly.
-            batch = BatchRunResult()
-            for stock in stocks:
-                batch.extend(
-                    self._batch_result(
-                        runner.run_code(
-                            alert_config.market,
-                            stock["code"],
-                            stock.get("name", stock["code"]),
-                            alert_config.frequency,
-                        )
-                    )
-                )
+        )
 
         self.last_batch_result = batch
         persistence_ok = True

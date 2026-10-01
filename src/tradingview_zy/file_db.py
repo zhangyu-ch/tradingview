@@ -11,7 +11,8 @@ import random
 import tempfile
 import threading
 import uuid
-from typing import Any, Iterator, Union
+from io import BytesIO
+from typing import Any, Union
 
 import pandas as pd
 import pytz
@@ -386,7 +387,7 @@ class FileCacheDB:
             return None
         try:
             csv_bytes = file_pathname.read_bytes()
-            klines = pd.read_csv(file_pathname)
+            klines = pd.read_csv(BytesIO(csv_bytes))
         except (PermissionError, BlockingIOError):
             return None
         except (OSError, ValueError, pd.errors.ParserError) as exc:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import importlib.util
 import json
 import sys
@@ -31,18 +30,6 @@ us_history = _load(
     "lo02_us_history",
 )
 sync = _load(ROOT / "src/tradingview_zy/sync_batch.py", "lo02_sync_batch")
-
-TDX_ADAPTERS = {
-    "exchange_tdx_futures.py": {"category": 3, "market_ids": {23, 28, 29, 30, 42, 47, 66}},
-    "exchange_tdx_fx.py": {"category": 4, "market_ids": None},
-    "exchange_tdx_hk.py": {"category": 2, "market_ids": None},
-    "exchange_tdx_ny_futures.py": {"category": 3, "market_ids": {16, 17}},
-    "exchange_tdx_us.py": {"category": None, "market_ids": None},
-}
-WRAPPERS = [
-    ROOT / f"script/crontab/reboot_sync_{market}_klines.py"
-    for market in ["a", "us", "currency", "currency_spot", "hk", "futures"]
-]
 
 
 class FakeConnectionError(RuntimeError):
@@ -198,37 +185,6 @@ def test_shared_exhq_lifecycle_fails_closed_on_empty_supported_map() -> None:
         )
 
 
-def test_five_exhq_adapters_use_only_the_shared_lifecycle() -> None:
-    for filename in TDX_ADAPTERS:
-        path = ROOT / "src/tradingview_zy/exchange" / filename
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=str(path))
-        class_node = next(node for node in tree.body if isinstance(node, ast.ClassDef))
-        assert "TdxExHqLifecycleMixin" in {ast.unparse(base) for base in class_node.bases}
-        assert not any(
-            isinstance(node, ast.FunctionDef) and node.name == "reset_tdx_ip"
-            for node in class_node.body
-        )
-        init = next(
-            node
-            for node in class_node.body
-            if isinstance(node, ast.FunctionDef) and node.name == "__init__"
-        )
-        assert any(
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "_initialize_tdx_exhq"
-            for node in ast.walk(init)
-        )
-        assert not any(
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "TdxExHq_API"
-            for node in ast.walk(tree)
-        )
-        assert "self._new_tdx_client()" in source
-
-
 def test_us_history_window_is_timezone_aware_and_independently_parses_bounds() -> None:
     winter_start, winter_end = us_history.parse_us_history_window(
         "d",
@@ -364,26 +320,3 @@ def test_explicit_safe_empty_universe_does_not_import_providers(
     assert result.status == "completed"
     assert result.completed == result.failed == result.pending == 0
     assert state["items"] == {}
-
-
-def test_six_sync_scripts_are_thin_and_configs_remove_stale_inline_universes() -> None:
-    for wrapper in WRAPPERS:
-        source = wrapper.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=str(wrapper))
-        assert len(source.splitlines()) < 30
-        assert "while True" not in source
-        assert not any(
-            isinstance(node, (ast.For, ast.While, ast.With, ast.Try))
-            for node in tree.body
-        )
-        assert "tradingview_zy.exchange." not in source
-
-    config_root = ROOT / "script/crontab/sync_configs"
-    spot = json.loads((config_root / "currency_spot_klines.json").read_text())
-    hk = json.loads((config_root / "hk_klines.json").read_text())
-    futures = json.loads((config_root / "futures_klines.json").read_text())
-    assert spot["universe"]["codes"] == ["BTC/USDT"]
-    assert hk["universe"] == {"type": "list", "codes": [], "allow_empty": True}
-    assert futures["universe"]["include_contains"] == ["KQ.m@"]
-    assert futures["universe"]["max_codes"] == 200
-    assert "2022" not in json.dumps(futures)

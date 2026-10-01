@@ -17,12 +17,10 @@ from tradingview_zy.tv_storage import (
 def _load_route(request, db, logger):
     namespace = {
         "request": request,
-        "db": db,
+        "get_web_services": lambda: SimpleNamespace(database=db, logger=logger),
         "json": json,
         "uuid": uuid,
-        "__log": logger,
         "TVStorageError": TVStorageError,
-        "normalize_drawing_payload": normalize_drawing_payload,
         "resolve_storage_owner": resolve_storage_owner,
         "current_user": SimpleNamespace(get_id=lambda: "session-user"),
     }
@@ -30,9 +28,15 @@ def _load_route(request, db, logger):
 
 
 def _db(save=None, get=None):
+    policy = TVStoragePolicy()
+
+    def save_drawing(**kwargs):
+        payload = normalize_drawing_payload(policy, **kwargs)
+        return save(**payload) if save is not None else True
+
     return SimpleNamespace(
-        tv_storage_policy=TVStoragePolicy(),
-        tv_drawing_save_or_update=save or (lambda **kwargs: True),
+        tv_storage_policy=policy,
+        tv_drawing_save_or_update=save_drawing,
         tv_drawing_get=get or (lambda *args: None),
     )
 

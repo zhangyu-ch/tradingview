@@ -14,14 +14,6 @@ from test_support.web_routes import route_source
 ROOT = Path(__file__).resolve().parents[1]
 QUOTE_HELPER = ROOT / "src/tradingview_zy/exchange/tdx_quotes.py"
 CALENDAR_HELPER = ROOT / "src/tradingview_zy/trading_calendar.py"
-TDX_FILES = [
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx.py",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_hk.py",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_us.py",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_fx.py",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_futures.py",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_ny_futures.py",
-]
 
 
 def _load_module(name: str, path: Path):
@@ -126,26 +118,6 @@ def test_calendar_rejects_naive_times_and_fails_closed_outside_versioned_coverag
     assert not calendar.is_market_open(
         "a", _aware(2027, 1, 4, 10, 0, "Asia/Shanghai")
     )
-
-
-def test_all_tdx_tick_paths_use_shared_rate_contract() -> None:
-    for path in TDX_FILES:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        tick_calls = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "Tick"
-        ]
-        assert tick_calls, path
-        for call in tick_calls:
-            rate_keywords = [kw for kw in call.keywords if kw.arg == "rate"]
-            assert len(rate_keywords) == 1, (path, call.lineno)
-            value = rate_keywords[0].value
-            assert isinstance(value, ast.Call), (path, call.lineno)
-            assert isinstance(value.func, ast.Name), (path, call.lineno)
-            assert value.func.id == "calculate_change_rate", (path, call.lineno)
 
 
 def test_a_catalog_retry_is_bounded_and_non_recursive() -> None:

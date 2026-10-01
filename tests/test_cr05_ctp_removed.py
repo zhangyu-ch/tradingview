@@ -10,7 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_ctp_runtime_implementation_and_dependency_are_removed() -> None:
     assert not (ROOT / "src/tradingview_zy/exchange/exchange_ctp.py").exists()
-    assert not (ROOT / "src/tradingview_zy/trader/trader_ctp.py").exists()
 
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8").lower()
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8").lower()

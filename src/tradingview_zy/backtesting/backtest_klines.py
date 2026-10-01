@@ -1,6 +1,7 @@
 # 回放行情所需
 import datetime
 import time
+from collections import deque
 from typing import Dict, List, Union
 
 import pandas as pd
@@ -66,11 +67,6 @@ class BackTestKlines(MarketDatas):
         # True 在多代码时会占用太多内存，这时可以设置为 False 增加使用数据库按需获取，增加运行时间，减少占用内存空间
         self.load_data_to_cache = True
         self.load_kline_nums = 10000  # 每次重新加载的K线数量
-
-        # 是否使用 cache 保存所有k线数据，True 会将代码周期时间段内所有数据读取并保存到内存，False 在每次使用的时候从数据库中获取
-        # True 在多代码时会占用太多内存，这时可以设置为 False 增加使用数据库按需获取，增加运行时间，减少占用内存空间
-        self.load_data_to_cache = True
-        self.load_kline_nums = 10000  # 每次重新加载的K线数量
         self.del_volume_zero = False  # 是否删除成交量为 0 的K线数据
 
         # 保存k线数据
@@ -83,8 +79,8 @@ class BackTestKlines(MarketDatas):
 
         self.ex = ExchangeDB(self.market)
 
-        # 用于循环的日期列表
-        self.loop_datetime_list: Dict[str, list] = {}
+        # 用于循环的日期队列
+        self.loop_datetime_list: Dict[str, deque] = {}
 
         # 进度条
         self.bar: Union[tqdm, None] = None
@@ -114,10 +110,9 @@ class BackTestKlines(MarketDatas):
                 args={"limit": None},
             )
             if klines is None:
-                self.loop_datetime_list[_f] = []
+                self.loop_datetime_list[_f] = deque()
                 continue
-            self.loop_datetime_list[_f] = list(klines["date"].to_list())
-            self.loop_datetime_list[_f].sort()
+            self.loop_datetime_list[_f] = deque(sorted(klines["date"].to_list()))
 
         self.bar = tqdm(
             total=len(list(self.loop_datetime_list.values())[-1]),
@@ -138,9 +133,7 @@ class BackTestKlines(MarketDatas):
         if len(self.loop_datetime_list[frequency]) == 0:
             self.clear_all_cache()
             return False
-        self.now_date = self.loop_datetime_list[frequency].pop(0)
-        # for _f, loop_dt_list in self.loop_datetime_list.items():
-        #     self.loop_datetime_list[_f] = [d for d in loop_dt_list if d >= self.now_date]
+        self.now_date = self.loop_datetime_list[frequency].popleft()
         # 清除之前的 klines 缓存，重新计算
         self.cache_klines = {}
         self.bar.update(1)
@@ -185,24 +178,20 @@ class BackTestKlines(MarketDatas):
                         drop=True
                     )
 
+            # 后对齐的市场不能包含当前日期，其余市场包含当前日期。
+            side = "left" if self.market in [
+                "currency", "currency_spot", "futures", "us"
+            ] else "right"
             for _f in self.frequencys:
                 key = "%s-%s" % (code, _f)
-                if self.market in [
-                    "currency",
-                    "currency_spot",
-                    "futures",
-                    "us",
-                ]:  # 后对其的，不能包含当前日期
-                    kline = self.all_klines[key][
-                        self.all_klines[key]["date"] < self.now_date
-                    ][-self.load_kline_nums : :]
-                else:
-                    kline = self.all_klines[key][
-                        self.all_klines[key]["date"] <= self.now_date
-                    ][-self.load_kline_nums : :]
+                history = self.all_klines[key]
+                end = history["date"].searchsorted(self.now_date, side=side)
+                # 保留 [-K:] 语义：K=0 取全部可见历史，K<0 跳过前 -K 行。
+                start, _, _ = slice(-self.load_kline_nums, None).indices(end)
+                kline = history.iloc[start:end].copy()
                 if self.del_volume_zero and len(kline) > 0:
                     kline = kline[kline["volume"] != 0]
-                kline = kline.sort_values("date").reset_index(drop=True)
+                kline.reset_index(drop=True, inplace=True)
                 klines[_f] = kline
         else:
             # 使用数据库按需查询

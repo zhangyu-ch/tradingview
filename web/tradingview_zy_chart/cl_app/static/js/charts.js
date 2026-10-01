@@ -167,12 +167,14 @@ class ChartManager {
       return;
     }
 
+    const codeChanged = Utils.get_code() !== code;
     Utils.set_local_data("market", market);
     Utils.set_local_data(`${market}_code`, code);
 
     console.log(`${this.id} 标的变化：${symbol.ticker}`);
 
-    if (typeof ZiXuan.render_zixuan_opts === "function") {
+    // 批量切换由页面统一刷新；这里只处理图表内的独立切换。
+    if (codeChanged && typeof ZiXuan.render_zixuan_opts === "function") {
       ZiXuan.render_zixuan_opts();
     }
   }

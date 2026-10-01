@@ -744,31 +744,13 @@ class BackTestTrader(Trader):
 
     # 做多平仓
     def close_buy(self, code, pos: POSITION, opt: Operation):
-        # 如果操作中设置了止损价格，则按照止损价格执行，否则按照最新价格执行
-        if opt.loss_price != 0:
-            price = opt.loss_price
-        else:
-            price = self.get_price(code)["close"]
-
-        # 分仓的情况计算要平仓的数量
-        amount = pos.amount / pos.now_pos_rate * opt.pos_rate
-
-        if self.mode == "signal":
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
-        else:
-            # TODO 如果是分仓，有可能会是 0，或者平完有剩余，需要再测
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
+        return self._calculate_close(code, pos, opt)
 
     # 做空平仓
     def close_sell(self, code, pos: POSITION, opt: Operation):
+        return self._calculate_close(code, pos, opt)
+
+    def _calculate_close(self, code, pos: POSITION, opt: Operation):
         # 如果操作中设置了止损价格，则按照止损价格执行，否则按照最新价格执行
         if opt.loss_price != 0:
             price = opt.loss_price
@@ -777,20 +759,12 @@ class BackTestTrader(Trader):
 
         # 分仓的情况计算要平仓的数量
         amount = pos.amount / pos.now_pos_rate * opt.pos_rate
-
-        if self.mode == "signal":
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
-        else:
-            # TODO 如果是分仓，有可能会是 0，或者平完有剩余，需要再测
-            if self.market == "a":
-                amount = int(amount / 100) * 100
-            if self.market == "futures":
-                amount = int(amount)
-            return {"price": price, "amount": amount}
+        # TODO 如果是分仓，有可能会是 0，或者平完有剩余，需要再测
+        if self.market == "a":
+            amount = int(amount / 100) * 100
+        if self.market == "futures":
+            amount = int(amount)
+        return {"price": price, "amount": amount}
 
     def cal_fee(
         self, code, price: float, balance: float, amount: float, other_info: dict = {}

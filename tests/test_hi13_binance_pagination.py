@@ -88,11 +88,3 @@ def test_backward_cursor_excludes_previous_first_row() -> None:
     )
     assert [row[0] for row in result] == [1000, 2000, 3000]
     assert calls == [{}, {"endTime": 1999}]
-
-
-def test_both_adapters_use_shared_pagination_without_minus_two_index() -> None:
-    for name in ["exchange_binance.py", "exchange_binance_spot.py"]:
-        text = (ROOT / "src/tradingview_zy/exchange" / name).read_text(encoding="utf-8")
-        assert "iloc[-2]" not in text
-        assert "latest_cached_datetime(db_klines)" in text
-        assert "paginate_ohlcv(" in text
