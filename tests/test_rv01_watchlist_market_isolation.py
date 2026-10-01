@@ -3,30 +3,30 @@ from __future__ import annotations
 import importlib
 import sys
 import types
-from datetime import timezone
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 
-def _load_db(tmp_path):
-    for name in ["tradingview_zy.db", "tradingview_zy.fun", "tradingview_zy.config"]:
-        sys.modules.pop(name, None)
-    tzlocal = types.ModuleType("tzlocal")
-    tzlocal.get_localzone = lambda: timezone.utc
-    sys.modules["tzlocal"] = tzlocal
-
+@pytest.fixture
+def database(tmp_path, monkeypatch):
+    package = importlib.import_module("tradingview_zy")
     config = types.ModuleType("tradingview_zy.config")
     config.DB_TYPE = "sqlite"
     config.DB_DATABASE = "rv01"
-    config.DB_HOST = "127.0.0.1"
-    config.DB_PORT = 3306
-    config.DB_USER = "user"
-    config.DB_PWD = "password"
     config.get_data_path = lambda: tmp_path
-    sys.modules["tradingview_zy.config"] = config
-    package = importlib.import_module("tradingview_zy")
-    package.config = config
-    return importlib.import_module("tradingview_zy.db")
+    with monkeypatch.context() as patch:
+        patch.setitem(sys.modules, "tradingview_zy.config", config)
+        patch.setattr(package, "config", config, raising=False)
+        # Record even an absent module so teardown restores both import surfaces.
+        patch.setitem(sys.modules, "tradingview_zy.db", None)
+        patch.delitem(sys.modules, "tradingview_zy.db")
+        patch.setattr(package, "db", None, raising=False)
+        module = importlib.import_module("tradingview_zy.db")
+        try:
+            yield module
+        finally:
+            module.db.engine.dispose()
 
 
 def _rows(module, market):
@@ -41,8 +41,8 @@ def _rows(module, market):
         ]
 
 
-def test_top_insert_only_moves_same_market(tmp_path):
-    module = _load_db(tmp_path)
+def test_top_insert_only_moves_same_market(database):
+    module = database
     module.db.zx_add_group_stock("a", "我的关注", "A1", "A1")
     module.db.zx_add_group_stock("a", "我的关注", "A2", "A2")
     module.db.zx_add_group_stock("hk", "我的关注", "HK1", "HK1")
@@ -55,8 +55,9 @@ def test_top_insert_only_moves_same_market(tmp_path):
     assert _rows(module, "hk") == hk_before
 
 
-def test_top_insert_rolls_back_delete_and_shift_when_insert_fails(tmp_path):
-    module = _load_db(tmp_path)
+def test_top_insert_rolls_back_delete_and_shift_when_insert_fails(database):
+    module = database
+    module.db.zx_add_group_stock("a", "我的关注", "A1", "A1")
     module.db.zx_add_group_stock("a", "我的关注", "KEEP", "Old")
     module.db.zx_add_group_stock("a", "我的关注", "A2", "A2")
     module.db.zx_add_group_stock("hk", "我的关注", "HK", "HK")
@@ -67,22 +68,22 @@ def test_top_insert_rolls_back_delete_and_shift_when_insert_fails(tmp_path):
             """
             CREATE TRIGGER fail_watchlist_insert
             BEFORE INSERT ON cl_zixuan_watchlist
-            WHEN NEW.stock_code = 'FAIL'
+            WHEN NEW.stock_code = 'KEEP'
             BEGIN
               SELECT RAISE(ABORT, 'injected insert failure');
             END;
             """
         )
 
-    with pytest.raises(Exception):
-        module.db.zx_add_group_stock("a", "我的关注", "FAIL", "Fail", location="top")
+    with pytest.raises(IntegrityError, match="injected insert failure"):
+        module.db.zx_add_group_stock("a", "我的关注", "KEEP", "New", location="top")
 
     assert _rows(module, "a") == before_a
     assert _rows(module, "hk") == before_hk
 
 
-def test_readding_existing_stock_moves_it_to_top_without_duplicates(tmp_path):
-    module = _load_db(tmp_path)
+def test_readding_existing_stock_moves_it_to_top_without_duplicates(database):
+    module = database
     module.db.zx_add_group_stock("a", "我的关注", "A1", "Old")
     module.db.zx_add_group_stock("a", "我的关注", "A2", "A2")
     module.db.zx_add_group_stock("a", "我的关注", "A1", "New", location="top")

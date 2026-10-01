@@ -22,12 +22,6 @@ TDX_FILES = [
     ROOT / "src/tradingview_zy/exchange/exchange_tdx_futures.py",
     ROOT / "src/tradingview_zy/exchange/exchange_tdx_ny_futures.py",
 ]
-CALENDAR_ADAPTERS = {
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx.py": "a",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_hk.py": "hk",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_us.py": "us",
-    ROOT / "src/tradingview_zy/exchange/exchange_tdx_fx.py": "fx",
-}
 
 
 def _load_module(name: str, path: Path):
@@ -182,27 +176,6 @@ def test_a_catalog_retry_is_bounded_and_non_recursive() -> None:
         and node.func.id == "call_with_bounded_retry"
         for node in ast.walk(all_stocks)
     )
-
-
-def test_tdx_cash_adapters_delegate_trading_state_to_shared_calendar() -> None:
-    for path, market in CALENDAR_ADAPTERS.items():
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        provider = next(node for node in tree.body if isinstance(node, ast.ClassDef))
-        method = next(
-            node
-            for node in provider.body
-            if isinstance(node, ast.FunctionDef) and node.name == "now_trading"
-        )
-        calls = [
-            node
-            for node in ast.walk(method)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "is_market_open"
-        ]
-        assert len(calls) == 1, path
-        assert isinstance(calls[0].args[0], ast.Constant)
-        assert calls[0].args[0].value == market
 
 
 def test_nullable_rate_is_serialized_and_rendered_as_unavailable() -> None:

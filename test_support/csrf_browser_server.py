@@ -30,6 +30,7 @@ def main() -> None:
 
     from cl_app import create_app
     from cl_app.blueprints.auth import LoginUser
+    from cl_app.web_services import get_web_services
 
     app = create_app({
         "TESTING": True,
@@ -40,6 +41,11 @@ def main() -> None:
         "WEB_CSRF_TRUSTED_ORIGINS": (),
     })
 
+    with app.app_context():
+        database = get_web_services().database
+        database.cache_set("req_proxy", {"host": "127.0.0.1", "port": "7890"})
+        database.cache_set("fs_keys", {"fs_app_secret": sys.argv[3]})
+
     @app.get("/csrf-browser")
     def browser_page():
         login_user(LoginUser(), remember=False)
@@ -49,8 +55,8 @@ def main() -> None:
 {% include 'dark.html' %}
 <link rel="stylesheet" href="/static/css/app.css">
 </head><body>
-<table id="plain"><tr><td>plain</td></tr></table>
-<table id="content" class="content-table"><tr><td>content</td></tr></table>
+<table id="plain"><tr><th>plain heading</th><td>plain</td></tr></table>
+<table id="content" class="content-table"><tr><th>content heading</th><td>content</td></tr></table>
 <form id="probe-form" method="post" action="/csrf-probe"></form>
 <div id="tv_chart_container_test" style="height:600px;width:1000px"></div>
 {% if chart %}

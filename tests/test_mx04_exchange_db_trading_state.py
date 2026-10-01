@@ -39,19 +39,6 @@ def test_exchange_db_now_trading_is_a_strict_bool_contract() -> None:
     assert type(result) is bool
 
 
-def test_exchange_db_no_longer_exposes_none_or_pass() -> None:
-    node = _now_trading_node()
-    assert not any(isinstance(child, ast.Pass) for child in ast.walk(node))
-    assert not any(
-        isinstance(child, ast.Return)
-        and (
-            child.value is None
-            or (isinstance(child.value, ast.Constant) and child.value.value is None)
-        )
-        for child in ast.walk(node)
-    )
-
-
 def test_callers_share_the_same_false_semantics() -> None:
     alert_source = (
         ROOT / "web/tradingview_zy_chart/cl_app/alert_tasks.py"

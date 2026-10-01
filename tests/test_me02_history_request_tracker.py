@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import ast
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
-from test_support.web_routes import route_node
+from test_support.isolated_web_app import run_web_app_script
 
 from tradingview_zy.history_request_tracker import (
     HistoryRequestTracker,
@@ -14,7 +13,6 @@ from tradingview_zy.history_request_tracker import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB_APP = ROOT / "web/tradingview_zy_chart/cl_app/__init__.py"
 CONFIG_DEMO = ROOT / "src/tradingview_zy/config.py.demo"
 
 
@@ -173,35 +171,63 @@ def test_invalid_tracker_configuration_fails_before_serving_requests() -> None:
         HistoryRequestTracker(max_requests_per_window=1_001)
 
 
-def test_web_route_uses_bounded_tracker_only_for_follow_up_requests() -> None:
-    factory_source = WEB_APP.read_text(encoding="utf-8")
-    udf_source = (
-        ROOT / "web/tradingview_zy_chart/cl_app/blueprints/udf.py"
-    ).read_text(encoding="utf-8")
+def test_history_responses_throttle_only_follow_ups_and_isolate_request_keys(tmp_path):
+    run_web_app_script(
+        tmp_path,
+        """
+        from types import SimpleNamespace
+        import pandas as pd
 
-    assert "__history_req_counter" not in factory_source + udf_source
-    assert "HistoryRequestTracker(" in factory_source
-    assert 'app.extensions["history_request_tracker"]' in factory_source
-    assert "session.get('_user_id')" in udf_source
-    assert "request.remote_addr" in udf_source
-
-    history_function = route_node("tv_history")
-    guarded_calls = []
-    for node in ast.walk(history_function):
-        if not isinstance(node, ast.If):
-            continue
-        test_text = ast.unparse(node.test)
-        if test_text != "not first_data_request":
-            continue
-        guarded_calls.extend(
-            call
-            for statement in node.body
-            for call in ast.walk(statement)
-            if isinstance(call, ast.Call)
-            and isinstance(call.func, ast.Attribute)
-            and call.func.attr == "record"
+        bars = pd.DataFrame({
+            "date": [pd.Timestamp("2026-05-04 09:30:00", tz="Asia/Shanghai")],
+            "open": [10], "close": [11], "high": [12], "low": [9], "volume": [100],
+        })
+        exchange = SimpleNamespace(
+            klines=lambda code, frequency: bars.copy(),
+            now_trading=lambda code: True,
         )
-    assert guarded_calls, "tracker record() must remain behind firstDataRequest=false"
+        cl_app.get_exchange = lambda market: exchange
+        app = cl_app.create_app(app_config | {
+            "WEB_HISTORY_MAX_REQUESTS_PER_WINDOW": 2,
+            "WEB_HISTORY_BURST_WINDOW_SECONDS": 3600,
+            "WEB_HISTORY_TRACKER_TTL_SECONDS": 3600,
+        })
+        client = app.test_client()
+
+        def history(*, first=False, user="alice", address="127.0.0.1",
+                    symbol="a:SH.600000", resolution="1"):
+            with client.session_transaction() as session:
+                session["_user_id"] = user
+            response = client.get("/tv/history", query_string={
+                "symbol": symbol, "resolution": resolution,
+                "from": 1777856400, "to": 1777860000,
+                "firstDataRequest": str(first).lower(),
+            }, environ_overrides={"REMOTE_ADDR": address})
+            assert response.status_code == 200
+            payload = response.get_json()
+            assert payload["o"] == [10], payload
+            assert payload["update"] is not first, payload
+            return payload["s"]
+
+        assert [history(first=True) for _ in range(3)] == ["ok"] * 3
+        assert history() == "ok"
+        assert history(first=True) == "ok"
+        assert history() == "ok"
+        assert history(first=True) == "ok"
+        assert history() == "no_data"
+
+        for variation in (
+            {"user": "bob"},
+            {"address": "127.0.0.2"},
+            {"symbol": "a:SZ.000001"},
+            {"symbol": "hk:SH.600000"},
+            {"resolution": "5"},
+        ):
+            assert history() == "ok"
+            assert history(**variation) == "ok", variation
+            assert history() == "no_data", variation
+        """,
+    )
 
 
 def test_config_demo_documents_all_history_tracker_bounds() -> None:

@@ -1,95 +1,109 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
 
+from flask import Flask, render_template
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "web/tradingview_zy_chart/cl_app/templates/index.html"
+TEMPLATES = ROOT / "web/tradingview_zy_chart/cl_app/templates"
 
 
-def _template() -> str:
-    return TEMPLATE.read_text(encoding="utf-8")
-
-
-def _timer_helpers(source: str) -> str:
-    start = source.index("    function stop_rate_update_timer()")
-    end = source.index("    var market_frequencys", start)
-    return source[start:end]
-
-
-def test_rate_timer_never_receives_the_function_result() -> None:
-    source = _template()
-    assert not re.search(
-        r"setInterval\s*\(\s*ZiXuan\.stocks_update_rate\s*\(\s*\)", source
+def test_page_start_and_watchlist_events_own_one_periodic_rate_timer() -> None:
+    app = Flask("rate_timer", template_folder=str(TEMPLATES))
+    app.jinja_env.globals["csrf_token"] = lambda: "test-csrf"
+    with app.test_request_context():
+        html = render_template(
+            "index.html",
+            market_catalog=[{"value": "a", "desc": "A股"}],
+            market_frequencys={"a": {"d": "日线"}},
+            market_default_codes={"a": "SH.000001"},
+            default_market="a",
+        )
+    scripts = re.findall(
+        r"<script(?![^>]*\bsrc=)[^>]*>\s*(.*?)\s*</script>", html, re.S | re.I
     )
-    assert "start_rate_update_timer();" in source
-    assert "stop_rate_update_timer();" in source
-
-
-def test_rate_timer_is_singleton_like_and_periodically_invokes_callback() -> None:
-    helpers = _timer_helpers(_template())
-    harness = f"""
-'use strict';
-let callbacks = [];
-let cleared = [];
+    harness = r'''
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const ready = [];
+const events = new Map();
+const timers = new Map();
 let nextId = 1;
-let interval_update_rates;
-const ZiXuan = {{ stocks_update_rate: () => {{ calls += 1; }} }};
-let calls = 0;
-function setInterval(callback, delay) {{
-  if (typeof callback !== 'function') throw new Error('callback must be a function');
-  if (delay !== 30000) throw new Error('unexpected delay');
-  callbacks.push(callback);
-  return nextId++;
-}}
-function clearInterval(id) {{ cleared.push(id); }}
-{helpers}
-start_rate_update_timer();
-if (calls !== 1 || callbacks.length !== 1 || interval_update_rates !== 1) throw new Error('first start failed');
-callbacks[0]();
-if (calls !== 2) throw new Error('scheduled callback did not run');
-start_rate_update_timer();
-if (calls !== 3 || callbacks.length !== 2 || interval_update_rates !== 2) throw new Error('restart failed');
-if (cleared.length !== 1 || cleared[0] !== 1) throw new Error('old timer was not cleared');
-stop_rate_update_timer();
-if (cleared.length !== 2 || cleared[1] !== 2 || interval_update_rates !== undefined) throw new Error('stop failed');
-"""
+let updates = 0;
+const jquery = (target) => {
+  if (typeof target === 'function') { ready.push(target); return; }
+  return {
+    attr: (name) => target[name],
+    empty() {}, css() {}, append() {}, hide() {}
+  };
+};
+const context = {
+  console,
+  $: jquery,
+  window: { innerHeight: 1000, JSON },
+  document: { getElementsByTagName: () => [{}] },
+  localStorage: { tv_chart: '{}' },
+  setInterval(callback, delay) {
+    assert.equal(typeof callback, 'function', 'interval must receive a callable');
+    const id = nextId++;
+    timers.set(id, { callback, delay });
+    return id;
+  },
+  clearInterval(id) { timers.delete(id); },
+  ZiXuan: {
+    init_zixuan_opts() {}, render_zixuan_opts() {},
+    stocks_update_rate() { updates += 1; }
+  },
+  Charts: { show_tv_chart() { return {}; } },
+  Utils: {
+    get_market: () => 'a', get_local_data: () => 'single', render_fixbar() {}
+  },
+  layui: {
+    use(callback) { callback(); },
+    dropdown: { render() {} },
+    element: { on(name, callback) { events.set(name, callback); } },
+    form: { val() {}, on() {} }
+  }
+};
+vm.createContext(context);
+for (const script of JSON.parse(process.argv[1])) vm.runInContext(script, context);
+for (const callback of ready) callback();
+assert.equal(updates, 1, 'page startup must refresh immediately');
+assert.equal(timers.size, 1, 'page startup must schedule one timer');
+const firstId = [...timers.keys()][0];
+assert.equal(timers.get(firstId).delay, 30000);
+timers.get(firstId).callback();
+assert.equal(updates, 2, 'scheduled refresh must run');
+
+const collapse = events.get('collapse(collapse-opts)');
+assert.equal(typeof collapse, 'function', 'page must wire the collapse event');
+const watchlist = { 'data-ca-title': '自选组' };
+collapse({ title: watchlist, show: true });
+assert.equal(updates, 3);
+assert.equal(timers.size, 1, 'reopening must replace rather than leak the timer');
+assert.equal(timers.has(firstId), false, 'old timer must be cancelled');
+assert.equal([...timers.values()][0].delay, 30000);
+collapse({ title: watchlist, show: false });
+assert.equal(timers.size, 0, 'closing must cancel the timer');
+collapse({ title: watchlist, show: false });
+collapse({ title: { 'data-ca-title': '关于' }, show: true });
+assert.equal(timers.size, 0, 'unrelated panels must not start rate refresh');
+assert.equal(updates, 3);
+collapse({ title: watchlist, show: true });
+assert.equal(timers.size, 1);
+assert.equal(updates, 4);
+[...timers.values()][0].callback();
+assert.equal(updates, 5);
+'''
     result = subprocess.run(
-        ["node", "-e", harness], cwd=ROOT, text=True, capture_output=True, check=False
+        ["node", "-e", harness, json.dumps(scripts)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
     )
     assert result.returncode == 0, result.stderr
-
-
-def test_inline_script_remains_javascript_parseable_after_jinja_substitution() -> None:
-    source = _template()
-    inline_scripts = re.findall(
-        r"<script(?![^>]*\bsrc=)[^>]*>\s*(.*?)\s*</script>", source, re.S | re.I
-    )
-    assert inline_scripts
-    checker = "new Function(process.argv[1]);"
-    for javascript in inline_scripts:
-        javascript = re.sub(
-            r"\{\{\s*market_frequencys\s*\|\s*tojson\s*\}\}",
-            "{}",
-            javascript,
-        )
-        javascript = re.sub(
-            r"\{\{\s*market_default_codes\s*\|\s*tojson\s*\}\}",
-            "{}",
-            javascript,
-        )
-        javascript = re.sub(
-            r"\{\{\s*default_market\s*\|\s*tojson\s*\}\}",
-            '"a"',
-            javascript,
-        )
-        result = subprocess.run(
-            ["node", "-e", checker, javascript],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        assert result.returncode == 0, result.stderr

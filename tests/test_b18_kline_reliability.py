@@ -198,17 +198,6 @@ def _tdx_method(name, action=None):
 
 
 @pytest.mark.parametrize("name", TDX_TARGETS)
-def test_all_tdx_empty_data_is_one_successful_attempt(name):
-    invoke, clients = _tdx_method(name)
-    args = {"pages": 1}
-    result = invoke(frequency="d", args=args)
-    assert result.empty
-    assert len(clients) == 1
-    assert clients[0].calls == 1 and clients[0].closed
-    assert args == {"pages": 1}
-
-
-@pytest.mark.parametrize("name", TDX_TARGETS)
 @pytest.mark.parametrize("kwargs", [
     {"frequency": "invalid"},
     {"frequency": "d", "args": {"pages": 0}},

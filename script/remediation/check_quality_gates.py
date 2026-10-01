@@ -76,6 +76,8 @@ def find_quality_gate_violations(root: Path) -> list[str]:
     unit = _job_segment(workflow, "unit-contracts")
     if "uv run pytest -q" not in unit:
         violations.append("unit-contracts must run the complete pytest suite")
+    if "actions/setup-node@" not in unit:
+        violations.append("unit-contracts must install Node.js for executable JavaScript contracts")
     for bypass in ("--ignore", "--deselect", "--continue-on-collection-errors", " -k "):
         if bypass in unit:
             violations.append(f"unit-contracts must not bypass tests with {bypass.strip()}")
@@ -100,8 +102,8 @@ def find_quality_gate_violations(root: Path) -> list[str]:
         violations.append("browser-contracts must install real Chromium")
     if 'RUN_BROWSER_TESTS: "1"' not in browser:
         violations.append("browser-contracts must enable RUN_BROWSER_TESTS")
-    if "tests/test_me29_browser_dom.py" not in browser:
-        violations.append("browser-contracts must execute the DOM gate test")
+    if "tests/test_cleanup_csrf_browser.py" not in browser:
+        violations.append("browser-contracts must execute the real-app browser gate test")
 
     windows = _job_segment(workflow, "windows-contracts")
     if "runs-on: windows-latest" not in windows:
@@ -111,6 +113,7 @@ def find_quality_gate_violations(root: Path) -> list[str]:
         "tests/test_me26_scheduler_lifecycle.py",
         "tests/test_me27_secret_management.py",
         "tests/test_me29_quality_gates.py",
+        "tests/test_windows_launchers.py",
     ):
         if filename not in windows:
             violations.append(f"windows-contracts missing {filename}")

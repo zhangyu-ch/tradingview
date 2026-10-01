@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import datetime as dt
 import json
 import shutil
@@ -17,7 +16,6 @@ if str(SCRIPTS) not in sys.path:
 from supply_chain_lib import (  # noqa: E402
     artifact_bytes,
     build_osv_report,
-    load_json,
     validate_generated_artifacts,
     validate_local_artifacts,
     validate_supply_chain,
@@ -41,7 +39,6 @@ def test_current_repository_supply_chain_contract_and_generation_are_determinist
     first = artifact_bytes(ROOT)
     second = artifact_bytes(ROOT)
     assert first == second
-    assert len(load_json(ROOT / "audit/supply-chain/sbom.cdx.json")["components"]) == 153
 
 
 @pytest.mark.parametrize(

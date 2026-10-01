@@ -197,22 +197,32 @@ def test_deleted_tombstones_and_dead_compatibility_shells_do_not_return() -> Non
     )
 
 
-def test_intentional_optional_backtest_hooks_are_explicit_noops_not_pass_stubs() -> None:
-    path = ROOT / "src/tradingview_zy/backtesting/base.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    methods = {
-        node.name: node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name in {"on_bt_loop_start", "clear"}
-    }
-    assert set(methods) == {"on_bt_loop_start", "clear"}
-    for name, node in methods.items():
-        body = _without_docstring(node.body)
-        assert len(body) == 1, name
-        assert isinstance(body[0], ast.Return), name
-        assert isinstance(body[0].value, ast.Constant), name
-        assert body[0].value.value is None, name
+def test_default_backtest_hooks_leave_strategy_and_backtest_state_unchanged() -> None:
+    from copy import deepcopy
+    from types import SimpleNamespace
+
+    from tradingview_zy.backtesting.base import Strategy
+
+    class MinimalStrategy(Strategy):
+        def open(self, code, market_data, poss):
+            return []
+
+        def close(self, code, signal, pos, market_data):
+            return None
+
+    strategy = MinimalStrategy()
+    strategy.allow_close_uids = ["close-1"]
+    strategy.use_times = {"open": {"num": 2, "times": 0.5}}
+    backtest = SimpleNamespace(codes=["AAPL"], positions={"AAPL": [1]})
+    before_strategy = deepcopy(vars(strategy))
+    before_backtest = deepcopy(vars(backtest))
+
+    assert strategy.on_bt_loop_start(backtest) is None
+    assert vars(strategy) == before_strategy
+    assert vars(backtest) == before_backtest
+    assert strategy.clear() is None
+    assert vars(strategy) == before_strategy
+    assert vars(backtest) == before_backtest
 
 
 def test_ib_registry_does_not_claim_catalogue_or_security_master() -> None:

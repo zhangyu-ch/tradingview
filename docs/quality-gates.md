@@ -5,16 +5,19 @@ checks in GitHub branch protection for the default branch. Every job uses Python
 installs the exact reviewed uv `0.10.0`, disables implicit Python downloads, and installs
 with `uv sync --locked`.
 
-- `unit-contracts` runs the complete pytest suite without ignore, deselect, keyword, or
-  collection-error bypasses.
+- `unit-contracts` installs Node.js for the bundled PineJS/JavaScript contracts and runs the
+  complete pytest suite without ignore, deselect, keyword, or collection-error bypasses.
 - `provider-contracts` runs the offline reliability matrix with warnings treated as errors,
   including pagination, retry, lifecycle, calendar, payload, and footprint contracts.
-- `mysql-contracts` uses a real MySQL 8.0 service and verifies schema migration plus long
-  strategy/chart content round trips that SQLite cannot prove.
-- `browser-contracts` installs real Chromium and verifies the rendered settings DOM never
-  contains a previously stored secret and keeps the replacement field empty and password-only.
+- `mysql-contracts` uses a real MySQL 8.0 service and verifies the current schema and long
+  strategy/chart content round trips that SQLite cannot prove. Historical migration and
+  failure atomicity are covered separately by the isolated SQLite migration contracts.
+- `browser-contracts` installs real Chromium and runs the isolated real application with
+  temporary SQLite data. It verifies CSRF transports, chart iframe storage, opt-in table
+  styles, and settings save/reload without leaking legacy secrets into the DOM or console.
 - `windows-contracts` verifies the locked environment, generated test configuration, local
-  file references, scheduler ownership, and supply-chain evidence on Windows.
+  file references, scheduler ownership, supply-chain evidence, and native launcher failure,
+  pause and non-interactive exit behavior on Windows.
 - `supply-chain-contracts` proves `uv.lock` is current, verifies every local wheel against its
   SHA-256/provenance manifest, checks deterministic CycloneDX 1.6 and license evidence, and
   runs a live fail-closed OSV batch scan. Its evidence is retained as a workflow artifact.

@@ -1,29 +1,11 @@
 from __future__ import annotations
 
-import sys
-import types
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
-
-# The offline verification image lacks this otherwise-unrelated runtime dependency.
-if "tzlocal" not in sys.modules:
-    tzlocal = types.ModuleType("tzlocal")
-    tzlocal.get_localzone = lambda: "UTC"
-    sys.modules["tzlocal"] = tzlocal
-
-from tradingview_zy import config  # noqa: E402
-from tradingview_zy.base import Market  # noqa: E402
-from tradingview_zy.exchange import (  # noqa: E402
-    UnsupportedProviderError,
-    g_exchange_obj,
-    get_exchange,
-)
 
 
 def test_ctp_runtime_implementation_and_dependency_are_removed() -> None:
@@ -41,16 +23,29 @@ def test_ctp_runtime_implementation_and_dependency_are_removed() -> None:
     assert "CTP_" not in config_template
 
 
-def test_factory_rejects_removed_ctp_before_import_or_cache(monkeypatch) -> None:
-    g_exchange_obj.clear()
-    monkeypatch.setattr(config, "MARKET_PROVIDERS", {"futures": "ctp"})
-    sys.modules.pop("tradingview_zy.exchange.exchange_ctp", None)
+@pytest.mark.parametrize("market, removed", [("futures", "ctp"), ("currency", "zb")])
+@pytest.mark.parametrize("matching_cache", [None, False, True], ids=["empty", "different", "matching"])
+def test_factory_rejects_removed_provider_without_import_or_cache_mutation(
+    monkeypatch, market, removed, matching_cache
+) -> None:
+    import tradingview_zy.exchange as exchange
 
-    with pytest.raises(UnsupportedProviderError, match="已从运行包移除"):
-        get_exchange(Market.FUTURES)
+    cached = Mock(provider_name=removed if matching_cache else "db")
+    unrelated = Mock(provider_name="db")
+    cache = {} if matching_cache is None else {market: cached, "hk": unrelated}
+    original = dict(cache)
+    importer = Mock(side_effect=AssertionError("removed provider must not import an SDK"))
+    monkeypatch.setattr(exchange.config, "MARKET_PROVIDERS", {market: removed})
+    monkeypatch.setattr(exchange, "g_exchange_obj", cache)
+    monkeypatch.setattr(exchange, "import_module", importer)
 
-    assert Market.FUTURES.value not in g_exchange_obj
-    assert "tradingview_zy.exchange.exchange_ctp" not in sys.modules
+    with pytest.raises(exchange.UnsupportedProviderError, match="已从运行包移除"):
+        exchange.get_exchange(market)
+
+    assert cache == original
+    importer.assert_not_called()
+    cached.close.assert_not_called()
+    unrelated.close.assert_not_called()
 
 
 def test_runtime_tree_contains_no_openctp_imports() -> None:

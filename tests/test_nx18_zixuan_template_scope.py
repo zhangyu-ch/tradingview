@@ -9,13 +9,6 @@ ROOT = Path(__file__).resolve().parents[1]
 ZIXUAN_JS = ROOT / "web/tradingview_zy_chart/cl_app/static/js/zixuan.js"
 
 
-def test_watchlist_template_is_block_local() -> None:
-    source = ZIXUAN_JS.read_text(encoding="utf-8")
-    assert "const templet =" in source
-    assert "\n              templet =" not in source
-    assert "\n            templet =" not in source
-
-
 def test_real_script_renders_checked_and_unchecked_without_global_leak() -> None:
     script = f"""
 const fs = require('fs');
@@ -55,7 +48,3 @@ if (!captured[1].templet.includes('checked')) {{
 }}
 """
     subprocess.run(["node", "-e", script], check=True, cwd=ROOT)
-
-
-def test_zixuan_javascript_is_syntactically_valid() -> None:
-    subprocess.run(["node", "--check", str(ZIXUAN_JS)], check=True, cwd=ROOT)

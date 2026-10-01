@@ -8,6 +8,7 @@ import sys
 import textwrap
 import tomllib
 import zipfile
+from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -108,7 +109,21 @@ def test_proxy_settings_keep_legacy_notification_data_private_and_untouched():
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["Pragma"] == "no-cache"
-    assert "old-proxy" in response.text
+
+    class Inputs(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.values = {}
+
+        def handle_starttag(self, tag, attrs):
+            attributes = dict(attrs)
+            if tag == "input" and "name" in attributes:
+                self.values[attributes["name"]] = attributes.get("value", "")
+
+    inputs = Inputs()
+    inputs.feed(response.text)
+    assert inputs.values["proxy_host"] == "old-proxy"
+    assert inputs.values["proxy_port"] == "7890"
     assert sentinel not in response.text
     assert "fs_app_secret" not in response.text
     assert "飞书" not in response.text

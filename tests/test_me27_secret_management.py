@@ -44,11 +44,25 @@ def test_environment_reference_resolves_and_plaintext_is_fail_closed(monkeypatch
         resolve_secret("env://MISSING_ME27", environ={}, required=True)
 
 
-def test_managed_store_rotation_is_atomic_private_versioned_and_retires_old(tmp_path) -> None:
+def test_managed_store_rotation_is_atomic_private_versioned_and_retires_old(tmp_path, monkeypatch) -> None:
     store = ManagedSecretStore(tmp_path)
     first = store.rotate("broker/binance", "first-secret")
     second = store.rotate("broker/binance", "second-secret")
     assert first != second
+    assert store.read(first) == "first-secret"
+    assert store.read(second) == "second-secret"
+    before = {path: path.read_bytes() for path in store.root.rglob("*") if path.is_file()}
+
+    def fail_publish(source, destination):
+        assert Path(source).read_text(encoding="utf-8") == "unpublished-secret"
+        assert not Path(destination).exists()
+        raise OSError("cannot publish new credential version")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "replace", fail_publish)
+        with pytest.raises(OSError, match="cannot publish new credential version"):
+            store.rotate("broker/binance", "unpublished-secret")
+    assert {path: path.read_bytes() for path in store.root.rglob("*") if path.is_file()} == before
     assert store.read(first) == "first-secret"
     assert store.read(second) == "second-secret"
     if os.name != "nt":

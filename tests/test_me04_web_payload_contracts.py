@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import ast
-from pathlib import Path
-
 import pandas as pd
 import pytest
 
-from test_support.web_routes import route_node, route_source
+from test_support.isolated_web_app import run_web_app_script
 
 from tradingview_zy.web_payloads import KlinePayloadError, prepare_klines_for_market
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def frame(**overrides):
@@ -60,17 +55,80 @@ def test_rejects_provider_identity_mismatch():
         )
 
 
-def test_history_route_prepares_before_epoch_and_returns_stable_payload_error():
-    route = route_node("tv_history")
-    calls = [
-        node.func.id
-        for node in ast.walk(route)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    ]
-    assert calls.index("prepare_klines_for_market") < calls.index(
-        "datetime_to_timestamp_seconds"
+@pytest.mark.parametrize("first_request", [True, False], ids=["backfill", "follow-up"])
+def test_history_localizes_naive_provider_dates_before_windowing(tmp_path, first_request):
+    run_web_app_script(
+        tmp_path,
+        """
+        import datetime as dt
+        from types import SimpleNamespace
+        import pandas as pd
+
+        bars = pd.DataFrame(parameters["bars"])
+        bars["date"] = pd.to_datetime(bars["date"])
+        exchange = SimpleNamespace(
+            klines=lambda code, frequency: bars,
+            now_trading=lambda code: True,
+        )
+        cl_app.get_exchange = lambda market: exchange
+        app = cl_app.create_app(app_config)
+        expected_times = [
+            int(dt.datetime(2026, 5, 4, 1, minute, tzinfo=dt.timezone.utc).timestamp())
+            for minute in (30, 31)
+        ]
+        response = app.test_client().get("/tv/history", query_string={
+            "symbol": "a:SH.600000", "resolution": "1",
+            "from": expected_times[1], "to": expected_times[1],
+            "firstDataRequest": str(parameters["first_request"]).lower(),
+        })
+        assert response.status_code == 200
+        first = parameters["first_request"]
+        assert response.get_json() == {
+            "s": "ok", "update": not first,
+            "t": expected_times if first else expected_times[1:],
+            "o": [10.0, 11.0] if first else [11.0],
+            "c": [11.0, 10.5] if first else [10.5],
+            "h": [12.0, 12.0] if first else [12.0],
+            "l": [9.0, 10.0] if first else [10.0],
+            "v": [100, 200] if first else [200],
+        }
+        assert bars["date"].dt.tz is None
+        assert "code" not in bars.columns
+        """,
+        bars=frame().to_dict(orient="list"),
+        first_request=first_request,
     )
-    source = route_source("tv_history")
-    assert "invalid_kline_payload" in source
-    assert "expected_code=code" in source
-    assert "expected_frequency=frequency" in source
+
+
+@pytest.mark.parametrize("fault", ["missing-volume", "wrong-code", "wrong-frequency"])
+def test_history_returns_stable_error_for_malformed_provider_payload(tmp_path, fault):
+    bars = frame()
+    if fault == "missing-volume":
+        bars = bars.drop(columns=["volume"])
+    elif fault == "wrong-code":
+        bars["code"] = "OTHER"
+    else:
+        bars["frequency"] = "5m"
+    run_web_app_script(
+        tmp_path,
+        """
+        from types import SimpleNamespace
+        import pandas as pd
+
+        calls = []
+        def klines(code, frequency):
+            calls.append((code, frequency))
+            return pd.DataFrame(parameters["bars"])
+
+        cl_app.get_exchange = lambda market: SimpleNamespace(klines=klines)
+        app = cl_app.create_app(app_config)
+        response = app.test_client().get("/tv/history", query_string={
+            "symbol": "a:SH.600000", "resolution": "1",
+            "from": 1777856400, "to": 1777860000, "firstDataRequest": "true",
+        })
+        assert response.status_code == 200
+        assert calls == [("SH.600000", "1m")]
+        assert response.get_json() == {"s": "error", "errmsg": "invalid_kline_payload"}
+        """,
+        bars=bars.to_dict(orient="list"),
+    )

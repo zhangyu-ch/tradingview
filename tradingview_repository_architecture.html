@@ -514,12 +514,12 @@
           </tbody>
         </table>
         <h3>10.3 (c) 过时的测试用例</h3>
-        <div class="notice success"><strong>当前结论：没有确认过时的活动测试文件。</strong>完整 suite 通过，CI 的 unit job 直接执行全部 pytest；测试名称中的 <code>removed</code>、<code>legacy</code> 和 <code>no_runtime_chanlun</code> 是防止已下线能力回归的当前约束。</div>
+        <div class="notice success"><strong>测试审计已移除没有运行对象的 FIFO 源码顺序门禁。</strong>CI 的 unit job 执行全部 pytest；测试名称中的 <code>removed</code>、<code>legacy</code> 和 <code>no_runtime_chanlun</code> 本身不是删除理由，仍须保留独立的能力下线约束。</div>
         <table>
           <thead><tr><th>测试候选</th><th>当前用途</th><th>可删除条件</th></tr></thead>
           <tbody>
             <tr><td class="path">tests/test_remediation_report_counts.py</td><td>验证历史报告生成器对“已完成（说明）”状态的计数，当前仍随完整 pytest 运行。</td><td>只有在 <code>parse_issue_report.py</code>、<code>remediation_report.md</code> 和历史台账一起封存后删除；不能单独删除。</td></tr>
-            <tr><td class="path">tests/test_new05_fifo_atomicity_guard.py</td><td>当前源码没有 FIFO 实现，它保护未来若重新引入 FIFO 时先验证结算再消费 lots 的顺序。</td><td>若架构决策永久放弃 FIFO，并把该问题记录归档，可连同 <code>check_fifo_atomicity.py</code> 删除；否则它是前置安全护栏。</td></tr>
+            <tr><td class="path">已移除的 FIFO 顺序门禁</td><td>当前无 FIFO 实现、生产调用或独立 CI 入口；旧检查器仅比较指定函数名的源码行号，不能证明结算原子性。</td><td>测试与 <code>check_fifo_atomicity.py</code> 一并移除，历史问题及验证记录保留。将来引入 FIFO 时应在真实结算边界验证失败后状态不变；本次清理不代表永久放弃 FIFO。</td></tr>
             <tr><td class="path">tests/test_cr03_live_trading_disabled.py<br>tests/test_cr04_qmt_trader_removed.py<br>tests/test_cr05_ctp_removed.py<br>tests/test_mx02_zb_removed.py<br>tests/test_no_runtime_chanlun_imports.py</td><td>验证实盘/旧 Provider/旧 Chanlun 不会重新进入运行树。</td><td>不建议删除。只要文档继续承诺能力下线，这些就是防回归测试。</td></tr>
             <tr><td>MySQL、Chromium、Windows 专项</td><td>通过环境变量控制，离线时设计性 skip；CI 在真实服务/浏览器/Windows 上启用。</td><td>不能因为本机 skip 就删除。若基础设施永久取消，必须先删除对应 CI job、文档和分支保护要求。</td></tr>
           </tbody>

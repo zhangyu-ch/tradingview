@@ -204,13 +204,25 @@ def test_six_adapters_catch_up_after_more_than_two_pages_and_same_key(target):
 
 
 @pytest.mark.parametrize("target", TARGETS)
-@pytest.mark.parametrize("cached", [None, "empty", "old"])
-def test_six_adapters_empty_first_page_preserves_cache(target, cached):
+@pytest.mark.parametrize("cached,frequency,options", [
+    (None, "1m", {}), ("empty", "1m", {}), ("old", "1m", {}),
+    (None, "d", {"pages": 1}),
+])
+def test_six_adapters_empty_first_page_preserves_cache(target, cached, frequency, options):
     cache = MemoryCache(None if cached is None else pd.DataFrame() if cached == "empty" else frame([0]))
+    original = None if cache.cached is None else cache.cached.copy(deep=True)
     run = adapter(target, [], cache)
-    assert run.invoke().empty
+    args = options.copy()
+    assert run.invoke(frequency=frequency, args=args).empty
+    assert len(run.clients) == 1
+    assert run.clients[0].calls == 1 and run.clients[0].closed
     assert run.clients[0].offsets == [0]
+    assert args == options
     assert not cache.writes
+    if original is None:
+        assert cache.cached is None
+    else:
+        pd.testing.assert_frame_equal(cache.cached, original)
 
 
 @pytest.mark.parametrize("target", TARGETS)

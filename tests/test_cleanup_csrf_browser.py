@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+LEGACY_SECRET = "stored-secret-must-never-reach-browser"
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_BROWSER_TESTS") != "1",
     reason="real Chromium gate runs only when RUN_BROWSER_TESTS=1",
@@ -23,7 +24,7 @@ def browser_app(tmp_path_factory):
     with (directory / "server.log").open("w+", encoding="utf-8") as log:
         process = subprocess.Popen(
             [sys.executable, str(ROOT / "test_support/csrf_browser_server.py"),
-             str(directory), str(ready)],
+             str(directory), str(ready), LEGACY_SECRET],
             cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
         )
         try:
@@ -207,5 +208,42 @@ def test_content_table_style_is_opt_in(browser_app, browser_page):
     page = browser_page
     page.goto(browser_app + "/csrf-browser")
     borders = page.evaluate("""() => Object.fromEntries(['plain', 'content'].map(id =>
-      [id, getComputedStyle(document.querySelector('#' + id + ' td')).borderTopStyle]))""")
-    assert borders == {"plain": "none", "content": "solid"}
+      [id, ['', ' tr', ' td', ' th'].map(selector =>
+        getComputedStyle(document.querySelector('#' + id + selector)).borderTopStyle)]))""")
+    assert borders == {"plain": ["none"] * 4, "content": ["solid"] * 4}
+
+
+def test_settings_form_saves_proxy_without_exposing_legacy_secret(browser_app, browser_page):
+    page = browser_page
+    console = []
+    errors = []
+    page.on("console", lambda message: console.append(message.text))
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(browser_app + "/csrf-browser")
+    response = page.goto(browser_app + "/setting")
+    assert response.status == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert LEGACY_SECRET not in response.text()
+    assert page.locator('input[name="proxy_host"]').input_value() == "127.0.0.1"
+    assert page.locator('input[name="proxy_port"]').input_value() == "7890"
+    assert page.locator('input[name="fs_app_secret"]').count() == 0
+    assert LEGACY_SECRET not in page.content()
+
+    page.locator('input[name="proxy_host"]').fill(" browser-proxy.invalid ")
+    page.locator('input[name="proxy_port"]').fill(" 1080 ")
+    with page.expect_response(lambda response:
+            response.url == browser_app + "/setting/save"
+            and response.request.method == "POST") as saved:
+        page.get_by_role("button", name="保存").click()
+    assert saved.value.status == 200
+    assert saved.value.json() == {"ok": True}
+    assert LEGACY_SECRET not in saved.value.request.post_data
+    assert LEGACY_SECRET not in saved.value.text()
+    page.reload()
+    assert page.locator('input[name="proxy_host"]').input_value() == "browser-proxy.invalid"
+    assert page.locator('input[name="proxy_port"]').input_value() == "1080"
+    assert page.locator('input[name="fs_app_secret"]').count() == 0
+    assert LEGACY_SECRET not in page.content()
+    assert all(LEGACY_SECRET not in message for message in console)
+    assert errors == []

@@ -35,16 +35,18 @@ def test_missing_tests_workflow_is_rejected(tmp_path: Path) -> None:
     ]
 
 
-def test_complete_unit_suite_cannot_be_weakened_with_ignore(tmp_path: Path) -> None:
+def test_unit_gate_requires_complete_suite_and_node(tmp_path: Path) -> None:
     _copy_gate_files(tmp_path)
     workflow = tmp_path / ".github/workflows/tests.yml"
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace(
-            "uv run pytest -q\n", "uv run pytest -q --ignore=tests/test_footprint.py\n", 1
-        ),
-        encoding="utf-8",
+    text = workflow.read_text(encoding="utf-8").replace(
+        "uv run pytest -q\n", "uv run pytest -q --ignore=tests/test_footprint.py\n", 1
+    ).replace(
+        '      - uses: actions/setup-node@v4\n        with:\n          node-version: "22"\n', "", 1
     )
-    assert any("must not bypass" in value for value in find_quality_gate_violations(tmp_path))
+    workflow.write_text(text, encoding="utf-8")
+    violations = find_quality_gate_violations(tmp_path)
+    assert any("must not bypass" in value for value in violations)
+    assert any("must install Node.js" in value for value in violations)
 
 
 def test_provider_matrix_rejects_removed_contract_test(tmp_path: Path) -> None:
@@ -77,10 +79,12 @@ def test_browser_gate_requires_real_chromium_and_enable_flag(tmp_path: Path) -> 
         "playwright install --with-deps chromium", "echo browser omitted"
     )
     text = text.replace('RUN_BROWSER_TESTS: "1"', 'RUN_BROWSER_TESTS: "0"')
+    text = text.replace(" tests/test_cleanup_csrf_browser.py", "")
     workflow.write_text(text, encoding="utf-8")
     violations = find_quality_gate_violations(tmp_path)
     assert any("real Chromium" in value for value in violations)
     assert any("RUN_BROWSER_TESTS" in value for value in violations)
+    assert any("real-app browser gate" in value for value in violations)
 
 
 def test_read_only_permission_and_hygiene_bootstrap_are_required(tmp_path: Path) -> None:
@@ -123,12 +127,6 @@ def test_prepare_test_config_is_atomic_private_and_uses_repo_runtime(tmp_path: P
         assert stat.S_IMODE(destination.stat().st_mode) == 0o600
 
 
-def test_footprint_uses_public_timestamp_api() -> None:
-    source = (ROOT / "src/tradingview_zy/footprint.py").read_text(encoding="utf-8")
-    assert "from tradingview_zy.web_payloads import datetime_to_timestamp_seconds" in source
-    assert "_datetime_to_timestamp_seconds" not in source
-
-
 def test_supply_chain_gate_requires_lock_evidence_osv_and_exact_uv_pin(tmp_path: Path) -> None:
     _copy_gate_files(tmp_path)
     workflow = tmp_path / ".github/workflows/tests.yml"
@@ -169,8 +167,10 @@ def test_windows_contract_gate_requires_native_runner_and_targeted_tests(tmp_pat
         1,
     )
     text = text.replace("          tests/test_me27_secret_management.py\n", "", 1)
+    text = text.replace("          tests/test_windows_launchers.py\n", "", 1)
     workflow.write_text(text, encoding="utf-8")
 
     violations = find_quality_gate_violations(tmp_path)
     assert "windows-contracts must run on windows-latest" in violations
     assert "windows-contracts missing tests/test_me27_secret_management.py" in violations
+    assert "windows-contracts missing tests/test_windows_launchers.py" in violations

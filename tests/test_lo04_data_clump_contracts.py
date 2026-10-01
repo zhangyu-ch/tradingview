@@ -7,7 +7,6 @@ import sys
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from tradingview_zy.alert_strategy_storage import (
@@ -100,17 +99,6 @@ def test_us_history_materializes_canonical_kline_bars_from_payload_objects() -> 
 
     bar = KlineBar(**frame.iloc[0].to_dict())
     assert bar.to_mapping()["code"] == "AAPL"
-
-
-def test_us_providers_build_typed_payloads_instead_of_duplicate_dict_groups() -> None:
-    for filename in ("exchange_alpaca.py", "exchange_polygon.py"):
-        source = (ROOT / "src/tradingview_zy/exchange" / filename).read_text(
-            encoding="utf-8"
-        )
-        assert "ProviderBarPayload(" in source
-        assert '"timestamp":' not in source
-        assert '"open": bar.open' not in source
-        assert '"open": aggregate.open' not in source
 
 
 def test_strategy_parameters_are_versioned_canonical_and_defensively_copied() -> None:

@@ -57,7 +57,3 @@ if (context.Charts.show_tv_chart.length !== 1) {{
 }}
 """
     subprocess.run(["node", "-e", script], check=True, cwd=ROOT)
-
-
-def test_modified_javascript_is_syntactically_valid() -> None:
-    subprocess.run(["node", "--check", str(CHARTS_JS)], check=True, cwd=ROOT)

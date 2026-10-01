@@ -17,7 +17,7 @@ from typing import Dict, List, Union
 import pandas as pd
 import pytest
 import pytz
-from sqlalchemy import MetaData, create_engine, select, text
+from sqlalchemy import create_engine, select
 from sqlalchemy.dialects import mysql
 from sqlalchemy.schema import CreateTable
 
@@ -191,18 +191,30 @@ def test_noncrypto_storage_unchanged(db_module):
 def test_utc_daily_and_three_hour_ohlcv(converter, zone):
     data = frame(["2024-02-28T23:59Z", "2024-02-29T00:00Z", "2024-02-29T02:59Z", "2024-02-29T03:00Z", "2024-02-29T23:59Z", "2024-03-01T00:00Z"])
     data["date"] = data.date.dt.tz_convert(zone)
+    # Shanghai 07:59/08:00 straddle UTC days. Interior extrema distinguish
+    # max/min from first/last, unlike constant high/low/volume fixtures.
+    data["open"] = [10, 20, 30, 40, 50, 60]
+    data["close"] = [11, 21, 31, 41, 51, 61]
+    data["high"] = [12, 22, 92, 42, 52, 62]
+    data["low"] = [9, 19, 29, -4, 49, 59]
+    data["volume"] = [1, 2, 3, 4, 5, 6]
     original = data.copy(deep=True)
     daily = converter(data, "d")
+    assert str(daily.date.dt.tz) == "UTC"
     assert list(daily.date) == list(pd.to_datetime(["2024-02-28", "2024-02-29", "2024-03-01"], utc=True))
-    assert list(daily.open) == [1,2,6]
-    assert list(daily.close) == [2,6,7]
-    assert list(daily.volume) == [10,40,10]
-    assert list(daily.high) == [9,9,9] and list(daily.low) == [0,0,0]
+    assert daily.date.dt.tz_convert("Asia/Shanghai").dt.hour.tolist() == [8, 8, 8]
+    assert daily[["open", "close", "high", "low", "volume"]].values.tolist() == [
+        [10, 11, 12, 9, 1], [20, 51, 92, -4, 14], [60, 61, 62, 59, 6],
+    ]
     h3 = converter(data, "3h")
-    assert list(h3.date.dt.hour) == [21,0,3,21,0]
-    assert list(h3.open) == [1,2,4,5,6]
-    assert list(h3.close) == [2,4,5,6,7]
-    assert list(h3.volume) == [10,20,10,10,10]
+    assert list(h3.date) == list(pd.to_datetime([
+        "2024-02-28T21:00Z", "2024-02-29T00:00Z", "2024-02-29T03:00Z",
+        "2024-02-29T21:00Z", "2024-03-01T00:00Z",
+    ]))
+    assert h3[["open", "close", "high", "low", "volume"]].values.tolist() == [
+        [10, 11, 12, 9, 1], [20, 31, 92, 19, 5], [40, 41, 42, -4, 4],
+        [50, 51, 52, 49, 5], [60, 61, 62, 59, 6],
+    ]
     pd.testing.assert_frame_equal(data, original)
     assert converter(data.iloc[:0], "d").empty
 

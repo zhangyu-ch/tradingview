@@ -6,7 +6,6 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -317,16 +316,6 @@ def test_us_history_rejects_invalid_ohlcv(field: str, value: float, message: str
     row[field] = value
     with pytest.raises(us_history.UsHistoryPayloadError, match=message):
         us_history.build_us_history_frame([row], code="AAPL", frequency="1m")
-
-
-def test_alpaca_and_polygon_use_shared_us_history_boundary() -> None:
-    for filename in ["exchange_alpaca.py", "exchange_polygon.py"]:
-        source = (
-            ROOT / "src/tradingview_zy/exchange" / filename
-        ).read_text(encoding="utf-8")
-        assert "parse_us_history_window" in source
-        assert "build_us_history_frame" in source
-        assert "len(end_date)" not in source
 
 
 def test_universe_filters_are_stable_bounded_and_fail_closed() -> None:

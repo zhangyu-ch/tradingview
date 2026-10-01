@@ -340,8 +340,6 @@ class FakeZiXuan:
 
     def __init__(self, market):
         self.market = market
-        self.cleared_groups = []
-        self.added_stocks = []
         self.replaced_snapshots = []
         FakeZiXuan.instances.append(self)
 
@@ -350,14 +348,6 @@ class FakeZiXuan:
 
     def replace_stocks(self, zx_group, snapshot):
         self.replaced_snapshots.append((zx_group, snapshot))
-        return True
-
-    def clear_zx_stocks(self, zx_group):
-        self.cleared_groups.append(zx_group)
-        return True
-
-    def add_stock(self, zx_group, code, name, memo=""):
-        self.added_stocks.append((zx_group, code, name, memo))
         return True
 
 
@@ -576,8 +566,7 @@ def test_xuangu_task_without_target_group_only_updates_running_results(monkeypat
     assert tasks.run_xuangu("a", "task1", ["d"], "source") is True
 
     zx = FakeZiXuan.instances[0]
-    assert zx.cleared_groups == []
-    assert zx.added_stocks == []
+    assert zx.replaced_snapshots == []
     assert tasks.running_tasks[("a", "task1")][0].code == "SH.000001"
 
 
@@ -602,8 +591,6 @@ def test_xuangu_task_writes_results_to_target_zx_group(monkeypatch):
     assert tasks.run_xuangu("a", "task1", ["d"], "source", "target") is True
 
     zx = FakeZiXuan.instances[0]
-    assert zx.cleared_groups == []
-    assert zx.added_stocks == []
     assert zx.replaced_snapshots == [(
         "target",
         [{"code": "SH.000001", "name": "上证指数", "memo": "selected by task"}],

@@ -22,6 +22,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -94,7 +97,7 @@ jobs:
         run: uv sync --locked
       - name: Prepare isolated test configuration
         run: python script/remediation/prepare_test_config.py
-      - name: Run real MySQL migration and long-content contract
+      - name: Run real MySQL current-schema and long-content contract
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           RUN_MYSQL_TESTS: "1"
@@ -123,7 +126,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           RUN_BROWSER_TESTS: "1"
-        run: uv run pytest -q -W error tests/test_me29_browser_dom.py tests/test_cleanup_csrf_browser.py
+        run: uv run pytest -q -W error tests/test_cleanup_csrf_browser.py
 
   windows-contracts:
     runs-on: windows-latest
@@ -148,6 +151,7 @@ jobs:
           tests/test_me26_scheduler_lifecycle.py
           tests/test_me27_secret_management.py
           tests/test_me29_quality_gates.py
+          tests/test_windows_launchers.py
 
   supply-chain-contracts:
     runs-on: ubuntu-latest

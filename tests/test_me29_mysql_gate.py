@@ -19,7 +19,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_real_mysql_migrations_and_long_text_round_trip() -> None:
+def test_real_mysql_current_schema_and_long_text_round_trip() -> None:
     from sqlalchemy import URL, create_engine, select
     from sqlalchemy.orm import Session
 
